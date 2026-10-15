@@ -1,0 +1,79 @@
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env*.local
+.env
+ 
+
+# typescript
+*.tsbuildinfo
+
+# Android - Ignore everything except widget-related files
+android/
+# Allow widget-related source files
+!android/app/src/main/java/com/bebsapati/com/SellWidgetProvider.java
+!android/app/src/main/java/com/bebsapati/com/WidgetModule.java
+!android/app/src/main/java/com/bebsapati/com/WidgetPackage.java
+# Allow widget-related resource files
+!android/app/src/main/res/layout/sell_widget.xml
+!android/app/src/main/res/xml/sell_widget_info.xml
+!android/app/src/main/res/drawable/widget_gradient_background.xml
+!android/app/src/main/res/drawable/widget_background.xml
+!android/app/src/main/res/drawable/sell_widget_preview.xml
+!android/app/src/main/res/drawable/bebsapati_logo.png
+# Allow updated AndroidManifest.xml (contains widget provider registration)
+!android/app/src/main/AndroidManifest.xml
+# Allow updated MainActivity.kt (contains deep link handling)
+!android/app/src/main/java/com/bebsapati/com/MainActivity.kt
+# Allow updated MainApplication.kt (contains widget module registration)
+!android/app/src/main/java/com/bebsapati/com/MainApplication.ktd - Ignore everything except widget-related files
+android/
+# Allow widget-related source files
+!android/app/src/main/java/com/bebsapati/com/SellWidgetProvider.java
+!android/app/src/main/java/com/bebsapati/com/WidgetModule.java
+# Allow widget-related resource files
+!android/app/src/main/res/layout/sell_widget.xml
+!android/app/src/main/res/xml/sell_widget_info.xml
+!android/app/src/main/res/drawable/widget_gradient_background.xml
+!android/app/src/main/res/drawable/widget_background.xml
+!android/app/src/main/res/drawable/sell_widget_preview.xml
+!android/app/src/main/res/drawable/bebsapati_logo.png
+# Allow updated AndroidManifest.xml (contains widget provider registration)
+!android/app/src/main/AndroidManifest.xml
+# Allow updated MainActivity.kt (contains deep link handling)
+!android/app/src/main/java/com/bebsapati/com/MainActivity.kt
+# Allow updated MainApplication.kt (contains widget module registration)
+!android/app/src/main/java/com/bebsapati/com/MainApplication.kt
+
+ios/
+
+.puku

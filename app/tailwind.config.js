@@ -1,0 +1,45 @@
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+	// NOTE: Update this to include the paths to all of your component files.
+	content: ['./app/**/*.{js,jsx,ts,tsx}', './components/**/*.{js,jsx,ts,tsx}'],
+	presets: [require('nativewind/preset')],
+	theme: {
+		extend: {
+			colors: {
+				primaryTheme: '#195FE1',
+				statusBarColor: '#177DFF',
+				btnPrimary: '#195FE1',
+				btnFaded: '#78B9EB',
+				btnText: '#FFFFFF',
+				bgColor: '#F0F8FF',
+				textField: '#00000030',
+				errorText: '#ff0033',
+				dashboardButtonBg: '#D9D9D9',
+				scanKeyboardBg: '#447EE7',
+				pageHeaderFooterBorder: '#C0C6CC',
+				tableRowHeaderBg: '#F4F5FC',
+				modalBg: '#6592E5',
+
+				topBg: '#1C2459',
+				appBg: '#e2e8f0',
+				cartBg: '#7BD2E7',
+				color_0: '#FFFFFF',
+				color_0_5: '#E8F2FF',
+				color_1: '#D1E5FF',
+				color_1_5: '#B9D8FF',
+				color_2: '#A2CBFF',
+				color_3: '#74B1FF',
+				color_4: '#4597FF',
+				color_5: '#177DFF',
+				color_6: '#1264CC',
+				color_7: '#0E4B99',
+				color_8: '#093266',
+				color_8_5: '#07264D',
+				color_9: '#051933',
+				color_9_5: '#020D1A',
+				color_10: '#000000',
+			},
+		},
+	},
+	plugins: [],
+}

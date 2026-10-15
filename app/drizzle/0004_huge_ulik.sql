@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `syncStatus_syncedAt_unique` ON `syncStatus` (`syncedAt`);

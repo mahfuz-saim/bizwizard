@@ -1,0 +1,1 @@
+DROP INDEX `syncStatus_syncedAt_unique`;
