@@ -1,0 +1,11 @@
+-- CreateEnum
+CREATE TYPE "MessageType" AS ENUM ('PROMOTIONAL', 'TRANSACTIONAL', 'DEBT_REMINDER', 'GENERAL');
+
+-- AlterTable
+ALTER TABLE "attendance" ALTER COLUMN "monthYear" SET DEFAULT TO_CHAR(CURRENT_DATE, 'MONTH-YYYY');
+
+-- AlterTable
+ALTER TABLE "expense" ALTER COLUMN "monthYear" SET DEFAULT TO_CHAR(CURRENT_DATE, 'MONTH-YYYY');
+
+-- AlterTable
+ALTER TABLE "messages" ADD COLUMN     "messgeType" "MessageType" NOT NULL DEFAULT 'GENERAL';

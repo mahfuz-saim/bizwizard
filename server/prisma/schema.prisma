@@ -1,0 +1,1534 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  OWNER
+  BUYER
+  EMPLOYEE
+  SALES_REPRESENTATIVE
+  SUPPLIER
+}
+
+enum UserStatus {
+  BLOCKED
+  ACTIVE
+  PENDING
+  DELETED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum PaymentStatus {
+  PAID
+  UNPAID
+  PENDING
+  FAILED
+  CANCELED
+  VALID
+  INVALID
+  UNATTEMPTED
+  EXPIRED
+}
+
+enum OperationType {
+  CREATE
+  READ
+  DELETE
+  UPDATE
+}
+
+enum ExpenseType {
+  EMPLOYEE_SALARY
+  GENERAL
+  PRODUCT
+}
+
+enum PickupStatus {
+  PENDING
+  ACCEPTED
+  PROCESSING
+  COMPLETE
+  CANCELED
+}
+
+enum RewardType {
+  CREDITS
+  SUBSCRIPTION_EXTENSION
+}
+
+enum RewardClaimStatus {
+  PENDING
+  CLAIMED
+  REVOKED
+}
+
+model RefreshToken {
+  id           String   @id @default(uuid())
+  userID       String   @unique
+  refreshToken String   @unique
+  deviceId     String?  @unique
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("refresh_tokens")
+}
+
+model User {
+  id        String     @id @default(uuid())
+  number    String     @unique
+  email     String?    @unique
+  password  String?
+  role      UserRole[]
+  status    UserStatus @default(PENDING)
+  OTP       Int
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  kyc       KYC?
+
+  admin               Admin?
+  ForgetRequest       ForgetRequest[]
+  Owner               Owner?
+  Buyer               Buyer?
+  Supplier            Supplier?
+  Employee            Employee?
+  SalesRepresentative SalesRepresentative?
+  AuditLog            AuditLog[]
+
+  @@index([status])
+  @@map("users")
+}
+
+model ForgetRequest {
+  id        String   @id @default(uuid())
+  number    String
+  OTP       Int
+  flag      String?
+  isChecked Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userID String
+  user   User?  @relation(fields: [userID], references: [id])
+
+  @@index([number])
+  @@index([userID])
+  @@index([isChecked])
+  @@map("forget_requests")
+}
+
+model Admin {
+  id                      String     @id @default(uuid())
+  userID                  String     @unique
+  user                    User       @relation(fields: [userID], references: [id])
+  name                    String
+  image                   String?
+  number                  String     @unique
+  isDeleted               Boolean    @default(false)
+  createdAt               DateTime   @default(now())
+  updatedAt               DateTime   @updatedAt
+  MessageApprovalRequests Messages[]
+
+  @@map("admins")
+}
+
+model SalesRepresentative {
+  id           String        @id @default(uuid())
+  userID       String        @unique
+  user         User          @relation(fields: [userID], references: [id])
+  name         String
+  image        String?
+  number       String        @unique
+  isDeleted    Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  ReferralCode ReferralCode?
+
+  // referrals where this SR is the referred user (downstream in an SR->SR chain)
+  referralsReferred    Referral[]             @relation("srReferred")
+  // inverse relations for reward pointers
+  RewardReferrerSR     ReferralReward[]       @relation("RewardReferrerSR")
+  RewardReferredSR     ReferralReward[]       @relation("RewardReferredSR")
+  // chain promise relations
+  promisesAsUpstream   ReferralChainPromise[] @relation("PromiseUpstream")
+  promiseAsDownstream  ReferralChainPromise?  @relation("PromiseDownstream")
+  // wallet
+  salesRepCreditWallet SalesRepCreditWallet?
+  salesRepCreditTopups SalesRepCreditTopup[]
+
+  @@map("sales_representative")
+}
+
+model Owner {
+  id               String        @id @default(uuid())
+  userID           String        @unique
+  user             User          @relation(fields: [userID], references: [id])
+  name             String
+  image            String?
+  dob              String
+  nid              String?
+  birthCertificate String?
+  address          String
+  number           String        @unique
+  email            String        @unique
+  isDeleted        Boolean       @default(false)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  tenants          Tenant[]
+  shops            Shop[]
+  ShopPayments     ShopPayment[]
+  // user referral code
+  ReferralCode     ReferralCode?
+  // referrer data
+  referralId       String?       @unique
+  referral         Referral?     @relation("userRef", fields: [referralId], references: [id])
+  LotDeletions     LotDeletion[]
+  soldProducts     Checkout[]
+
+  @@map("owner")
+}
+
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  code      String?  @unique
+  ownerID   String
+  owner     Owner    @relation(fields: [ownerID], references: [userID])
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  shops             Shop[]
+  employees         Employee[]
+  shopConfigs       ShopConfig[]
+  shopBuyers        ShopBuyer[]
+  buyerSystemTags   BuyerSystemTag[]
+  customTags        CustomTag[]
+  buyerCustomTags   BuyerCustomTag[]
+  debts             Debt[]
+  debtLedgers       BuyerDebtLedger[]
+  shopVariants      ShopVariant[]
+  lots              Lot[]
+  lotDeletions      LotDeletion[]
+  checkouts         Checkout[]
+  pickups           Pickup[]
+  pickupItems       PickupItem[]
+  checkoutItems     CheckoutItem[]
+  shopPayments      ShopPayment[]
+  subscriptions     Subscription[]
+  creditWallets     CreditWallet[]
+  creditTopups      CreditTopup[]
+  creditUsages      CreditUsage[]
+  expenses          Expense[]
+  expenseItems      ExpenseItem[]
+  notes             note[]
+  addresses         Address[]
+  shopJoinRequests  ShopJoinRequest[]
+  ReferrerRewards   ReferralReward[]   @relation("ReferrerRewards")
+  ReferredRewards   ReferralReward[]   @relation("ReferredRewards")
+  shopSuppliers     ShopSupplier[]
+  messages          Messages[]
+  attendances       Attendance[]
+  notifications     Notification[]
+  notificationReads NotificationRead[]
+
+  @@index([ownerID])
+  @@map("tenants")
+}
+
+model Buyer {
+  id        String      @id @default(uuid())
+  number    String      @unique
+  name      String
+  address   String
+  userID    String      @unique
+  user      User        @relation(fields: [userID], references: [id])
+  isDeleted Boolean     @default(false)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  Debt      Debt[]
+  Pickup    Pickup[]
+  Checkout  Checkout[]
+  Shops     ShopBuyer[]
+
+  @@map("buyer")
+}
+
+model Employee {
+  id               String           @id @default(uuid())
+  number           String           @unique
+  name             String
+  address          String
+  dob              String
+  nid              String?
+  birthCertificate String?
+  userID           String           @unique
+  user             User             @relation(fields: [userID], references: [id])
+  tenantID         String?
+  tenant           Tenant?          @relation(fields: [tenantID], references: [id])
+  shopID           String?
+  shop             Shop?            @relation(fields: [shopID], references: [id])
+  isDeleted        Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  ShopJoinRequest  ShopJoinRequest?
+  LotDeletions     LotDeletion[]
+  Attendance       Attendance[]
+  soldProducts     Checkout[]
+
+  @@index([tenantID])
+  @@index([shopID])
+  @@map("employee")
+}
+
+model Shop {
+  id           String       @id @default(uuid())
+  shopName     String
+  contact      String
+  tradeLicense String?
+  category     ShopCategory @default(OTHER)
+  shopCode     String?      @unique
+  tenantID     String
+  tenant       Tenant       @relation(fields: [tenantID], references: [id])
+  address      Address?
+  ownerID      String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  shopConfig   ShopConfig?
+
+  owner Owner @relation(fields: [ownerID], references: [userID])
+
+  shopVariants     ShopVariant[]
+  Checkout         Checkout[]
+  Pickup           Pickup[]
+  Debt             Debt[]
+  Employee         Employee[]
+  Expense          Expense[]
+  note             note[]
+  ShopJoinRequests ShopJoinRequest[]
+  Buyers           ShopBuyer[]
+  credit           Float             @default(0)
+  ShopPayments     ShopPayment[]
+
+  CreditWallet  CreditWallet?
+  CreditTopup   CreditTopup[]
+  CreditUsage   CreditUsage[]
+  ShopSupplier  ShopSupplier[]
+  Messages      Messages[]
+  Subscription  Subscription[]
+  Notifications Notification[]
+  customTags    CustomTag[]
+
+  ReferrerRewards ReferralReward[] @relation("ReferrerRewards")
+  ReferredRewards ReferralReward[] @relation("ReferredRewards")
+
+  @@index([tenantID])
+  @@index([ownerID])
+  @@map("shops")
+}
+
+model ShopConfig {
+  id                         String   @id @default(uuid())
+  shopID                     String   @unique
+  Shop                       Shop     @relation(fields: [shopID], references: [id])
+  tenantID                   String
+  tenant                     Tenant   @relation(fields: [tenantID], references: [id])
+  defaultExpirationThreshold Int      @default(3) // in days
+  defaultNotSoldThreshold    Int      @default(30) // in days
+  defaultLowStockThreshold   Int      @default(15) // in units
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  @@index([tenantID])
+  @@map("shop_config")
+}
+
+model ShopBuyer {
+  id        String   @id @default(uuid())
+  shopID    String
+  Shop      Shop     @relation(fields: [shopID], references: [id])
+  tenantID  String
+  tenant    Tenant   @relation(fields: [tenantID], references: [id])
+  name      String
+  number    String
+  address   String
+  buyerID   String
+  Buyer     Buyer    @relation(fields: [buyerID], references: [userID])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  isDeleted Boolean  @default(false)
+
+  systemTags BuyerSystemTag[]
+  customTags BuyerCustomTag[]
+
+  @@unique([shopID, buyerID])
+  @@index([tenantID])
+  @@index([buyerID])
+  @@index([number])
+  @@map("shop_buyer")
+}
+
+model BuyerSystemTag {
+  id       String    @id @default(cuid())
+  buyerId  String
+  buyer    ShopBuyer @relation(fields: [buyerId], references: [id])
+  tenantID String
+  tenant   Tenant    @relation(fields: [tenantID], references: [id])
+  tag      SystemTag
+
+  @@unique([buyerId, tag]) // Prevent duplicate system tags
+  @@index([tenantID])
+}
+
+enum SystemTag {
+  VIP
+  REGULAR
+  INACTIVE
+  // Add more as needed
+}
+
+model CustomTag {
+  id          String           @id @default(cuid())
+  name        String
+  description String?
+  shopId      String
+  shop        Shop             @relation(fields: [shopId], references: [id])
+  tenantID    String
+  tenant      Tenant           @relation(fields: [tenantID], references: [id])
+  buyers      BuyerCustomTag[]
+
+  @@unique([name, shopId]) // Each shop can only have unique tag names
+  @@index([tenantID])
+}
+
+model BuyerCustomTag {
+  id       String    @id @default(cuid())
+  buyerId  String
+  buyer    ShopBuyer @relation(fields: [buyerId], references: [id])
+  tenantID String
+  tenant   Tenant    @relation(fields: [tenantID], references: [id])
+  tagId    String
+  tag      CustomTag @relation(fields: [tagId], references: [id])
+
+  @@unique([buyerId, tagId]) // Prevent assigning the same custom tag multiple times
+  @@index([tenantID])
+}
+
+model Debt {
+  id           String         @id @default(uuid())
+  checkoutID   String         @unique
+  checkout     Checkout       @relation(fields: [checkoutID], references: [id])
+  buyerID      String
+  buyer        Buyer          @relation(fields: [buyerID], references: [userID])
+  shopID       String
+  shop         Shop           @relation(fields: [shopID], references: [id])
+  tenantID     String
+  tenant       Tenant         @relation(fields: [tenantID], references: [id])
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  paidAmount   Float?         @default(0)
+  debtPayments DebtPayments[]
+  status       DebtStatus     @default(UNPAID)
+
+  @@unique([checkoutID, buyerID, shopID])
+  @@index([tenantID])
+  @@index([shopID])
+  @@index([buyerID])
+  @@map("debt")
+}
+
+enum DebtStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  DEFAULTED
+}
+
+model DebtPayments {
+  id        String   @id @default(uuid())
+  amount    Float
+  debtId    String
+  debt      Debt     @relation(fields: [debtId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([debtId])
+}
+
+model BuyerDebtLedger {
+  id              String          @id @default(uuid())
+  shopId          String
+  buyerId         String
+  tenantID        String
+  tenant          Tenant          @relation(fields: [tenantID], references: [id])
+  type            LedgerEntryType
+  amount          Float // Transaction amount (positive for debt, actual payment for payments)
+  previousBalance Float // Balance before this transaction
+  newBalance      Float // Balance after this transaction
+  debtId          String? // Link to specific debt
+  checkoutId      String? // Link to checkout that created the debt
+  description     String?
+  metadata        Json? // For storing additional data like bulk payment splits
+  createdAt       DateTime        @default(now())
+
+  @@index([shopId, buyerId, createdAt])
+  @@index([buyerId, createdAt])
+  @@index([tenantID])
+  @@map("buyer_debt_ledger")
+}
+
+enum LedgerEntryType {
+  DEBT_CREATED
+  PAYMENT_SINGLE
+  PAYMENT_BULK
+}
+
+enum ProductCategory {
+  FRESH_PRODUCE
+  DAIRY_PRODUCTS
+  MEAT_AND_SEAFOOD
+  BAKERY_ITEMS
+  PANTRY_STAPLES
+  CANNED_AND_JARRED_GOODS
+  SNACKS_AND_CONFECTIONERY
+  FROZEN_FOODS
+  BEVERAGES
+  HOUSEHOLD_SUPPLIES
+  PERSONAL_CARE_PRODUCTS
+  BABY_PRODUCTS
+  PET_SUPPLIES
+  HEALTH_AND_WELLNESS
+  INTERNATIONAL_FOODS
+  MEDICINE
+  OTHER
+}
+
+model Inventory {
+  id            String          @id @default(uuid())
+  productName   String
+  barcode       String          @unique
+  measuringUnit String
+  genericName   String?
+  image         String?
+  category      ProductCategory @default(OTHER)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  isPrivate     Boolean         @default(false)
+
+  shopVariants ShopVariant[]
+  CheckoutItem CheckoutItem[]
+  PickupItem   PickupItem[]
+
+  @@map("inventory")
+}
+
+model ShopVariant {
+  id                 String        @id @default(uuid())
+  productID          String?
+  name               String?
+  variantName        String?
+  variantCode        String?
+  packOf             Int?
+  shopID             String
+  tenantID           String
+  tenant             Tenant        @relation(fields: [tenantID], references: [id])
+  lowStock           Int?
+  lowStockSMS        Boolean?
+  lastSoldDate       DateTime?
+  notifyAfterNotSold Int?
+  notifyBeforeExp    Int? // in days
+  notifyAt           DateTime?
+  notSoldSMS         Boolean?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  totalProducts      Int           @default(0)
+  Lot                Lot[]
+  LotDeletion        LotDeletion[]
+  ExpenseItem        ExpenseItem[]
+
+  product Inventory? @relation(fields: [productID], references: [id])
+  shop    Shop       @relation(fields: [shopID], references: [id])
+
+  @@unique([shopID, variantCode])
+  @@index([tenantID])
+  @@index([productID])
+  @@map("shop_variants")
+}
+
+model Lot {
+  id              String    @id @default(uuid())
+  stock           Int
+  mrp             Float
+  isMRPDefault    Boolean
+  retail          Float
+  includeVAT      Boolean
+  buyPrice        Float
+  sellPrice       Float
+  vat             Float?
+  mfgDate         DateTime?
+  expDate         DateTime?
+  locationAtStore String?
+  note            String?
+
+  shopVariantId String
+  tenantID      String
+  tenant        Tenant         @relation(fields: [tenantID], references: [id])
+  ShopVariant   ShopVariant    @relation(fields: [shopVariantId], references: [id])
+  PickupItem    PickupItem[]
+  CheckoutItem  CheckoutItem[]
+  supplyId      String?
+  supply        ShopSupplier?  @relation(fields: [supplyId], references: [id])
+  LotDeletion   LotDeletion[]
+  ExpenseItem   ExpenseItem[]
+  status        LotStatus      @default(ACTIVE)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([tenantID])
+  @@index([shopVariantId])
+  @@index([supplyId])
+  @@index([status])
+  @@index([expDate])
+  @@map("lot")
+}
+
+enum LotStatus {
+  ACTIVE
+  INACTIVE
+  SOLD
+  DELETED
+}
+
+enum LotDeletionReason {
+  EXPIRED
+  RETURNED
+  DAMAGED
+}
+
+enum LossType {
+  FULL_LOSS
+  PARTIAL_LOSS
+  NO_LOSS
+}
+
+model LotDeletion {
+  id                  String            @id @default(uuid())
+  shopVariantId       String
+  ShopVariant         ShopVariant       @relation(fields: [shopVariantId], references: [id])
+  lotId               String            @unique
+  Lot                 Lot               @relation(fields: [lotId], references: [id])
+  tenantID            String
+  tenant              Tenant            @relation(fields: [tenantID], references: [id])
+  stock               Int
+  buyPrice            Float
+  lossType            LossType
+  lossAmount          Float
+  reason              LotDeletionReason
+  note                String?
+  deletionDate        DateTime          @default(now())
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  deletedByType       UserRole
+  deletedByOwnerId    String?
+  deletedByEmployeeId String?
+  deletedByOwner      Owner?            @relation(fields: [deletedByOwnerId], references: [userID])
+  deltedByEmployee    Employee?         @relation(fields: [deletedByEmployeeId], references: [userID])
+
+  @@index([tenantID])
+  @@index([shopVariantId])
+  @@index([deletedByOwnerId])
+  @@index([deletedByEmployeeId])
+  @@index([deletionDate])
+  @@map("lot_adjustments")
+}
+
+//TODO: SOLD BY
+model Checkout {
+  id               String         @id @default(uuid())
+  shopID           String
+  shop             Shop           @relation(fields: [shopID], references: [id])
+  tenantID         String
+  tenant           Tenant         @relation(fields: [tenantID], references: [id])
+  buyerID          String?
+  buyer            Buyer?         @relation(fields: [buyerID], references: [userID])
+  totalPrice       Float //total price after discount
+  totalQuantity    Int
+  totalDiscount    Float          @default(0) //total cart discount applied
+  discountType     DiscountType   @default(PERCENTAGE)
+  status           PaymentStatus
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  items            CheckoutItem[]
+  Debt             Debt?
+  isDraft          Boolean        @default(false)
+  soldBy           UserRole?
+  soldByOwnerId    String?
+  soldByOwner      Owner?         @relation(fields: [soldByOwnerId], references: [userID])
+  soldByEmployeeId String?
+  soldByEmployee   Employee?      @relation(fields: [soldByEmployeeId], references: [userID])
+  pin              Int? // Personal Identification Number for verification
+
+  @@index([tenantID])
+  @@index([shopID, createdAt])
+  @@index([buyerID])
+  @@index([status])
+  @@map("checkouts")
+}
+
+enum DiscountType {
+  PERCENTAGE
+  AMOUNT
+}
+
+model Pickup {
+  id            String        @id @default(uuid())
+  shopID        String
+  shop          Shop          @relation(fields: [shopID], references: [id])
+  tenantID      String
+  tenant        Tenant        @relation(fields: [tenantID], references: [id])
+  buyerID       String
+  buyer         Buyer         @relation(fields: [buyerID], references: [id])
+  totalPrice    Float         @default(0)
+  totalQuantity Int           @default(0)
+  status        PickupStatus  @default(PENDING)
+  paymentStatus PaymentStatus @default(UNPAID)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  pickupItems   PickupItem[]
+
+  @@index([tenantID])
+  @@index([shopID])
+  @@index([buyerID])
+  @@index([status])
+  @@index([paymentStatus])
+  @@map("pickups")
+}
+
+model PickupItem {
+  id          String     @id @default(uuid())
+  pickupID    String
+  pickup      Pickup     @relation(fields: [pickupID], references: [id])
+  tenantID    String
+  tenant      Tenant     @relation(fields: [tenantID], references: [id])
+  lotId       String
+  Lot         Lot        @relation(fields: [lotId], references: [id])
+  productName String
+  unitPrice   Float
+  quantity    Int
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  Inventory   Inventory? @relation(fields: [inventoryId], references: [id])
+  inventoryId String?
+
+  @@index([tenantID])
+  @@index([pickupID])
+  @@index([lotId])
+  @@index([inventoryId])
+  @@map("pickup_items")
+}
+
+model CheckoutItem {
+  id String @id @default(uuid())
+
+  checkoutID String
+  checkout   Checkout @relation(fields: [checkoutID], references: [id], onDelete: Cascade)
+
+  tenantID String
+  tenant   Tenant @relation(fields: [tenantID], references: [id])
+
+  lotId String?
+  Lot   Lot?    @relation(fields: [lotId], references: [id])
+
+  productName String
+  variantId   String?
+  variantName String?
+
+  unitPrice       Float //sell price 
+  discountedPrice Float //total price after all the line discounts applied
+  itemDiscount    Float        @default(0) //discount per item; needs to be multiplied by quantity to get line total discount 
+  discountType    DiscountType @default(PERCENTAGE) //percentage or fixed amount
+
+  quantity Int
+
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  Inventory   Inventory? @relation(fields: [inventoryId], references: [id])
+  inventoryId String?
+
+  @@index([tenantID])
+  @@index([checkoutID])
+  @@index([lotId])
+  @@index([inventoryId])
+  @@map("checkout_items")
+}
+
+model Coupon {
+  id           String        @id @default(uuid())
+  code         String        @unique
+  description  String?
+  discount     Float
+  discountType DiscountType  @default(PERCENTAGE)
+  validFrom    DateTime
+  validUntil   DateTime
+  usageLimit   Int? // Total number of times the coupon can be used
+  usedCount    Int           @default(0) // Number of times the coupon has been used
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  status       CouponStatus  @default(ACTIVE)
+  Payments     ShopPayment[]
+
+  @@index([status])
+  @@index([validUntil])
+  @@map("coupons")
+}
+
+enum CouponStatus {
+  ACTIVE
+  EXPIRED
+  REDEEMED
+  INACTIVE
+}
+
+model ShopPayment {
+  id                    String        @id @default(uuid())
+  userId                String
+  user                  Owner         @relation(fields: [userId], references: [userID])
+  shopId                String
+  Shop                  Shop          @relation(fields: [shopId], references: [id])
+  tenantID              String
+  tenant                Tenant        @relation(fields: [tenantID], references: [id])
+  date                  DateTime
+  amount                Float         @default(0.00)
+  amountWithoutDiscount Float         @default(0.00)
+  transactionId         String        @unique
+  status                PaymentStatus @default(PENDING)
+  paymentGatewayData    Json?
+  validationId          String?       @unique
+  validatedAt           DateTime? // Timestamp when the payment was validated
+  sessionKey            String?       @unique // For session-based payments
+  isValidated           Boolean       @default(false)
+  couponId              String?
+  couponUsed            Coupon?       @relation(fields: [couponId], references: [id])
+
+  paymentType   PaymentType
+  planData      Json? // Optional JSON field to store plan details for subscription payments
+  creditTopupId String? // Optional link to the CreditTopup
+  CreditTopup   CreditTopup?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantID])
+  @@index([shopId])
+  @@index([userId])
+  @@index([status])
+  @@index([date])
+  @@map("shop_payments")
+}
+
+model SubscriptionPlan {
+  id              String         @id @default(cuid())
+  name            String
+  price           Float
+  months          Int
+  features        Json?
+  isActive        Boolean        @default(true)
+  discount        Float?         @default(0.00)
+  discountedPrice Float
+  subscriptions   Subscription[]
+
+  @@index([isActive])
+  @@map("subscription_plans")
+}
+
+model EmployeeSubscriptionPlan {
+  id               String         @id @default(cuid())
+  name             String
+  pricePerEmployee Float
+  isActive         Boolean        @default(true)
+  discount         Float?         @default(0.00)
+  discountedPrice  Float
+  subscriptions    Subscription[]
+
+  @@index([isActive])
+  @@map("employee_subscription_plans")
+}
+
+model Subscription {
+  id                 String                    @id @default(cuid())
+  shopId             String
+  tenantID           String
+  tenant             Tenant                    @relation(fields: [tenantID], references: [id])
+  subscriptionPlanId String
+  plan               SubscriptionPlan          @relation(fields: [subscriptionPlanId], references: [id])
+  employeePlanId     String?
+  employeePlan       EmployeeSubscriptionPlan? @relation(fields: [employeePlanId], references: [id])
+  employeeSlots      Int                       @default(0)
+  startDate          DateTime
+  endDate            DateTime
+  status             SubscriptionStatus
+  shop               Shop                      @relation(fields: [shopId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantID])
+  @@index([shopId])
+  @@index([subscriptionPlanId])
+  @@index([status])
+  @@index([endDate])
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  TRIAL
+  PENDING
+}
+
+model CreditWallet {
+  id           String   @id @default(cuid())
+  shopId       String   @unique
+  tenantID     String
+  tenant       Tenant   @relation(fields: [tenantID], references: [id])
+  totalCredits Float    @default(0)
+  usedCredits  Float    @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  Shop         Shop          @relation(fields: [shopId], references: [id])
+  creditTopups CreditTopup[]
+  creditUsages CreditUsage[]
+
+  @@index([tenantID])
+  @@map("credit_wallets")
+}
+
+model CreditTopup {
+  id        String   @id @default(cuid())
+  shopId    String
+  tenantID  String
+  tenant    Tenant   @relation(fields: [tenantID], references: [id])
+  walletId  String
+  credits   Float
+  paymentId String?  @unique // Optional link to a payment record
+  addedAt   DateTime @default(now())
+
+  shop    Shop         @relation(fields: [shopId], references: [id])
+  wallet  CreditWallet @relation(fields: [walletId], references: [id])
+  payment ShopPayment? @relation(fields: [paymentId], references: [id])
+
+  @@index([tenantID])
+  @@index([shopId])
+  @@index([walletId])
+  @@index([addedAt])
+  @@map("credit_topups")
+}
+
+model CreditConversionRate {
+  id           Int      @id @default(autoincrement())
+  currencyCode String   @db.VarChar(3)
+  rate         Float
+  isActive     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([currencyCode, isActive], name: "unique_active_currency")
+}
+
+model CreditUsage {
+  id          String      @id @default(cuid())
+  shopId      String
+  tenantID    String
+  tenant      Tenant      @relation(fields: [tenantID], references: [id])
+  walletId    String
+  creditsUsed Float
+  serviceType ServiceType
+  description String?
+  usedAt      DateTime    @default(now())
+
+  shop   Shop         @relation(fields: [shopId], references: [id])
+  wallet CreditWallet @relation(fields: [walletId], references: [id])
+
+  @@index([tenantID])
+  @@index([shopId])
+  @@index([walletId])
+  @@index([usedAt])
+  @@map("credit_usages")
+}
+
+enum ServiceType {
+  MESSAGE
+  STORAGE
+  API_CALL
+  CUSTOM
+}
+
+enum PaymentType {
+  SUBSCRIPTION
+  EMPLOYEE
+  CREDIT
+  OTHER
+  RENEW_PLAN
+}
+
+model AuditLog {
+  id             String        @id @default(uuid())
+  operationType  OperationType
+  userId         String
+  userRole       UserRole
+  operationTable String
+  oldData        Json?
+  newData        Json?
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime      @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([operationType])
+  @@index([operationTable])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model Expense {
+  id          String        @id @default(uuid())
+  shopID      String
+  shop        Shop          @relation(references: [id], fields: [shopID])
+  tenantID    String
+  tenant      Tenant        @relation(fields: [tenantID], references: [id])
+  totalAmount Float         @default(0)
+  month       Int           @default(dbgenerated("EXTRACT(MONTH FROM CURRENT_DATE)"))
+  year        Int           @default(dbgenerated("EXTRACT(YEAR FROM CURRENT_DATE)"))
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  ExpenseItem ExpenseItem[]
+
+  @@unique([shopID, year, month])
+  @@index([year, month])
+  @@index([tenantID])
+  @@map("expense")
+}
+
+model ExpenseItem {
+  id          String      @id @default(uuid())
+  expenseID   String
+  expense     Expense     @relation(fields: [expenseID], references: [id])
+  tenantID    String
+  tenant      Tenant      @relation(fields: [tenantID], references: [id])
+  amount      Float
+  name        String?
+  description String?
+  expenseType ExpenseType @default(GENERAL)
+
+  // Product purchase tracking (populated when expenseType = PRODUCT)
+  shopVariantId String?
+  shopVariant   ShopVariant?  @relation(fields: [shopVariantId], references: [id])
+  lotId         String?
+  lot           Lot?          @relation(fields: [lotId], references: [id])
+  supplierId    String? // Reference to ShopSupplier.id
+  supplier      ShopSupplier? @relation(fields: [supplierId], references: [id])
+  quantity      Int? // Number of units purchased
+  unitPrice     Float? // Buy price per unit
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantID])
+  @@index([expenseID])
+  @@index([shopVariantId])
+  @@index([lotId])
+  @@index([supplierId])
+  @@map("expense_item")
+}
+
+model note {
+  id         String   @id @default(uuid())
+  shopID     String
+  shop       Shop     @relation(fields: [shopID], references: [id])
+  tenantID   String
+  tenant     Tenant   @relation(fields: [tenantID], references: [id])
+  name       String?
+  note       String
+  dueDate    DateTime
+  isComplete Boolean  @default(false)
+  isDeleted  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([tenantID])
+  @@index([shopID])
+  @@index([dueDate])
+  @@index([isComplete])
+  @@map("note")
+}
+
+model loginOTP {
+  id     String   @id @default(uuid())
+  number String   @unique
+  otp    Int
+  exp    DateTime
+
+  @@index([exp])
+  @@map("login_otp")
+}
+
+model OtpRequestNumber {
+  id        String   @id @default(uuid())
+  number    String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("otp_request_numbers")
+}
+
+model Address {
+  id       String @id @default(uuid())
+  street   String
+  upazila  String
+  district String
+
+  shopId   String @unique
+  Shop     Shop?  @relation(fields: [shopId], references: [id])
+  tenantID String
+  tenant   Tenant @relation(fields: [tenantID], references: [id])
+
+  @@index([tenantID])
+  @@map("address")
+}
+
+model ShopJoinRequest {
+  shopID       String
+  Shop         Shop                  @relation(fields: [shopID], references: [id])
+  tenantID     String
+  tenant       Tenant                @relation(fields: [tenantID], references: [id])
+  userID       String                @unique
+  User         Employee              @relation(fields: [userID], references: [userID])
+  status       ShopJoinRequestStatus @default(PENDING)
+  requestCount Int                   @default(0)
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  @@unique([shopID, userID])
+  @@index([tenantID])
+  @@map("shop_join_request")
+}
+
+enum ShopJoinRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum ReferralCodeOwnerType {
+  OWNER
+  SALES_REPRESENTATIVE
+}
+
+model ReferralCode {
+  id                    String                @id @default(uuid())
+  code                  String                @unique
+  userType              ReferralCodeOwnerType
+  ownerId               String?               @unique
+  Owner                 Owner?                @relation(fields: [ownerId], references: [userID])
+  salesRepresentativeId String?               @unique
+  salesRepresentative   SalesRepresentative?  @relation(fields: [salesRepresentativeId], references: [userID])
+  Referrals             Referral[]
+
+  @@map("referral_code")
+}
+
+model Referral {
+  id                            String               @id @default(uuid())
+  // The referral code that was used
+  referralCodeId                String
+  referralCode                  ReferralCode         @relation(fields: [referralCodeId], references: [id])
+  // The user who was referred (owner today; SR for SR->SR chains)
+  referredUser                  Owner?               @relation("userRef")
+  // optional SR-side referred user (for SR->SR chains)
+  referredSalesRepresentativeId String?
+  referredSalesRepresentative   SalesRepresentative? @relation("srReferred", fields: [referredSalesRepresentativeId], references: [userID])
+  // all reward rows tied to this Referral via the now-non-unique referralId
+  rewards                       ReferralReward[]     @relation("ReferralMainReward")
+  // chain-bonus reward row (one-to-one, alternate inverse on chainBonusReferralId)
+  chainBonusReward              ReferralReward?      @relation("ChainBonusReferral")
+
+  @@index([referralCodeId])
+  @@index([referredSalesRepresentativeId])
+  @@map("referrals")
+}
+
+model ReferralReward {
+  id                   String    @id @default(uuid())
+  // referralId is now nullable + non-unique — chain-bonus reward rows are not tied to a Referral.
+  // (the unique index is intentionally dropped so the chain-bonus row can also reference
+  //  the same Referral.id via chainBonusReferralId below.)
+  referralId           String?
+  // alternate unique key used by chain-bonus reward rows so both can coexist
+  chainBonusReferralId String?   @unique
+  chainBonusReferral   Referral? @relation("ChainBonusReferral", fields: [chainBonusReferralId], references: [id])
+
+  // Referrer (person who shared the code) rewards
+  referrerStatus     RewardClaimStatus    @default(PENDING)
+  referrerRewardType RewardType?
+  referrerCredits    Float?               @default(100)
+  referrerSubDays    Int?                 @default(7)
+  referrerClaimedAt  DateTime?
+  referrerShopId     String?
+  referrerShop       Shop?                @relation("ReferrerRewards", fields: [referrerShopId], references: [id])
+  referrerTenantId   String?
+  referrerTenant     Tenant?              @relation("ReferrerRewards", fields: [referrerTenantId], references: [id])
+  referrerSalesRepId String?
+  referrerSalesRep   SalesRepresentative? @relation("RewardReferrerSR", fields: [referrerSalesRepId], references: [userID])
+
+  // Referred user (new user who signed up) rewards
+  referredStatus     RewardClaimStatus    @default(PENDING)
+  referredRewardType RewardType?
+  referredCredits    Float?               @default(100)
+  referredSubDays    Int?                 @default(7)
+  referredClaimedAt  DateTime?
+  referredShopId     String?
+  referredShop       Shop?                @relation("ReferredRewards", fields: [referredShopId], references: [id])
+  referredTenantId   String?
+  referredTenant     Tenant?              @relation("ReferredRewards", fields: [referredTenantId], references: [id])
+  referredSalesRepId String?
+  referredSalesRep   SalesRepresentative? @relation("RewardReferredSR", fields: [referredSalesRepId], references: [userID])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  Referral  Referral? @relation("ReferralMainReward", fields: [referralId], references: [id])
+
+  @@index([referrerTenantId, id])
+  @@index([referredTenantId, id])
+  @@index([referrerShopId])
+  @@index([referredShopId])
+  @@index([referrerStatus])
+  @@index([referredStatus])
+  @@index([referrerSalesRepId])
+  @@index([referredSalesRepId])
+  @@map("referral_rewards")
+}
+
+enum ReferralChainPromiseStatus {
+  PENDING
+  FULFILLED
+}
+
+model ReferralChainPromise {
+  id                    String                     @id @default(uuid())
+  upstreamSalesRepId    String
+  upstreamSalesRep      SalesRepresentative        @relation("PromiseUpstream", fields: [upstreamSalesRepId], references: [userID])
+  // one referrer per downstream SR — unique constraint enforces single upstream
+  downstreamSalesRepId  String                     @unique
+  downstreamSalesRep    SalesRepresentative        @relation("PromiseDownstream", fields: [downstreamSalesRepId], references: [userID])
+  halfAmount            Float
+  status                ReferralChainPromiseStatus @default(PENDING)
+  fulfilledAt           DateTime?
+  // the owner referral that fulfilled this promise; unique prevents double-fire on race
+  fulfilledByReferralId String?                    @unique
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+
+  @@index([upstreamSalesRepId, status])
+  @@map("referral_chain_promises")
+}
+
+model SalesRepCreditWallet {
+  id           String              @id @default(cuid())
+  salesRepId   String              @unique
+  salesRep     SalesRepresentative @relation(fields: [salesRepId], references: [userID])
+  totalCredits Float               @default(0)
+  usedCredits  Float               @default(0)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  topups SalesRepCreditTopup[]
+
+  @@map("sales_rep_credit_wallets")
+}
+
+model SalesRepCreditTopup {
+  id         String               @id @default(cuid())
+  salesRepId String
+  salesRep   SalesRepresentative  @relation(fields: [salesRepId], references: [userID])
+  walletId   String
+  wallet     SalesRepCreditWallet @relation(fields: [walletId], references: [id])
+  credits    Float
+  reason     String?
+  refId      String?
+  addedAt    DateTime             @default(now())
+
+  @@index([salesRepId])
+  @@index([walletId])
+  @@index([addedAt])
+  @@map("sales_rep_credit_topups")
+}
+
+enum ShopCategory {
+  GROCERY
+  SUPERMARKET
+  BAKERY
+  PHARMACY
+  CLOTHING
+  ELECTRONICS
+  BOOKSTORE
+  HARDWARE
+  RESTAURANT
+  CAFE
+  BEAUTY_SALON
+  PET_STORE
+  TOY_STORE
+  JEWELRY
+  FURNITURE
+  SPORTS
+  STATIONERY
+  AUTO_PARTS
+  FLOWER_SHOP
+  CONVENIENCE
+  OTHER
+}
+
+model Supplier {
+  id           String         @id @default(uuid())
+  userID       String         @unique
+  user         User           @relation(fields: [userID], references: [id])
+  number       String         @unique
+  name         String
+  company      String
+  image        String?
+  isDeleted    Boolean        @default(false)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  shopSupplied ShopSupplier[]
+
+  @@map("suppliers")
+}
+
+model ShopSupplier {
+  id             String        @id @default(uuid())
+  supplierId     String
+  supplier       Supplier      @relation(fields: [supplierId], references: [userID])
+  shopId         String
+  shop           Shop          @relation(fields: [shopId], references: [id])
+  tenantID       String
+  tenant         Tenant        @relation(fields: [tenantID], references: [id])
+  supplierName   String?
+  number         String
+  company        String?
+  comment        String?
+  supply         Lot[]
+  isDeleted      Boolean       @default(false)
+  lastSuppliedAt DateTime?
+  ExpenseItem    ExpenseItem[]
+
+  @@index([tenantID])
+  @@index([shopId])
+  @@index([supplierId])
+  @@index([number])
+  @@map("shop_supplier")
+}
+
+model AppVersion {
+  id          String   @id @default(uuid())
+  version     String
+  description String?
+  appType     AppType
+  isMandatory Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([appType])
+  @@index([isMandatory])
+  @@map("app_version")
+}
+
+enum AppType {
+  SHOP
+  SUPPLIER
+  BUYER
+}
+
+model Messages {
+  id             String         @id @default(uuid())
+  message        String
+  phoneNumbers   String[]
+  scheduledAt    DateTime
+  totalCost      Float
+  messgeType     MessageType    @default(GENERAL)
+  shopId         String
+  shop           Shop?          @relation(fields: [shopId], references: [id])
+  tenantID       String
+  tenant         Tenant         @relation(fields: [tenantID], references: [id])
+  approvalStatus ApprovalStatus @default(PENDING)
+  sentStatus     SuccessStatus  @default(PENDING)
+  approvedById   String?
+  approvedBy     Admin?         @relation(fields: [approvedById], references: [userID])
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([tenantID])
+  @@index([shopId])
+  @@index([approvalStatus])
+  @@index([sentStatus])
+  @@index([scheduledAt])
+  @@map("messages")
+}
+
+enum MessageType {
+  PROMOTIONAL
+  TRANSACTIONAL
+  DEBT_REMINDER
+  GENERAL
+}
+
+enum ApprovalStatus {
+  APPROVED
+  PENDING
+  REJECTED
+}
+
+enum SuccessStatus {
+  SUCCESS
+  FAILED
+  PENDING
+}
+
+//TODO: move admin approvals to a separate table
+
+model FCM_Token {
+  id        String   @id @default(uuid())
+  userId    String?  @unique
+  shopId    String?
+  token     String   @unique
+  tenantId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([shopId])
+  @@map("fcm_tokens")
+}
+
+model Attendance {
+  id         String           @id @default(uuid())
+  employeeId String
+  Employee   Employee         @relation(fields: [employeeId], references: [userID])
+  tenantID   String
+  tenant     Tenant           @relation(fields: [tenantID], references: [id])
+  month      Int              @default(dbgenerated("EXTRACT(MONTH FROM CURRENT_DATE)"))
+  year       Int              @default(dbgenerated("EXTRACT(YEAR FROM CURRENT_DATE)"))
+  date       DateTime         @default(now())
+  inTime     DateTime?
+  inStatus   AttendanceStatus @default(ABSENT)
+  outTime    DateTime?
+  outStatus  AttendanceStatus @default(ABSENT)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@unique([employeeId, date])
+  @@index([tenantID])
+  @@index([year, month])
+  @@map("attendance")
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  PENDING
+  REQUESTED
+}
+
+model Notification {
+  id         String             @id @default(cuid())
+  shopId     String?
+  Shop       Shop?              @relation(fields: [shopId], references: [id])
+  tenantID   String?
+  tenant     Tenant?            @relation(fields: [tenantID], references: [id])
+  userId     String?
+  title      String
+  body       String
+  data       Json?
+  role       UserRole[]
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  isPublic   Boolean            @default(false) // Indicates if the notification is public and can be seen by all users
+  ReadStatus NotificationRead[] // Relation to track read status by users
+
+  @@index([tenantID])
+  @@index([userId])
+  @@index([shopId])
+  @@index([createdAt])
+  @@index([isPublic])
+}
+
+model NotificationRead {
+  id             String       @id @default(uuid())
+  isRead         Boolean      @default(false)
+  readAt         DateTime?    @default(now())
+  tenantID       String
+  tenant         Tenant       @relation(fields: [tenantID], references: [id])
+  notificationId String
+  notification   Notification @relation(fields: [notificationId], references: [id])
+  userId         String
+
+  @@index([tenantID])
+  @@index([notificationId, userId])
+}
+
+model KYC {
+  id                 String         @id @default(uuid())
+  userId             String         @unique
+  firstName          String
+  lastName           String
+  dateOfBirth        DateTime
+  nationality        String
+  address            String
+  idType             IdType
+  idNumber           String
+  documents          KycDocument[]
+  isVerified         Boolean        @default(false)
+  verificationStatus ApprovalStatus @default(PENDING)
+  verificationDate   DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([verificationStatus])
+  @@index([isVerified])
+}
+
+model KycDocument {
+  id         String   @id @default(uuid())
+  kycId      String
+  fileUrl    String
+  fileType   String
+  uploadedAt DateTime @default(now())
+
+  kyc KYC @relation(fields: [kycId], references: [id])
+
+  @@index([kycId])
+}
+
+enum IdType {
+  PASSPORT
+  DRIVERS_LICENSE
+  NATIONAL_ID
+  BIRTH_CERTIFICATE
+  OTHER
+}

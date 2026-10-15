@@ -1,0 +1,493 @@
+{
+    "users": [
+        {
+            "id": "user-admin-001",
+            "number": "01700000001",
+            "password": "admin123",
+            "role": "ADMIN",
+            "status": "ACTIVE",
+            "OTP": 123456
+        },
+        {
+            "id": "user-superadmin-001",
+            "number": "01700000002",
+            "password": "superadmin123",
+            "role": "SUPER_ADMIN",
+            "status": "ACTIVE",
+            "OTP": 123456
+        },
+        {
+            "id": "user-salesrep-001",
+            "number": "01700000003",
+            "password": "salesrep123",
+            "role": "SALES_REPRESENTATIVE",
+            "status": "ACTIVE",
+            "OTP": 123456
+        },
+        {
+            "id": "user-owner-001",
+            "number": "01700000004",
+            "password": "owner123",
+            "role": "OWNER",
+            "status": "ACTIVE",
+            "email": "owner1@mail.com",
+            "OTP": 123456
+        },
+        {
+            "id": "user-owner-002",
+            "number": "01700000005",
+            "password": "owner123",
+            "role": "OWNER",
+            "status": "ACTIVE",
+            "email": "owner2@mail.com",
+            "OTP": 123456
+        },
+        {
+            "id": "user-buyer-001",
+            "number": "01700000006",
+            "password": "buyer123",
+            "role": "BUYER",
+            "status": "ACTIVE",
+            "OTP": 123456
+        },
+        {
+            "id": "user-buyer-002",
+            "number": "01700000007",
+            "password": "buyer123",
+            "role": "BUYER",
+            "status": "ACTIVE",
+            "OTP": 123456
+        },
+        {
+            "id": "user-employee-001",
+            "number": "01700000008",
+            "password": "employee123",
+            "role": "EMPLOYEE",
+            "status": "ACTIVE",
+            "OTP": 123456
+        },
+        {
+            "id": "user-employee-002",
+            "number": "01700000009",
+            "password": "employee123",
+            "role": "EMPLOYEE",
+            "status": "ACTIVE",
+            "OTP": 123456
+        },
+        {
+            "id": "user-supplier-001",
+            "number": "01700000010",
+            "password": "supplier123",
+            "role": "SUPPLIER",
+            "status": "ACTIVE",
+            "OTP": 123456
+        },
+        {
+            "id": "user-supplier-002",
+            "number": "01700000011",
+            "password": "supplier123",
+            "role": "SUPPLIER",
+            "status": "ACTIVE",
+            "OTP": 123456
+        }
+    ],
+    "admins": [
+        {
+            "id": "admin-001",
+            "userID": "user-admin-001",
+            "name": "System Admin",
+            "image": "https://example.com/admin.jpg",
+            "number": "01700000001"
+        },
+        {
+            "id": "admin-002",
+            "userID": "user-superadmin-001",
+            "name": "Super Admin",
+            "image": "https://example.com/superadmin.jpg",
+            "number": "01700000002"
+        }
+    ],
+    "salesRepresentatives": [
+        {
+            "id": "salesrep-001",
+            "userID": "user-salesrep-001",
+            "name": "Sales Representative",
+            "image": "https://example.com/salesrep.jpg",
+            "number": "01700000003"
+        }
+    ],
+    "owners": [
+        {
+            "id": "owner-001",
+            "userID": "user-owner-001",
+            "name": "John Doe",
+            "image": "https://example.com/owner1.jpg",
+            "dob": "1985-05-15",
+            "nid": "1234567890123",
+            "birthCertificate": "BC1234567890",
+            "address": "123 Main Street, Dhaka",
+            "number": "01700000004",
+            "email": "owner1@mail.com"
+        },
+        {
+            "id": "owner-002",
+            "userID": "user-owner-002",
+            "name": "Jane Smith",
+            "image": "https://example.com/owner2.jpg",
+            "dob": "1990-08-20",
+            "nid": "9876543210987",
+            "birthCertificate": "BC9876543210",
+            "address": "456 Oak Avenue, Chittagong",
+            "number": "01700000005",
+            "email": "owner2@mail.com"
+        }
+    ],
+    "buyers": [
+        {
+            "id": "buyer-001",
+            "userID": "user-buyer-001",
+            "number": "01700000006",
+            "name": "Ahmed Hassan",
+            "address": "789 Elm Street, Dhaka"
+        },
+        {
+            "id": "buyer-002",
+            "userID": "user-buyer-002",
+            "number": "01700000007",
+            "name": "Fatima Khan",
+            "address": "321 Pine Road, Sylhet"
+        }
+    ],
+    "suppliers": [
+        {
+            "id": "supplier-001",
+            "userID": "user-supplier-001",
+            "number": "01700000010",
+            "name": "Mohammad Ali",
+            "company": "Ali Trading Co.",
+            "image": "https://example.com/supplier1.jpg"
+        },
+        {
+            "id": "supplier-002",
+            "userID": "user-supplier-002",
+            "number": "01700000011",
+            "name": "Rashida Begum",
+            "company": "Begum Wholesale",
+            "image": "https://example.com/supplier2.jpg"
+        }
+    ],
+    "shops": [
+        {
+            "id": "shop-001",
+            "shopName": "Corner Grocery Store",
+            "contact": "01700000004",
+            "tradeLicense": "TL123456789",
+            "category": "GROCERY",
+            "shopCode": "CGS001",
+            "ownerId": "owner-001",
+            "credit": 10000.0,
+            "address": {
+                "id": "address-001",
+                "street": "123 Main Street",
+                "upazila": "Dhanmondi",
+                "district": "Dhaka"
+            }
+        },
+        {
+            "id": "shop-002",
+            "shopName": "Fresh Mart Supermarket",
+            "contact": "01700000005",
+            "tradeLicense": "TL987654321",
+            "category": "SUPERMARKET",
+            "shopCode": "FMS002",
+            "ownerId": "owner-002",
+            "credit": 25000.0,
+            "address": {
+                "id": "address-002",
+                "street": "456 Oak Avenue",
+                "upazila": "Agrabad",
+                "district": "Chittagong"
+            }
+        }
+    ],
+    "employees": [
+        {
+            "id": "employee-001",
+            "userID": "user-employee-001",
+            "number": "01700000008",
+            "name": "Karim Rahman",
+            "address": "111 Worker Lane, Dhaka",
+            "dob": "1995-03-10",
+            "nid": "1111222233334",
+            "birthCertificate": "BC1111222233",
+            "shopID": "shop-001"
+        },
+        {
+            "id": "employee-002",
+            "userID": "user-employee-002",
+            "number": "01700000009",
+            "name": "Salma Khatun",
+            "address": "222 Staff Road, Chittagong",
+            "dob": "1992-11-25",
+            "nid": "5555666677778",
+            "birthCertificate": "BC5555666677",
+            "shopID": "shop-002"
+        }
+    ],
+    "inventory": [
+        {
+            "id": "inventory-001",
+            "productName": "Basmati Rice",
+            "barcode": "8901030840015",
+            "measuringUnit": "kg",
+            "image": "https://example.com/basmati-rice.jpg",
+            "isPrivate": false
+        },
+        {
+            "id": "inventory-002",
+            "productName": "White Sugar",
+            "barcode": "8901030840022",
+            "measuringUnit": "kg",
+            "image": "https://example.com/white-sugar.jpg",
+            "isPrivate": false
+        },
+        {
+            "id": "inventory-003",
+            "productName": "All Purpose Flour",
+            "barcode": "8901030840039",
+            "measuringUnit": "kg",
+            "image": "https://example.com/flour.jpg",
+            "isPrivate": false
+        },
+        {
+            "id": "inventory-004",
+            "productName": "Cooking Oil",
+            "barcode": "8901030840046",
+            "measuringUnit": "liter",
+            "image": "https://example.com/cooking-oil.jpg",
+            "isPrivate": false
+        },
+        {
+            "id": "inventory-005",
+            "productName": "Red Lentils",
+            "barcode": "8901030840053",
+            "measuringUnit": "kg",
+            "image": "https://example.com/red-lentils.jpg",
+            "isPrivate": false
+        },
+        {
+            "id": "inventory-006",
+            "productName": "Milk Powder",
+            "barcode": "8901030840060",
+            "measuringUnit": "gm",
+            "image": "https://example.com/milk-powder.jpg",
+            "isPrivate": true
+        }
+    ],
+    "shopVariants": [
+        {
+            "id": "shop-variant-001",
+            "productID": "inventory-001",
+            "name": "Premium Basmati Rice",
+            "variantName": "5kg Premium Pack",
+            "variantCode": "RICE-5KG-PREM",
+            "packOf": 5,
+            "shopID": "shop-001",
+            "lowStock": 20,
+            "lowStockSMS": true,
+            "lastSoldDate": "2024-01-15T10:30:00Z",
+            "notifyAfterNotSold": 30,
+            "notSoldSMS": true,
+            "totalProducts": 150
+        },
+        {
+            "id": "shop-variant-002",
+            "productID": "inventory-002",
+            "name": "Refined White Sugar",
+            "variantName": "1kg Pack",
+            "variantCode": "SUGAR-1KG",
+            "packOf": 1,
+            "shopID": "shop-001",
+            "lowStock": 50,
+            "lowStockSMS": true,
+            "lastSoldDate": "2024-01-20T14:15:00Z",
+            "notifyAfterNotSold": 25,
+            "notSoldSMS": true,
+            "totalProducts": 200
+        },
+        {
+            "id": "shop-variant-003",
+            "productID": "inventory-003",
+            "name": "All Purpose Flour",
+            "variantName": "2kg Pack",
+            "variantCode": "FLOUR-2KG",
+            "packOf": 2,
+            "shopID": "shop-001",
+            "lowStock": 30,
+            "lowStockSMS": true,
+            "lastSoldDate": "2024-01-18T09:45:00Z",
+            "notifyAfterNotSold": 35,
+            "notSoldSMS": false,
+            "totalProducts": 100
+        },
+        {
+            "id": "shop-variant-004",
+            "productID": "inventory-004",
+            "name": "Soybean Oil",
+            "variantName": "1L Bottle",
+            "variantCode": "OIL-1L",
+            "packOf": 1,
+            "shopID": "shop-002",
+            "lowStock": 25,
+            "lowStockSMS": true,
+            "lastSoldDate": "2024-01-22T16:20:00Z",
+            "notifyAfterNotSold": 40,
+            "notSoldSMS": true,
+            "totalProducts": 80
+        },
+        {
+            "id": "shop-variant-005",
+            "productID": "inventory-005",
+            "name": "Red Lentils (Masoor Dal)",
+            "variantName": "1kg Pack",
+            "variantCode": "LENTIL-1KG",
+            "packOf": 1,
+            "shopID": "shop-002",
+            "lowStock": 15,
+            "lowStockSMS": true,
+            "lastSoldDate": "2024-01-19T11:10:00Z",
+            "notifyAfterNotSold": 20,
+            "notSoldSMS": true,
+            "totalProducts": 120
+        },
+        {
+            "id": "shop-variant-006",
+            "productID": "inventory-006",
+            "name": "Full Cream Milk Powder",
+            "variantName": "400g Pack",
+            "variantCode": "MILK-400G",
+            "packOf": 400,
+            "shopID": "shop-002",
+            "lowStock": 10,
+            "lowStockSMS": true,
+            "lastSoldDate": "2024-01-21T13:30:00Z",
+            "notifyAfterNotSold": 45,
+            "notSoldSMS": false,
+            "totalProducts": 60
+        }
+    ],
+    "lots": [
+        {
+            "id": "lot-001",
+            "stock": 50,
+            "mrp": 600.0,
+            "isMRPDefault": true,
+            "retail": 580.0,
+            "includeVAT": true,
+            "buyPrice": 520.0,
+            "sellPrice": 580.0,
+            "vat": 60.0,
+            "mfgDate": "2023-12-01T00:00:00Z",
+            "expDate": "2025-12-01T00:00:00Z",
+            "locationAtStore": "Aisle 1, Shelf A",
+            "note": "Premium quality basmati rice",
+            "shopVariantId": "shop-variant-001"
+        },
+        {
+            "id": "lot-002",
+            "stock": 100,
+            "mrp": 600.0,
+            "isMRPDefault": true,
+            "retail": 570.0,
+            "includeVAT": true,
+            "buyPrice": 510.0,
+            "sellPrice": 570.0,
+            "vat": 60.0,
+            "mfgDate": "2023-11-15T00:00:00Z",
+            "expDate": "2025-11-15T00:00:00Z",
+            "locationAtStore": "Aisle 1, Shelf B",
+            "note": "Second batch basmati rice",
+            "shopVariantId": "shop-variant-001"
+        },
+        {
+            "id": "lot-003",
+            "stock": 200,
+            "mrp": 110.0,
+            "isMRPDefault": true,
+            "retail": 105.0,
+            "includeVAT": true,
+            "buyPrice": 95.0,
+            "sellPrice": 105.0,
+            "vat": 10.0,
+            "mfgDate": "2024-01-01T00:00:00Z",
+            "expDate": "2026-01-01T00:00:00Z",
+            "locationAtStore": "Aisle 2, Shelf A",
+            "note": "Refined white sugar",
+            "shopVariantId": "shop-variant-002"
+        },
+        {
+            "id": "lot-004",
+            "stock": 100,
+            "mrp": 240.0,
+            "isMRPDefault": true,
+            "retail": 230.0,
+            "includeVAT": true,
+            "buyPrice": 210.0,
+            "sellPrice": 230.0,
+            "vat": 20.0,
+            "mfgDate": "2023-12-20T00:00:00Z",
+            "expDate": "2024-12-20T00:00:00Z",
+            "locationAtStore": "Aisle 3, Shelf A",
+            "note": "All purpose flour",
+            "shopVariantId": "shop-variant-003"
+        },
+        {
+            "id": "lot-005",
+            "stock": 80,
+            "mrp": 180.0,
+            "isMRPDefault": true,
+            "retail": 175.0,
+            "includeVAT": true,
+            "buyPrice": 160.0,
+            "sellPrice": 175.0,
+            "vat": 15.0,
+            "mfgDate": "2024-01-10T00:00:00Z",
+            "expDate": "2025-01-10T00:00:00Z",
+            "locationAtStore": "Aisle 4, Shelf A",
+            "note": "Soybean cooking oil",
+            "shopVariantId": "shop-variant-004"
+        },
+        {
+            "id": "lot-006",
+            "stock": 120,
+            "mrp": 140.0,
+            "isMRPDefault": true,
+            "retail": 135.0,
+            "includeVAT": true,
+            "buyPrice": 120.0,
+            "sellPrice": 135.0,
+            "vat": 15.0,
+            "mfgDate": "2024-01-05T00:00:00Z",
+            "expDate": "2025-01-05T00:00:00Z",
+            "locationAtStore": "Aisle 5, Shelf A",
+            "note": "Red lentils masoor dal",
+            "shopVariantId": "shop-variant-005"
+        },
+        {
+            "id": "lot-007",
+            "stock": 60,
+            "mrp": 450.0,
+            "isMRPDefault": true,
+            "retail": 430.0,
+            "includeVAT": true,
+            "buyPrice": 400.0,
+            "sellPrice": 430.0,
+            "vat": 30.0,
+            "mfgDate": "2024-01-12T00:00:00Z",
+            "expDate": "2025-01-12T00:00:00Z",
+            "locationAtStore": "Aisle 6, Shelf A",
+            "note": "Full cream milk powder",
+            "shopVariantId": "shop-variant-006"
+        }
+    ]
+}

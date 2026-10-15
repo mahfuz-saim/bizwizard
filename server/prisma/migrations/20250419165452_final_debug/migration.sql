@@ -1,0 +1,5 @@
+-- AlterEnum
+ALTER TYPE "PickupStatus" ADD VALUE 'CANCELED';
+
+-- AlterTable
+ALTER TABLE "expense" ALTER COLUMN "monthYear" SET DEFAULT TO_CHAR(CURRENT_DATE, 'MONTH-YYYY');

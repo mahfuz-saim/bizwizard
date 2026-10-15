@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "debt" ADD COLUMN     "paidAmount" DOUBLE PRECISION DEFAULT 0;
+
+-- AlterTable
+ALTER TABLE "expense" ALTER COLUMN "monthYear" SET DEFAULT TO_CHAR(CURRENT_DATE, 'MONTH-YYYY');

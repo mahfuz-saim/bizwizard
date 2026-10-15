@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "credit_topups" ALTER COLUMN "credits" SET DATA TYPE DOUBLE PRECISION;
+
+-- AlterTable
+ALTER TABLE "expense" ALTER COLUMN "monthYear" SET DEFAULT TO_CHAR(CURRENT_DATE, 'MONTH-YYYY');

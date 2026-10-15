@@ -1,0 +1,11 @@
+-- CreateEnum
+CREATE TYPE "DebtStatus" AS ENUM ('UNPAID', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'DEFAULTED');
+
+-- AlterTable
+ALTER TABLE "attendance" ALTER COLUMN "monthYear" SET DEFAULT TO_CHAR(CURRENT_DATE, 'MONTH-YYYY');
+
+-- AlterTable
+ALTER TABLE "debt" ADD COLUMN     "status" "DebtStatus" NOT NULL DEFAULT 'UNPAID';
+
+-- AlterTable
+ALTER TABLE "expense" ALTER COLUMN "monthYear" SET DEFAULT TO_CHAR(CURRENT_DATE, 'MONTH-YYYY');

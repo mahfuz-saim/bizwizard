@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "buyer" ALTER COLUMN "totalDebt" SET DEFAULT 0,
+ALTER COLUMN "point" SET DEFAULT 0;

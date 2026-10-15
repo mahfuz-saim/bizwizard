@@ -1,0 +1,93 @@
+import { LossType, LotDeletionReason, ProductCategory } from '@prisma/client';
+
+export interface IProduct {
+    productID?: string;
+    variantId?: string;
+    name: string;
+    category: ProductCategory;
+    variantName?: string;
+    variantCode?: string;
+    packOf?: number;
+    shopID: string;
+    lowStock?: number;
+    lowStockSMS?: boolean;
+    lastSoldDate?: Date;
+    notifyAfterNotSold?: number;
+    notifyBeforeExp?: number;
+    notSoldSMS?: boolean;
+    barcode?: string;
+    measuringUnit: string;
+    supplierId?: string;
+    genericName?: string;
+    lot: {
+        stock: number;
+        mrp: number;
+        isMRPDefault: boolean;
+        retail: number;
+        includeVAT: boolean;
+        buyPrice: number;
+        sellPrice: number;
+        vat?: number;
+        mfgDate?: Date;
+        expDate?: Date;
+        locationAtStore?: string;
+        note?: string;
+    };
+}
+
+// Catalog create — product + N variants without lots (Option A)
+export interface ICatalogVariant {
+    variantName: string;
+    variantCode?: string;
+    packOf?: number;
+    lowStock?: number;
+    lowStockSMS?: boolean;
+    notifyAfterNotSold?: number;
+    notifyBeforeExp?: number;
+    notSoldSMS?: boolean;
+}
+
+export interface ICreateCatalog {
+    shopID: string;
+    productID?: string; // if reusing existing Inventory
+    name: string;
+    category: ProductCategory;
+    measuringUnit: string;
+    barcode?: string;
+    genericName?: string;
+    variants: ICatalogVariant[];
+}
+
+export interface IUpdateLot {
+    mrp?: number;
+    isMRPDefault?: boolean;
+    retail?: number;
+    includeVAT?: boolean;
+    sellPrice?: number;
+    vat?: number;
+    mfgDate?: Date;
+    expDate?: Date;
+    locationAtStore?: string;
+    note?: string;
+}
+
+export interface IUpdateProduct {
+    name?: string;
+    variantName?: string;
+    variantCode?: string;
+    packOf?: number;
+    lowStock?: number;
+    lowStockSMS?: boolean;
+    lastSoldDate?: Date;
+    notifyAfterNotSold?: number;
+    notSoldSMS?: boolean;
+}
+
+export interface ILotDeletion {
+    lotId: string;
+    stock: number;
+    reason: LotDeletionReason;
+    lossType: LossType;
+    lossAmount: number;
+    note?: string;
+}
