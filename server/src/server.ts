@@ -2,8 +2,12 @@ import { Server } from 'http';
 import app from './app';
 import config from './config';
 import { errorlogger, logger } from './shared/logger';
+import { ensureDemoUser } from './shared/ensureDemoUser';
 
 async function bootstrap() {
+    // Auto-seed a demo OWNER for web dev if DEMO_EMAIL / DEMO_PASSWORD are set
+    await ensureDemoUser().catch(() => {});
+
     const server: Server = app.listen(config.port, () => {
         logger.info(`Server running on port ${config.port}`);
         console.log(`Server running on port ${config.port}`);

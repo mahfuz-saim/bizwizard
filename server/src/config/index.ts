@@ -44,4 +44,10 @@ export default {
         token: process.env.GMAIL_APPLICATION_TOKEN,
         credentials: process.env.GMAIL_APPLICATION_CREDENTIALS,
     },
+    demo: {
+        email: process.env.DEMO_EMAIL,
+        password: process.env.DEMO_PASSWORD,
+        number: process.env.DEMO_NUMBER || '00000000000',
+        shopName: process.env.DEMO_SHOP_NAME || 'Demo Store',
+    },
 };
