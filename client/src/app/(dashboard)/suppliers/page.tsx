@@ -11,7 +11,7 @@ import { useStore } from "@/lib/store"
 import { formatCurrency, generateAvatarColor, getInitials } from "@/lib/utils"
 
 export default function SuppliersPage() {
-  const { suppliers } = useStore()
+  const { suppliers, source } = useStore()
   const [search, setSearch] = React.useState("")
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -36,8 +36,8 @@ export default function SuppliersPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card><CardContent className="p-4"><p className="text-xs font-medium text-muted-foreground">Total Suppliers</p><p className="mt-1 text-2xl font-bold">{suppliers.length}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs font-medium text-muted-foreground">Total Payable</p><p className="mt-1 text-2xl font-bold text-destructive">{formatCurrency(totalDue)}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs font-medium text-muted-foreground">Total Paid</p><p className="mt-1 text-2xl font-bold text-success">{formatCurrency(totalPaid)}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs font-medium text-muted-foreground">Total Payable</p><p className="mt-1 text-2xl font-bold text-destructive">{source === "mock" ? formatCurrency(totalDue) : "Not tracked"}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs font-medium text-muted-foreground">{source === "mock" ? "Total Paid" : "Purchase Volume"}</p><p className="mt-1 text-2xl font-bold text-success">{source === "mock" ? formatCurrency(totalPaid) : formatCurrency(suppliers.reduce((n, s) => n + (s.totalPurchased || 0), 0))}</p></CardContent></Card>
       </div>
 
       <Card>
@@ -59,12 +59,12 @@ export default function SuppliersPage() {
                 <p className="text-xs text-muted-foreground">{s.address || "—"}</p>
               </div>
               <div className="text-right">
-                {s.totalDue > 0 ? (
+                {s.paymentTracked === false ? <Badge variant="outline">Payments not tracked</Badge> : s.totalDue > 0 ? (
                   <Badge variant="warning">Due {formatCurrency(s.totalDue)}</Badge>
                 ) : (
                   <Badge variant="success">Settled</Badge>
                 )}
-                <p className="mt-1 text-xs text-muted-foreground">{formatCurrency(s.totalPaid)} paid</p>
+                <p className="mt-1 text-xs text-muted-foreground">{s.paymentTracked === false ? `${formatCurrency(s.totalPurchased || 0)} purchased` : `${formatCurrency(s.totalPaid)} paid`}</p>
               </div>
             </div>
           ))}

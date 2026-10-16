@@ -144,13 +144,13 @@ export default function SalesPage() {
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{t.items.length} items</TableCell>
                         <TableCell>
-                          <Badge variant="outline">{t.paymentMethod}</Badge>
+                          <Badge variant="outline">{t.paymentMethod === "UNKNOWN" ? "Not recorded" : t.paymentMethod}</Badge>
                         </TableCell>
                         <TableCell className={`text-right font-semibold ${isSale ? "text-success" : ""}`}>
                           {formatCurrency(t.total)}
                         </TableCell>
                         <TableCell className={`text-right font-medium ${t.due > 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                          {t.due > 0 ? formatCurrency(t.due) : "—"}
+                          {t.paymentTracked === false ? "Not tracked" : t.due > 0 ? formatCurrency(t.due) : "—"}
                         </TableCell>
                       </TableRow>
                     )

@@ -12,7 +12,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { generateAvatarColor, getInitials } from "@/lib/utils"
 
 export default function DebtsPage() {
-  const { customers, suppliers, transactions } = useStore()
+  const { customers, suppliers, source } = useStore()
 
   const receivable = customers.filter(c => c.totalDue > 0)
   const payable = suppliers.filter(s => s.totalDue > 0)
@@ -26,7 +26,7 @@ export default function DebtsPage() {
           <h2 className="text-2xl font-bold tracking-tight">Debts & Ledgers</h2>
           <p className="text-sm text-muted-foreground">Track receivables from customers and payables to suppliers.</p>
         </div>
-        <Button><Plus className="mr-2 h-4 w-4" /> Record Payment</Button>
+        <Button disabled title="Payment recording is not yet connected"><Plus className="mr-2 h-4 w-4" /> Record Payment</Button>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -37,7 +37,7 @@ export default function DebtsPage() {
         </CardContent></Card>
         <Card><CardContent className="p-4">
           <p className="text-xs font-medium text-muted-foreground">You will pay</p>
-          <p className="mt-1 text-2xl font-bold text-destructive">{formatCurrency(totalPayable)}</p>
+          <p className="mt-1 text-2xl font-bold text-destructive">{source === "mock" ? formatCurrency(totalPayable) : "Not tracked"}</p>
           <p className="text-xs text-muted-foreground">To {payable.length} suppliers</p>
         </CardContent></Card>
       </div>
@@ -65,7 +65,7 @@ export default function DebtsPage() {
                 ))}
             </TabsContent>
             <TabsContent value="payable" className="mt-4 space-y-2">
-              {payable.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">No pending payables. 🎉</p> :
+              {payable.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">{source === "mock" ? "No pending payables." : "Supplier payment balances are not tracked by the backend."}</p> :
                 payable.map((s) => (
                   <div key={s.id} className="flex items-center gap-3 rounded-lg border p-3">
                     <Avatar className="h-10 w-10" style={{ backgroundColor: generateAvatarColor(s.name) }}>

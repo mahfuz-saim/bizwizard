@@ -11,14 +11,14 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
+  DialogTitle
 } from "@/components/ui/dialog"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
+  SelectValue
 } from "@/components/ui/select"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -39,7 +39,7 @@ interface Props {
 }
 
 export function BuyStockDialog({ open, onOpenChange, prefillProduct }: Props) {
-  const { products, suppliers, addBuy } = useStore()
+  const { products, suppliers, addBuy, source } = useStore()
   const [supplierId, setSupplierId] = React.useState<string>("")
   const [supplierName, setSupplierName] = React.useState<string>("")
   const [note, setNote] = React.useState("")
@@ -64,8 +64,8 @@ export function BuyStockDialog({ open, onOpenChange, prefillProduct }: Props) {
         {
           productId: prefillProduct.id,
           quantity: 1,
-          buyPrice: prefillProduct.buyPrice || 0,
-        },
+          buyPrice: prefillProduct.buyPrice || 0
+        }
       ])
     }
   }, [open, prefillProduct, reset])
@@ -78,13 +78,18 @@ export function BuyStockDialog({ open, onOpenChange, prefillProduct }: Props) {
           i.productId === p.id ? { ...i, quantity: i.quantity + 1 } : i
         )
       }
-      return [...prev, { productId: p.id, quantity: 1, buyPrice: p.buyPrice || 0 }]
+      return [
+        ...prev,
+        { productId: p.id, quantity: 1, buyPrice: p.buyPrice || 0 }
+      ]
     })
     setSearch("")
   }
 
   const updateItem = (idx: number, patch: Partial<LineItem>) => {
-    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)))
+    setItems((prev) =>
+      prev.map((it, i) => (i === idx ? { ...it, ...patch } : it))
+    )
   }
 
   const removeItem = (idx: number) => {
@@ -97,7 +102,11 @@ export function BuyStockDialog({ open, onOpenChange, prefillProduct }: Props) {
   )
 
   const subtotal = items.reduce(
-    (s, it) => s + (isNaN(it.quantity) || isNaN(it.buyPrice) ? 0 : it.quantity * it.buyPrice),
+    (s, it) =>
+      s +
+      (isNaN(it.quantity) || isNaN(it.buyPrice)
+        ? 0
+        : it.quantity * it.buyPrice),
     0
   )
   const due = Math.max(0, subtotal - paid)
@@ -115,17 +124,40 @@ export function BuyStockDialog({ open, onOpenChange, prefillProduct }: Props) {
       .slice(0, 8)
   }, [products, search])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [saving, setSaving] = React.useState(false)
+  const [submitError, setSubmitError] = React.useState("")
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (items.length === 0) return
-    addBuy({
-      supplierId: supplierId || undefined,
-      supplierName: (suppliers.find((s) => s.id === supplierId)?.name) || supplierName || "Walk-in Supplier",
-      items: items.map((i) => ({ productId: i.productId, quantity: Number(i.quantity), buyPrice: Number(i.buyPrice) })),
-      paid: Number(paid) || 0,
-      note: note || undefined,
-    })
-    onOpenChange(false)
+    if (saving) return
+    setSaving(true)
+    setSubmitError("")
+    try {
+      if (items.length === 0) return
+      await addBuy({
+        supplierId: supplierId || undefined,
+        supplierName:
+          suppliers.find((s) => s.id === supplierId)?.name ||
+          supplierName ||
+          "Walk-in Supplier",
+        items: items.map((i) => ({
+          productId: i.productId,
+          quantity: Number(i.quantity),
+          buyPrice: Number(i.buyPrice)
+        })),
+        paid: Number(paid) || 0,
+        note: note || undefined
+      })
+      onOpenChange(false)
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : "Unable to save. Please try again."
+      )
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -137,7 +169,10 @@ export function BuyStockDialog({ open, onOpenChange, prefillProduct }: Props) {
             Buy Stock (Purchase)
           </DialogTitle>
           <DialogDescription>
-            Record a purchase from a supplier. This will increase your stock levels.
+            Record a purchase from a supplier. This will increase your stock
+            levels.{" "}
+            {source !== "mock" &&
+              "Only fully paid purchases are supported; supplier payment balances are not recorded by the backend."}
           </DialogDescription>
         </DialogHeader>
 
@@ -145,13 +180,21 @@ export function BuyStockDialog({ open, onOpenChange, prefillProduct }: Props) {
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <Label>Supplier</Label>
-              <Select value={supplierId} onValueChange={(v) => { setSupplierId(v); setSupplierName("") }}>
+              <Select
+                value={supplierId}
+                onValueChange={(v) => {
+                  setSupplierId(v)
+                  setSupplierName("")
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select supplier" />
                 </SelectTrigger>
                 <SelectContent>
                   {suppliers.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -162,7 +205,10 @@ export function BuyStockDialog({ open, onOpenChange, prefillProduct }: Props) {
                 id="newSupplier"
                 placeholder="Supplier name"
                 value={supplierName}
-                onChange={(e) => { setSupplierName(e.target.value); setSupplierId("") }}
+                onChange={(e) => {
+                  setSupplierName(e.target.value)
+                  setSupplierId("")
+                }}
               />
             </div>
           </div>
@@ -191,7 +237,12 @@ export function BuyStockDialog({ open, onOpenChange, prefillProduct }: Props) {
                     >
                       <span className="truncate">
                         <span className="font-medium">{p.name}</span>
-                        {p.variantName && <span className="text-muted-foreground"> · {p.variantName}</span>}
+                        {p.variantName && (
+                          <span className="text-muted-foreground">
+                            {" "}
+                            · {p.variantName}
+                          </span>
+                        )}
                       </span>
                       <span className="ml-2 shrink-0 text-xs text-muted-foreground">
                         Stock: {p.stock}
@@ -216,24 +267,35 @@ export function BuyStockDialog({ open, onOpenChange, prefillProduct }: Props) {
               <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
                 <Plus className="mb-2 h-8 w-8" />
                 <p className="text-sm">No products added yet.</p>
-                <p className="text-xs">Search above to add products to this purchase.</p>
+                <p className="text-xs">
+                  Search above to add products to this purchase.
+                </p>
               </div>
             ) : (
               items.map((it, idx) => {
                 const p = productMap[it.productId]
                 if (!p) return null
                 return (
-                  <div key={idx} className="grid gap-2 border-b p-3 md:grid-cols-12 md:items-center md:gap-2 last:border-0">
+                  <div
+                    key={idx}
+                    className="grid gap-2 border-b p-3 md:grid-cols-12 md:items-center md:gap-2 last:border-0"
+                  >
                     <div className="md:col-span-5">
                       <p className="text-sm font-medium">{p.name}</p>
-                      {p.variantName && <p className="text-xs text-muted-foreground">{p.variantName}</p>}
+                      {p.variantName && (
+                        <p className="text-xs text-muted-foreground">
+                          {p.variantName}
+                        </p>
+                      )}
                     </div>
                     <div className="md:col-span-2">
                       <Input
                         type="number"
                         min={1}
                         value={it.quantity}
-                        onChange={(e) => updateItem(idx, { quantity: Number(e.target.value) })}
+                        onChange={(e) =>
+                          updateItem(idx, { quantity: Number(e.target.value) })
+                        }
                         className="text-right"
                       />
                     </div>
@@ -243,7 +305,9 @@ export function BuyStockDialog({ open, onOpenChange, prefillProduct }: Props) {
                         min={0}
                         step="0.01"
                         value={it.buyPrice}
-                        onChange={(e) => updateItem(idx, { buyPrice: Number(e.target.value) })}
+                        onChange={(e) =>
+                          updateItem(idx, { buyPrice: Number(e.target.value) })
+                        }
                         className="text-right"
                       />
                     </div>
@@ -251,7 +315,12 @@ export function BuyStockDialog({ open, onOpenChange, prefillProduct }: Props) {
                       {formatCurrency(it.quantity * it.buyPrice)}
                     </div>
                     <div className="md:col-span-1 flex md:justify-end">
-                      <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(idx)}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeItem(idx)}
+                      >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
@@ -277,7 +346,9 @@ export function BuyStockDialog({ open, onOpenChange, prefillProduct }: Props) {
                 <span className="font-medium">{formatCurrency(subtotal)}</span>
               </div>
               <div className="flex items-center justify-between">
-                <Label htmlFor="paid" className="text-sm">Amount Paid</Label>
+                <Label htmlFor="paid" className="text-sm">
+                  Amount Paid
+                </Label>
                 <Input
                   id="paid"
                   type="number"
@@ -290,16 +361,34 @@ export function BuyStockDialog({ open, onOpenChange, prefillProduct }: Props) {
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Due</span>
-                <span className={`font-semibold ${due > 0 ? "text-destructive" : ""}`}>{formatCurrency(due)}</span>
+                <span
+                  className={`font-semibold ${due > 0 ? "text-destructive" : ""}`}
+                >
+                  {formatCurrency(due)}
+                </span>
               </div>
             </div>
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            {submitError && (
+              <p role="alert" className="text-sm text-destructive">
+                {submitError}
+              </p>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
               Cancel
             </Button>
-            <Button type="submit" disabled={items.length === 0} variant="warning">
+            <Button
+              type="submit"
+              aria-busy={saving}
+              disabled={saving || items.length === 0}
+              variant="warning"
+            >
               <Truck className="mr-2 h-4 w-4" /> Record Purchase
             </Button>
           </DialogFooter>

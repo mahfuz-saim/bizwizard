@@ -24,6 +24,7 @@ export interface Product {
   measuringUnit: MeasuringUnit
   image?: string
   stock: number
+  lots?: { id: string; stock: number; buyPrice?: number | null; sellPrice?: number | null; expDate?: string | null }[]
   lowStockThreshold: number
   buyPrice: number
   sellPrice: number
@@ -50,6 +51,9 @@ export interface Supplier {
   phone: string
   email?: string
   address?: string
+  paymentTracked?: boolean
+  totalPurchased?: number
+  userID?: string
   totalPaid: number
   totalDue: number
   createdAt: string
@@ -76,9 +80,11 @@ export interface Transaction {
   total: number
   paid: number
   due: number
-  paymentMethod: "CASH" | "BKASH" | "NAGAD" | "CARD" | "BANK"
+  paymentMethod: "CASH" | "BKASH" | "NAGAD" | "CARD" | "BANK" | "UNKNOWN"
   note?: string
   createdAt: string
+  cost?: number
+  paymentTracked?: boolean
   soldBy?: string
 }
 
@@ -110,3 +116,6 @@ export interface DashboardStats {
   totalCustomers: number
   totalSuppliers: number
 }
+
+export interface ShopMessage { id: string; message: string; createdAt: string; approvalStatus?: string; sentStatus?: string }
+export interface ShopNotification { id: string; title: string; body: string; createdAt: string }

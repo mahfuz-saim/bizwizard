@@ -2,13 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import {
-  Trash2,
-  Barcode,
-  Plus,
-  Search,
-  CheckCircle2,
-} from "lucide-react"
+import { Trash2, Barcode, Plus, Search, CheckCircle2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -18,14 +12,14 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
+  DialogTitle
 } from "@/components/ui/dialog"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
+  SelectValue
 } from "@/components/ui/select"
 import { Card, CardContent } from "@/components/ui/card"
 import { useStore } from "@/lib/store"
@@ -46,16 +40,22 @@ interface Props {
 
 export function SellDialog({ open, onOpenChange, prefillProduct }: Props) {
   const router = useRouter()
-  const { products, customers, addSell } = useStore()
+  const { products, customers, addSell, source } = useStore()
   const [customerId, setCustomerId] = React.useState<string>("")
   const [customerName, setCustomerName] = React.useState<string>("")
-  const [paymentMethod, setPaymentMethod] = React.useState<"CASH" | "BKASH" | "NAGAD" | "CARD" | "BANK">("CASH")
+  const [paymentMethod, setPaymentMethod] = React.useState<
+    "CASH" | "BKASH" | "NAGAD" | "CARD" | "BANK"
+  >("CASH")
   const [note, setNote] = React.useState("")
   const [search, setSearch] = React.useState("")
   const [discount, setDiscount] = React.useState<number>(0)
   const [paid, setPaid] = React.useState<number>(0)
   const [items, setItems] = React.useState<LineItem[]>([])
-  const [success, setSuccess] = React.useState<{ total: number; due: number; id: string } | null>(null)
+  const [success, setSuccess] = React.useState<{
+    total: number
+    due: number
+    id: string
+  } | null>(null)
 
   const reset = React.useCallback(() => {
     setCustomerId("")
@@ -77,8 +77,8 @@ export function SellDialog({ open, onOpenChange, prefillProduct }: Props) {
         {
           productId: prefillProduct.id,
           quantity: 1,
-          sellPrice: prefillProduct.sellPrice || 0,
-        },
+          sellPrice: prefillProduct.sellPrice || 0
+        }
       ])
     }
   }, [open, prefillProduct, reset])
@@ -88,16 +88,23 @@ export function SellDialog({ open, onOpenChange, prefillProduct }: Props) {
       const existing = prev.find((i) => i.productId === p.id)
       if (existing) {
         return prev.map((i) =>
-          i.productId === p.id ? { ...i, quantity: Math.min(i.quantity + 1, p.stock) } : i
+          i.productId === p.id
+            ? { ...i, quantity: Math.min(i.quantity + 1, p.stock) }
+            : i
         )
       }
-      return [...prev, { productId: p.id, quantity: 1, sellPrice: p.sellPrice || 0 }]
+      return [
+        ...prev,
+        { productId: p.id, quantity: 1, sellPrice: p.sellPrice || 0 }
+      ]
     })
     setSearch("")
   }
 
   const updateItem = (idx: number, patch: Partial<LineItem>) => {
-    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)))
+    setItems((prev) =>
+      prev.map((it, i) => (i === idx ? { ...it, ...patch } : it))
+    )
   }
 
   const removeItem = (idx: number) => {
@@ -110,7 +117,11 @@ export function SellDialog({ open, onOpenChange, prefillProduct }: Props) {
   )
 
   const subtotal = items.reduce(
-    (s, it) => s + (isNaN(it.quantity) || isNaN(it.sellPrice) ? 0 : it.quantity * it.sellPrice),
+    (s, it) =>
+      s +
+      (isNaN(it.quantity) || isNaN(it.sellPrice)
+        ? 0
+        : it.quantity * it.sellPrice),
     0
   )
   const total = Math.max(0, subtotal - (Number(discount) || 0))
@@ -130,22 +141,44 @@ export function SellDialog({ open, onOpenChange, prefillProduct }: Props) {
       .slice(0, 8)
   }, [products, search])
 
+  const [saving, setSaving] = React.useState(false)
+  const [submitError, setSubmitError] = React.useState("")
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (items.length === 0) return
-    const finalCustomerName =
-      (customers.find((c) => c.id === customerId)?.name) || customerName.trim() || "Walk-in Customer"
-    const txn = await addSell({
-      customerId: customerId || undefined,
-      customerName: finalCustomerName,
-      items: items.map((i) => ({ productId: i.productId, quantity: Number(i.quantity), sellPrice: Number(i.sellPrice) })),
-      discount: Number(discount) || 0,
-      paid: Number(paid) || 0,
-      paymentMethod,
-      note: note || undefined,
-    })
-    if (txn) {
-      setSuccess({ total: txn.total, due: txn.due, id: txn.id })
+    if (saving) return
+    setSaving(true)
+    setSubmitError("")
+    try {
+      if (items.length === 0) return
+      const finalCustomerName =
+        customers.find((c) => c.id === customerId)?.name ||
+        customerName.trim() ||
+        "Walk-in Customer"
+      const txn = await addSell({
+        customerId: customerId || undefined,
+        customerName: finalCustomerName,
+        items: items.map((i) => ({
+          productId: i.productId,
+          quantity: Number(i.quantity),
+          sellPrice: Number(i.sellPrice)
+        })),
+        discount: Number(discount) || 0,
+        paid: Number(paid) || 0,
+        paymentMethod,
+        note: note || undefined
+      })
+      if (txn) {
+        setSuccess({ total: txn.total, due: txn.due, id: txn.id })
+      }
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : "Unable to save. Please try again."
+      )
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -164,16 +197,22 @@ export function SellDialog({ open, onOpenChange, prefillProduct }: Props) {
             <div className="mt-6 w-full space-y-2 rounded-lg bg-muted/40 p-4 text-left text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Total</span>
-                <span className="font-semibold">{formatCurrency(success.total)}</span>
+                <span className="font-semibold">
+                  {formatCurrency(success.total)}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Paid</span>
-                <span className="font-semibold">{formatCurrency(success.total - success.due)}</span>
+                <span className="font-semibold">
+                  {formatCurrency(success.total - success.due)}
+                </span>
               </div>
               {success.due > 0 && (
                 <div className="flex justify-between text-destructive">
                   <span>Due</span>
-                  <span className="font-semibold">{formatCurrency(success.due)}</span>
+                  <span className="font-semibold">
+                    {formatCurrency(success.due)}
+                  </span>
                 </div>
               )}
             </div>
@@ -193,7 +232,13 @@ export function SellDialog({ open, onOpenChange, prefillProduct }: Props) {
                 onClick={() => {
                   reset()
                   if (prefillProduct) {
-                    setItems([{ productId: prefillProduct.id, quantity: 1, sellPrice: prefillProduct.sellPrice }])
+                    setItems([
+                      {
+                        productId: prefillProduct.id,
+                        quantity: 1,
+                        sellPrice: prefillProduct.sellPrice
+                      }
+                    ])
                   }
                 }}
               >
@@ -215,7 +260,8 @@ export function SellDialog({ open, onOpenChange, prefillProduct }: Props) {
             New Sale
           </DialogTitle>
           <DialogDescription>
-            Record a sale to a customer. Stock will be decremented automatically.
+            Record a sale to a customer. Stock will be decremented
+            automatically.
           </DialogDescription>
         </DialogHeader>
 
@@ -223,13 +269,21 @@ export function SellDialog({ open, onOpenChange, prefillProduct }: Props) {
           <div className="grid gap-4 md:grid-cols-3">
             <div>
               <Label>Customer</Label>
-              <Select value={customerId} onValueChange={(v) => { setCustomerId(v); setCustomerName("") }}>
+              <Select
+                value={customerId}
+                onValueChange={(v) => {
+                  setCustomerId(v)
+                  setCustomerName("")
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Walk-in customer" />
                 </SelectTrigger>
                 <SelectContent>
                   {customers.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -239,16 +293,33 @@ export function SellDialog({ open, onOpenChange, prefillProduct }: Props) {
               <Input
                 placeholder="Customer name"
                 value={customerName}
-                onChange={(e) => { setCustomerName(e.target.value); setCustomerId("") }}
+                onChange={(e) => {
+                  setCustomerName(e.target.value)
+                  setCustomerId("")
+                }}
               />
             </div>
             <div>
               <Label>Payment Method</Label>
-              <Select value={paymentMethod} onValueChange={(v: any) => setPaymentMethod(v)}>
+              {source !== "mock" && (
+                <p className="text-xs text-muted-foreground">
+                  The backend records paid amounts, not payment channels.
+                </p>
+              )}
+              <Select
+                disabled={source !== "mock"}
+                value={source === "mock" ? paymentMethod : "UNKNOWN"}
+                onValueChange={(v) =>
+                  setPaymentMethod(v as typeof paymentMethod)
+                }
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  {source !== "mock" && (
+                    <SelectItem value="UNKNOWN">Not recorded</SelectItem>
+                  )}
                   <SelectItem value="CASH">Cash</SelectItem>
                   <SelectItem value="BKASH">bKash</SelectItem>
                   <SelectItem value="NAGAD">Nagad</SelectItem>
@@ -284,11 +355,20 @@ export function SellDialog({ open, onOpenChange, prefillProduct }: Props) {
                     >
                       <span className="truncate">
                         <span className="font-medium">{p.name}</span>
-                        {p.variantName && <span className="text-muted-foreground"> · {p.variantName}</span>}
+                        {p.variantName && (
+                          <span className="text-muted-foreground">
+                            {" "}
+                            · {p.variantName}
+                          </span>
+                        )}
                       </span>
                       <span className="ml-2 shrink-0 text-xs">
-                        <span className="text-muted-foreground">Stock {p.stock} · </span>
-                        <span className="font-semibold text-success">{formatCurrency(p.sellPrice)}</span>
+                        <span className="text-muted-foreground">
+                          Stock {p.stock} ·{" "}
+                        </span>
+                        <span className="font-semibold text-success">
+                          {formatCurrency(p.sellPrice)}
+                        </span>
                       </span>
                     </button>
                   ))}
@@ -310,7 +390,9 @@ export function SellDialog({ open, onOpenChange, prefillProduct }: Props) {
               <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
                 <Barcode className="mb-2 h-8 w-8" />
                 <p className="text-sm">No items in cart.</p>
-                <p className="text-xs">Start typing or scan a barcode to add products.</p>
+                <p className="text-xs">
+                  Start typing or scan a barcode to add products.
+                </p>
               </div>
             ) : (
               items.map((it, idx) => {
@@ -318,10 +400,17 @@ export function SellDialog({ open, onOpenChange, prefillProduct }: Props) {
                 if (!p) return null
                 const overStock = it.quantity > p.stock
                 return (
-                  <div key={idx} className="grid gap-2 border-b p-3 md:grid-cols-12 md:items-center md:gap-2 last:border-0">
+                  <div
+                    key={idx}
+                    className="grid gap-2 border-b p-3 md:grid-cols-12 md:items-center md:gap-2 last:border-0"
+                  >
                     <div className="md:col-span-5">
                       <p className="text-sm font-medium">{p.name}</p>
-                      {p.variantName && <p className="text-xs text-muted-foreground">{p.variantName} · Stock: {p.stock}</p>}
+                      {p.variantName && (
+                        <p className="text-xs text-muted-foreground">
+                          {p.variantName} · Stock: {p.stock}
+                        </p>
+                      )}
                     </div>
                     <div className="md:col-span-2">
                       <Input
@@ -329,10 +418,16 @@ export function SellDialog({ open, onOpenChange, prefillProduct }: Props) {
                         min={1}
                         max={p.stock}
                         value={it.quantity}
-                        onChange={(e) => updateItem(idx, { quantity: Number(e.target.value) })}
+                        onChange={(e) =>
+                          updateItem(idx, { quantity: Number(e.target.value) })
+                        }
                         className={`text-right ${overStock ? "border-destructive" : ""}`}
                       />
-                      {overStock && <p className="mt-1 text-xs text-destructive">Exceeds stock</p>}
+                      {overStock && (
+                        <p className="mt-1 text-xs text-destructive">
+                          Exceeds stock
+                        </p>
+                      )}
                     </div>
                     <div className="md:col-span-2">
                       <Input
@@ -340,7 +435,9 @@ export function SellDialog({ open, onOpenChange, prefillProduct }: Props) {
                         min={0}
                         step="0.01"
                         value={it.sellPrice}
-                        onChange={(e) => updateItem(idx, { sellPrice: Number(e.target.value) })}
+                        onChange={(e) =>
+                          updateItem(idx, { sellPrice: Number(e.target.value) })
+                        }
                         className="text-right"
                       />
                     </div>
@@ -348,7 +445,12 @@ export function SellDialog({ open, onOpenChange, prefillProduct }: Props) {
                       {formatCurrency(it.quantity * it.sellPrice)}
                     </div>
                     <div className="md:col-span-1 flex md:justify-end">
-                      <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(idx)}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeItem(idx)}
+                      >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
@@ -361,7 +463,12 @@ export function SellDialog({ open, onOpenChange, prefillProduct }: Props) {
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <Label htmlFor="note">Note (optional)</Label>
-              <Input id="note" placeholder="Any additional info..." value={note} onChange={(e) => setNote(e.target.value)} />
+              <Input
+                id="note"
+                placeholder="Any additional info..."
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
             </div>
             <div className="space-y-2 rounded-lg bg-muted/40 p-4">
               <div className="flex justify-between text-sm">
@@ -369,7 +476,9 @@ export function SellDialog({ open, onOpenChange, prefillProduct }: Props) {
                 <span className="font-medium">{formatCurrency(subtotal)}</span>
               </div>
               <div className="flex items-center justify-between gap-2">
-                <Label htmlFor="discount" className="text-sm">Discount</Label>
+                <Label htmlFor="discount" className="text-sm">
+                  Discount
+                </Label>
                 <Input
                   id="discount"
                   type="number"
@@ -382,10 +491,14 @@ export function SellDialog({ open, onOpenChange, prefillProduct }: Props) {
               </div>
               <div className="flex justify-between text-sm border-t pt-2">
                 <span className="font-medium">Total</span>
-                <span className="text-lg font-bold">{formatCurrency(total)}</span>
+                <span className="text-lg font-bold">
+                  {formatCurrency(total)}
+                </span>
               </div>
               <div className="flex items-center justify-between gap-2">
-                <Label htmlFor="paid" className="text-sm">Amount Paid</Label>
+                <Label htmlFor="paid" className="text-sm">
+                  Amount Paid
+                </Label>
                 <Input
                   id="paid"
                   type="number"
@@ -398,16 +511,40 @@ export function SellDialog({ open, onOpenChange, prefillProduct }: Props) {
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Due</span>
-                <span className={`font-semibold ${due > 0 ? "text-destructive" : "text-success"}`}>{formatCurrency(due)}</span>
+                <span
+                  className={`font-semibold ${due > 0 ? "text-destructive" : "text-success"}`}
+                >
+                  {formatCurrency(due)}
+                </span>
               </div>
             </div>
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            {submitError && (
+              <p role="alert" className="text-sm text-destructive">
+                {submitError}
+              </p>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
               Cancel
             </Button>
-            <Button type="submit" variant="success" disabled={items.length === 0 || items.some((it) => it.quantity > (productMap[it.productId]?.stock ?? 0))}>
+            <Button
+              type="submit"
+              aria-busy={saving}
+              variant="success"
+              disabled={
+                saving ||
+                items.length === 0 ||
+                items.some(
+                  (it) => it.quantity > (productMap[it.productId]?.stock ?? 0)
+                )
+              }
+            >
               <Barcode className="mr-2 h-4 w-4" /> Complete Sale
             </Button>
           </DialogFooter>
