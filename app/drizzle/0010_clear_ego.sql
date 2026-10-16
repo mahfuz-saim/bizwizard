@@ -1,1 +1,0 @@
-ALTER TABLE `inventory` ADD `genericName` text;
