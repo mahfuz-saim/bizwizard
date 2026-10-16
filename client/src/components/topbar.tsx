@@ -44,7 +44,7 @@ interface TopbarProps {
 export function Topbar({ onOpenMobileNav, shopName = "My Store" }: TopbarProps) {
   const { theme, setTheme, resolvedTheme } = useTheme()
   const pathname = usePathname()
-  const { source, error, refresh } = useStore()
+  const { source, error, refresh, logout } = useStore()
   const [refreshing, setRefreshing] = React.useState(false)
 
   const pageTitle = React.useMemo(() => {
@@ -133,12 +133,12 @@ export function Topbar({ onOpenMobileNav, shopName = "My Store" }: TopbarProps) 
               <>
                 <p className="font-medium text-foreground">Using demo data</p>
                 <p className="text-muted-foreground">
-                  {error || `Could not reach ${host}`}
+                  {error || "Local sample data. No backend requests are made."}
                 </p>
               </>
             )}
             {source === "loading" && <p>Connecting to {host}…</p>}
-            <p className="mt-1 text-[10px] text-muted-foreground">Click to retry</p>
+            <p className="mt-1 text-[10px] text-muted-foreground">Refresh live data</p>
           </TooltipContent>
         </Tooltip>
 
@@ -186,14 +186,14 @@ export function Topbar({ onOpenMobileNav, shopName = "My Store" }: TopbarProps) 
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleRefresh() }}>
               <RefreshCw className="mr-2 h-4 w-4" />
-              {source === "backend" ? "Refresh data" : "Reconnect to backend"}
+              {source === "backend" ? "Refresh data" : "Demo data (local)"}
             </DropdownMenuItem>
             <DropdownMenuItem>Profile</DropdownMenuItem>
             <DropdownMenuItem>Settings</DropdownMenuItem>
             <DropdownMenuItem>Help & Support</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive focus:text-destructive">
-              Log out
+            <DropdownMenuItem onSelect={logout} className="text-destructive focus:text-destructive">
+              {source === "mock" ? "Exit demo" : "Log out"}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -4,8 +4,7 @@
  * - Reads base URL from NEXT_PUBLIC_API_BASE_URL (.env)
  * - Uses cookie + Bearer-token hybrid auth; access tokens are persisted in
  *   localStorage (via setAccessToken).
- * - Provides silent login against the demo email+password so the web UI
- *   doesn't need to expose a login/signup screen during development.
+ * - Requires explicit authentication; demo mode is local and opt-in.
  * - Normalises backend responses into the frontend's Product shape.
  */
 
@@ -139,6 +138,8 @@ export const api = {
     request<T>(path, { method: "PUT", json: body }),
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "PATCH", json: body }),
+  postWithAuthorization: <T>(path: string, body: unknown, token: string) =>
+    request<T>(path, { method: "POST", json: body, headers: { Authorization: token } }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 }
 
@@ -185,18 +186,6 @@ export async function loginWithCredentials(
     profile: me?.profile,
     role: me?.role,
     tenants: me?.tenants || [],
-  }
-}
-
-/** Silent demo login, using env vars. Returns null on failure. */
-export async function silentDemoLogin(): Promise<AuthSession | null> {
-  const email = process.env.NEXT_PUBLIC_DEMO_EMAIL
-  const password = process.env.NEXT_PUBLIC_DEMO_PASSWORD
-  if (!email || !password) return null
-  try {
-    return await loginWithCredentials(email, password)
-  } catch {
-    return null
   }
 }
 

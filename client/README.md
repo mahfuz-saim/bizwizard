@@ -42,7 +42,7 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-A small status chip in the top bar shows whether you are running against the **Live** backend or **Demo data** (shown when the backend can&apos;t be reached or returns an auth error). Click the chip (or use the profile menu) to retry the connection.
+A small status chip in the top bar shows whether you are running against the **Live** backend or **Demo data** (only after explicitly clicking **Run Demo**). Click the chip (or use the profile menu) to retry the connection.
 
 ## Project Structure
 
@@ -86,3 +86,7 @@ The data layer (`src/lib/store.tsx`) always renders immediately:
 - **When the backend is reachable**, it loads `/product` (paginated shop variants) and best-effort loads `/analytics`, wiring Add/Sell mutations to `/product/catalog`, `/product/:id` and `/checkout/quick`.
 - **When the backend is unreachable or unauthenticated**, it falls back to realistic demo data (from `src/lib/mock-data.ts`) so the UI stays usable for development / demos. Mutations remain fully interactive against the local state.
 - The store exposes `source: "backend" | "mock" | "loading"` and `refresh()` for the UI status indicator and manual reconnect.
+
+## Authentication
+
+Unauthenticated visits show login, Create account, Reset password (phone OTP), and Run Demo options. Stored sessions are validated against `/auth/me`. Backend failures never fall back to demo data. Demo changes are temporary and local; use the profile menu to exit demo or log out. Modules not yet connected to backend data start empty for real accounts.

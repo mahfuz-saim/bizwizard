@@ -3,16 +3,14 @@
 import * as React from "react"
 import {
   api,
+  ApiError,
   clearSession,
   getAccessToken,
   getShopId,
-  getTenantId,
-  isBackendReachable,
   loginWithCredentials,
   normalizeShopVariant,
   setShopId,
   setTenantId,
-  silentDemoLogin,
   type AuthSession,
   type RawShopVariant,
 } from "./api"
@@ -39,6 +37,9 @@ interface DataContextValue {
   source: Source
   error: string | null
   session: AuthSession | null
+  login: (identifier: string, password: string) => Promise<void>
+  runDemo: () => void
+  logout: () => void
   refresh: () => Promise<void>
 
   products: Product[]
@@ -69,6 +70,8 @@ interface DataContextValue {
   }) => Promise<Transaction | null>
 }
 
+const emptyStats: DashboardStats = { todaySell: 0, todayProfit: 0, todayDebt: 0, todayDiscount: 0, yesterdayProfit: 0, totalProducts: 0, lowStockCount: 0, totalCustomers: 0, totalSuppliers: 0 }
+
 const DataContext = React.createContext<DataContextValue | null>(null)
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
@@ -76,12 +79,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = React.useState<string | null>(null)
   const [session, setSession] = React.useState<AuthSession | null>(null)
 
-  const [products, setProducts] = React.useState<Product[]>(initialProducts)
-  const [customers] = React.useState<Customer[]>(initialCustomers)
-  const [suppliers] = React.useState<Supplier[]>(initialSuppliers)
-  const [transactions, setTransactions] = React.useState<Transaction[]>(initialTransactions)
-  const [expenses] = React.useState<Expense[]>(initialExpenses)
-  const [stats, setStats] = React.useState<DashboardStats>(defaultStats)
+  const [products, setProducts] = React.useState<Product[]>([])
+  const [customers, setCustomers] = React.useState<Customer[]>([])
+  const [suppliers, setSuppliers] = React.useState<Supplier[]>([])
+  const [transactions, setTransactions] = React.useState<Transaction[]>([])
+  const [expenses, setExpenses] = React.useState<Expense[]>([])
+  const [stats, setStats] = React.useState<DashboardStats>(emptyStats)
 
   React.useEffect(() => {
     const lowStockCount = products.filter((p) => p.stock <= p.lowStockThreshold).length
@@ -107,71 +110,86 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return rawList.map(normalizeShopVariant)
   }, [])
 
+  const demoMode = React.useRef(false)
+
+  const resetData = React.useCallback(() => {
+    setProducts([])
+    setCustomers([])
+    setSuppliers([])
+    setTransactions([])
+    setExpenses([])
+    setStats(emptyStats)
+  }, [])
+
+  const logout = React.useCallback(() => {
+    demoMode.current = false
+    clearSession()
+    setSession(null)
+    resetData()
+    setError(null)
+    setSource("auth")
+    void api.post("/auth/logout").catch(() => {})
+  }, [resetData])
+
+  const runDemo = React.useCallback(() => {
+    clearSession()
+    setSession(null)
+    demoMode.current = true
+    setProducts(initialProducts)
+    setCustomers(initialCustomers)
+    setSuppliers(initialSuppliers)
+    setTransactions(initialTransactions)
+    setExpenses(initialExpenses)
+    setStats(defaultStats)
+    setError(null)
+    setSource("mock")
+  }, [])
+
   const refresh = React.useCallback(async () => {
+    if (demoMode.current) return
+    if (!getAccessToken()) {
+      resetData()
+      setSource("auth")
+      return
+    }
     setSource("loading")
     setError(null)
     try {
-      const reachable = await isBackendReachable()
-      if (!reachable) {
-        setProducts(initialProducts)
-        setSource("mock")
-        setError("Backend unreachable. Showing demo data.")
-        return
+      // Validate every restored session, not just sessions missing shop metadata.
+      const res = await api.get<Record<string, unknown>>("/auth/me")
+      const me = res.data
+      setTenantId(typeof me?.defaultTenantId === "string" ? me.defaultTenantId : null)
+      setShopId(typeof me?.defaultShopId === "string" ? me.defaultShopId : null)
+      setSession({ accessToken: getAccessToken()!, user: me?.user })
+      setProducts(await loadProducts())
+      setSource("backend")
+    } catch (e) {
+      resetData()
+      if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
+        clearSession()
+        setSession(null)
       }
-
-      // Try existing token first
-      if (!getAccessToken()) {
-        setSource("auth")
-        const s = await silentDemoLogin()
-        if (!s) {
-          setProducts(initialProducts)
-          setSource("mock")
-          setError("Not authenticated. Showing demo data.")
-          return
-        }
-        setSession(s)
-      }
-
-      // If we have a token but no tenant, fetch /auth/me to populate it
-      if (!getTenantId() || !getShopId()) {
-        const meRes = await api.get<any>("/auth/me")
-        const me = meRes.data as any
-        if (me?.defaultTenantId) setTenantId(me.defaultTenantId)
-        if (me?.defaultShopId) setShopId(me.defaultShopId)
-        setSession((s) => s ? { ...s, ...me } : null)
-      }
-
-      try {
-        const list = await loadProducts()
-        setProducts(list.length ? list : [])
-        setSource("backend")
-        setError(null)
-      } catch (e: any) {
-        // Token might be invalid -> try demo login once then retry
-        if (e?.status === 401 || e?.status === 403) {
-          clearSession()
-          const s = await silentDemoLogin()
-          if (s) {
-            setSession(s)
-            const list = await loadProducts()
-            setProducts(list.length ? list : [])
-            setSource("backend")
-            setError(null)
-            return
-          }
-        }
-        setProducts(initialProducts)
-        setSource("mock")
-        setError(e?.message || "Could not load data. Showing demo data.")
-      }
-    } catch (e: any) {
-      setProducts(initialProducts)
-      setSource("mock")
-      setError(e?.message || "Failed to load data.")
+      setError(e instanceof Error ? e.message : "Could not connect to the backend. Please try again.")
+      setSource("auth")
     }
-  }, [loadProducts])
+  }, [loadProducts, resetData])
 
-  React.useEffect(() => { refresh() }, [refresh])
+  const login = React.useCallback(async (identifier: string, password: string) => {
+    demoMode.current = false
+    clearSession()
+    resetData()
+    try {
+      const authenticated = await loginWithCredentials(identifier, password)
+      setSession(authenticated)
+      await refresh()
+    } catch (e) {
+      clearSession()
+      setSession(null)
+      throw e
+    }
+  }, [refresh, resetData])
+
+  React.useEffect(() => { void refresh() }, [refresh])
 
   const addProduct: DataContextValue["addProduct"] = React.useCallback(
     async (p) => {
@@ -318,7 +336,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   )
 
   const value: DataContextValue = {
-    source, error, session, refresh,
+    source, error, session, refresh, login, runDemo, logout,
     products, customers, suppliers, transactions, expenses, stats,
     addProduct, updateProduct, deleteProduct, addBuy, addSell,
   }
