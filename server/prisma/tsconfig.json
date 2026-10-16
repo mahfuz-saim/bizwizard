@@ -1,0 +1,13 @@
+{
+    "extends": "../tsconfig.json",
+    "compilerOptions": {
+        "rootDir": "..",
+        "noEmit": true
+    },
+    "include": [
+        "seed.ts",
+        "seed/transaction-data.ts",
+        "seed/transaction-data.test.ts",
+        "../src/helpers/bcryptHelpers.ts"
+    ]
+}

@@ -12,14 +12,14 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
+  DialogTitle
 } from "@/components/ui/dialog"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
+  SelectValue
 } from "@/components/ui/select"
 import { useStore } from "@/lib/store"
 import type { MeasuringUnit, Product } from "@/lib/types"
@@ -46,7 +46,7 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
     lowStockThreshold: 10,
     buyPrice: 0,
     sellPrice: 0,
-    expiryDate: "",
+    expiryDate: ""
   })
   const [errors, setErrors] = React.useState<Record<string, string>>({})
 
@@ -64,7 +64,7 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
           lowStockThreshold: product.lowStockThreshold,
           buyPrice: product.buyPrice,
           sellPrice: product.sellPrice,
-          expiryDate: product.expiryDate ? product.expiryDate.slice(0, 10) : "",
+          expiryDate: product.expiryDate ? product.expiryDate.slice(0, 10) : ""
         })
       } else {
         setForm({
@@ -78,54 +78,72 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
           lowStockThreshold: 10,
           buyPrice: 0,
           sellPrice: 0,
-          expiryDate: "",
+          expiryDate: ""
         })
       }
       setErrors({})
     }
   }, [open, product])
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    const errs: Record<string, string> = {}
-    if (!form.name.trim()) errs.name = "Product name is required"
-    if (form.sellPrice <= 0) errs.sellPrice = "Sell price must be greater than 0"
-    if (form.buyPrice < 0) errs.buyPrice = "Buy price can't be negative"
-    if (form.lowStockThreshold < 0) errs.lowStockThreshold = "Invalid threshold"
-    if (Object.keys(errs).length > 0) {
-      setErrors(errs)
-      return
-    }
+  const [saving, setSaving] = React.useState(false)
+  const [submitError, setSubmitError] = React.useState("")
 
-    if (isEdit && product) {
-      updateProduct(product.id, {
-        name: form.name.trim(),
-        variantName: form.variantName.trim() || undefined,
-        variantCode: form.variantCode.trim() || undefined,
-        barcode: form.barcode.trim() || undefined,
-        category: form.category,
-        measuringUnit: form.measuringUnit,
-        lowStockThreshold: Number(form.lowStockThreshold),
-        buyPrice: Number(form.buyPrice),
-        sellPrice: Number(form.sellPrice),
-        expiryDate: form.expiryDate || undefined,
-      })
-    } else {
-      addProduct({
-        name: form.name.trim(),
-        variantName: form.variantName.trim() || undefined,
-        variantCode: form.variantCode.trim() || undefined,
-        barcode: form.barcode.trim() || undefined,
-        category: form.category,
-        measuringUnit: form.measuringUnit,
-        stock: Number(form.stock) || 0,
-        lowStockThreshold: Number(form.lowStockThreshold),
-        buyPrice: Number(form.buyPrice),
-        sellPrice: Number(form.sellPrice),
-        expiryDate: form.expiryDate || undefined,
-      })
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (saving) return
+    setSaving(true)
+    setSubmitError("")
+    try {
+      const errs: Record<string, string> = {}
+      if (!form.name.trim()) errs.name = "Product name is required"
+      if (form.sellPrice <= 0)
+        errs.sellPrice = "Sell price must be greater than 0"
+      if (form.buyPrice < 0) errs.buyPrice = "Buy price can't be negative"
+      if (form.lowStockThreshold < 0)
+        errs.lowStockThreshold = "Invalid threshold"
+      if (Object.keys(errs).length > 0) {
+        setErrors(errs)
+        return
+      }
+
+      if (isEdit && product) {
+        await updateProduct(product.id, {
+          name: form.name.trim(),
+          variantName: form.variantName.trim() || undefined,
+          variantCode: form.variantCode.trim() || undefined,
+          barcode: form.barcode.trim() || undefined,
+          category: form.category,
+          measuringUnit: form.measuringUnit,
+          lowStockThreshold: Number(form.lowStockThreshold),
+          buyPrice: Number(form.buyPrice),
+          sellPrice: Number(form.sellPrice),
+          expiryDate: form.expiryDate || undefined
+        })
+      } else {
+        await addProduct({
+          name: form.name.trim(),
+          variantName: form.variantName.trim() || undefined,
+          variantCode: form.variantCode.trim() || undefined,
+          barcode: form.barcode.trim() || undefined,
+          category: form.category,
+          measuringUnit: form.measuringUnit,
+          stock: Number(form.stock) || 0,
+          lowStockThreshold: Number(form.lowStockThreshold),
+          buyPrice: Number(form.buyPrice),
+          sellPrice: Number(form.sellPrice),
+          expiryDate: form.expiryDate || undefined
+        })
+      }
+      onOpenChange(false)
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : "Unable to save. Please try again."
+      )
+    } finally {
+      setSaving(false)
     }
-    onOpenChange(false)
   }
 
   return (
@@ -151,10 +169,14 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
                 id="name"
                 placeholder="e.g. Basmati Rice"
                 value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, name: e.target.value }))
+                }
                 className={errors.name ? "border-destructive" : ""}
               />
-              {errors.name && <p className="mt-1 text-xs text-destructive">{errors.name}</p>}
+              {errors.name && (
+                <p className="mt-1 text-xs text-destructive">{errors.name}</p>
+              )}
             </div>
 
             <div>
@@ -163,7 +185,9 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
                 id="variantName"
                 placeholder="e.g. 1kg, Premium, Large"
                 value={form.variantName}
-                onChange={(e) => setForm((f) => ({ ...f, variantName: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, variantName: e.target.value }))
+                }
               />
             </div>
 
@@ -173,7 +197,9 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
                 id="variantCode"
                 placeholder="e.g. BR-PRM-1KG"
                 value={form.variantCode}
-                onChange={(e) => setForm((f) => ({ ...f, variantCode: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, variantCode: e.target.value }))
+                }
               />
             </div>
 
@@ -183,19 +209,26 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
                 id="barcode"
                 placeholder="Scan or type barcode"
                 value={form.barcode}
-                onChange={(e) => setForm((f) => ({ ...f, barcode: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, barcode: e.target.value }))
+                }
               />
             </div>
 
             <div>
               <Label htmlFor="category">Category</Label>
-              <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
+              <Select
+                value={form.category}
+                onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}
+              >
                 <SelectTrigger id="category">
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
                   {categories.map((c) => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -203,13 +236,20 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
 
             <div>
               <Label htmlFor="unit">Measuring Unit</Label>
-              <Select value={form.measuringUnit} onValueChange={(v) => setForm((f) => ({ ...f, measuringUnit: v as MeasuringUnit }))}>
+              <Select
+                value={form.measuringUnit}
+                onValueChange={(v) =>
+                  setForm((f) => ({ ...f, measuringUnit: v as MeasuringUnit }))
+                }
+              >
                 <SelectTrigger id="unit">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {measuringUnits.map((u) => (
-                    <SelectItem key={u} value={u}>{u}</SelectItem>
+                    <SelectItem key={u} value={u}>
+                      {u}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -223,7 +263,9 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
                   type="number"
                   min={0}
                   value={form.stock}
-                  onChange={(e) => setForm((f) => ({ ...f, stock: Number(e.target.value) }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, stock: Number(e.target.value) }))
+                  }
                 />
               </div>
             )}
@@ -235,11 +277,18 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
                 type="number"
                 min={0}
                 value={form.lowStockThreshold}
-                onChange={(e) => setForm((f) => ({ ...f, lowStockThreshold: Number(e.target.value) }))}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    lowStockThreshold: Number(e.target.value)
+                  }))
+                }
                 className={errors.lowStockThreshold ? "border-destructive" : ""}
               />
               {errors.lowStockThreshold && (
-                <p className="mt-1 text-xs text-destructive">{errors.lowStockThreshold}</p>
+                <p className="mt-1 text-xs text-destructive">
+                  {errors.lowStockThreshold}
+                </p>
               )}
             </div>
 
@@ -251,10 +300,16 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
                 min={0}
                 step="0.01"
                 value={form.buyPrice}
-                onChange={(e) => setForm((f) => ({ ...f, buyPrice: Number(e.target.value) }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, buyPrice: Number(e.target.value) }))
+                }
                 className={errors.buyPrice ? "border-destructive" : ""}
               />
-              {errors.buyPrice && <p className="mt-1 text-xs text-destructive">{errors.buyPrice}</p>}
+              {errors.buyPrice && (
+                <p className="mt-1 text-xs text-destructive">
+                  {errors.buyPrice}
+                </p>
+              )}
             </div>
 
             <div>
@@ -265,10 +320,16 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
                 min={0}
                 step="0.01"
                 value={form.sellPrice}
-                onChange={(e) => setForm((f) => ({ ...f, sellPrice: Number(e.target.value) }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, sellPrice: Number(e.target.value) }))
+                }
                 className={errors.sellPrice ? "border-destructive" : ""}
               />
-              {errors.sellPrice && <p className="mt-1 text-xs text-destructive">{errors.sellPrice}</p>}
+              {errors.sellPrice && (
+                <p className="mt-1 text-xs text-destructive">
+                  {errors.sellPrice}
+                </p>
+              )}
             </div>
 
             <div className="md:col-span-2">
@@ -277,16 +338,22 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
                 id="expiry"
                 type="date"
                 value={form.expiryDate}
-                onChange={(e) => setForm((f) => ({ ...f, expiryDate: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, expiryDate: e.target.value }))
+                }
               />
             </div>
           </div>
 
           <DialogFooter className="pt-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
               Cancel
             </Button>
-            <Button type="submit">
+            <Button type="submit" aria-busy={saving} disabled={saving}>
               {isEdit ? "Save Changes" : "Add Product"}
             </Button>
           </DialogFooter>

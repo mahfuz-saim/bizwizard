@@ -419,7 +419,7 @@ export default function InventoryPage() {
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
-                if (deleteTarget) deleteProduct(deleteTarget.id)
+                if (deleteTarget) void deleteProduct(deleteTarget.id).catch(() => { /* Store displays the backend error. */ })
                 setDeleteTarget(null)
               }}
             >

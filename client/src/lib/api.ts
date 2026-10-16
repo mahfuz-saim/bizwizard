@@ -4,16 +4,13 @@
  * - Reads base URL from NEXT_PUBLIC_API_BASE_URL (.env)
  * - Uses cookie + Bearer-token hybrid auth; access tokens are persisted in
  *   localStorage (via setAccessToken).
- * - Provides silent login against the demo email+password so the web UI
- *   doesn't need to expose a login/signup screen during development.
+ * - Requires explicit authentication; demo mode is local and opt-in.
  * - Normalises backend responses into the frontend's Product shape.
  */
 
-const API_BASE = (() => {
-  const v = process.env.NEXT_PUBLIC_API_BASE_URL
-  if (!v) return "http://localhost:5000/api/v1"
-  return v.replace(/\/$/, "")
-})()
+// All browser requests use the existing same-origin Next.js rewrite. The
+// backend URL belongs to the Next server, never the user's localhost.
+const API_BASE = "/api/proxy/v1"
 
 const TOKEN_KEY = "bizwizard_access_token"
 const TENANT_KEY = "bizwizard_tenant_id"
@@ -88,7 +85,8 @@ interface FetchOptions extends RequestInit {
 
 function buildUrl(path: string, params?: FetchOptions["params"]) {
   const url = new URL(
-    path.startsWith("http") ? path : `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`
+    path.startsWith("http") ? path : `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`,
+    typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"
   )
   if (params) {
     Object.entries(params).forEach(([k, v]) => {
@@ -109,6 +107,7 @@ async function request<T>(
   const res = await fetch(buildUrl(path, params), {
     ...init,
     credentials: "include",
+    cache: "no-store",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
@@ -139,15 +138,25 @@ export const api = {
     request<T>(path, { method: "PUT", json: body }),
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "PATCH", json: body }),
+  postWithAuthorization: <T>(path: string, body: unknown, token: string) =>
+    request<T>(path, { method: "POST", json: body, headers: { Authorization: token } }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 }
 
 // ---------- Auth helpers ----------
+export interface AuthUser {
+  id: string
+  name?: string | null
+  email?: string | null
+  number?: string | null
+  role?: string
+}
+
 export interface AuthSession {
   accessToken: string
   tenantId?: string | null
   shopId?: string | null
-  user?: unknown
+  user?: AuthUser | null
   profile?: unknown
   role?: string
   tenants?: { id: string; name: string; shops: { id: string; shopName: string }[] }[]
@@ -161,43 +170,11 @@ export async function loginWithCredentials(
   const body = isEmail
     ? { email: identifier, password }
     : { number: identifier, password }
-  const res = await api.post<any>("/auth/login", body)
-  const data = res.data as any
-  if (!data?.accessToken) throw new ApiError("No access token returned", 401)
-  setAccessToken(data.accessToken)
-  if (data.defaultTenantId) setTenantId(data.defaultTenantId)
-  if (data.defaultShopId) setShopId(data.defaultShopId)
-  if (data.user) setCurrentUser(data.user)
-  // Follow up with /auth/me if login didn't include profile
-  let me = data
-  if (!data.defaultTenantId) {
-    const meRes = await api.get<any>("/auth/me")
-    me = meRes.data as any
-    if (me?.defaultTenantId) setTenantId(me.defaultTenantId)
-    if (me?.defaultShopId) setShopId(me.defaultShopId)
-    if (me?.user) setCurrentUser(me.user)
-  }
-  return {
-    accessToken: data.accessToken,
-    tenantId: me?.defaultTenantId || null,
-    shopId: me?.defaultShopId || null,
-    user: me?.user,
-    profile: me?.profile,
-    role: me?.role,
-    tenants: me?.tenants || [],
-  }
-}
-
-/** Silent demo login, using env vars. Returns null on failure. */
-export async function silentDemoLogin(): Promise<AuthSession | null> {
-  const email = process.env.NEXT_PUBLIC_DEMO_EMAIL
-  const password = process.env.NEXT_PUBLIC_DEMO_PASSWORD
-  if (!email || !password) return null
-  try {
-    return await loginWithCredentials(email, password)
-  } catch {
-    return null
-  }
+  const res = await api.post<{ accessToken: string }>("/auth/login", body)
+  if (!res.data?.accessToken) throw new ApiError("No access token returned", 401)
+  setAccessToken(res.data.accessToken)
+  // Store.refresh validates /auth/me and loads shop metadata in one place.
+  return { accessToken: res.data.accessToken }
 }
 
 export function clearSession() {
@@ -205,14 +182,6 @@ export function clearSession() {
   setTenantId(null)
   setShopId(null)
   setCurrentUser(null)
-}
-
-export async function isBackendReachable(): Promise<boolean> {
-  try {
-    const base = API_BASE.replace(/\/api\/v1$/, "")
-    const res = await fetch(`${base}/test`, { method: "GET", cache: "no-store" })
-    return res.ok
-  } catch { return false }
 }
 
 // ---------- Response normalisation ----------
@@ -235,6 +204,7 @@ export interface RawShopVariant {
   mrp?: number | null
   sellPrice?: number | null
   buyPrice?: number | null
+  Lot?: { id: string; buyPrice?: number | null; sellPrice?: number | null; stock: number; expDate?: string | null }[]
   lots?: { buyPrice?: number | null; sellPrice?: number | null; stock: number }[]
   product?: {
     id?: string
@@ -250,13 +220,14 @@ export interface RawShopVariant {
 export function normalizeShopVariant(v: RawShopVariant) {
   const product = v.product || ({} as NonNullable<RawShopVariant["product"]>)
   // Prefer sell/buy price from lot level if available (BE stores them on lots)
-  const firstLot = v.lots?.[0]
+  const lots = v.Lot || v.lots
+  const firstLot = lots?.find(l => l.stock > 0) || lots?.[lots.length - 1]
   const sellPrice = Number(v.sellPrice ?? firstLot?.sellPrice ?? 0)
   const buyPrice = Number(v.buyPrice ?? firstLot?.buyPrice ?? 0)
   return {
     id: v.id,
     productID: v.productID,
-    name: product.productName || v.name || "Unnamed product",
+    name: v.name || product.productName || "Unnamed product",
     productName: product.productName || v.name || "",
     variantName: v.variantName || undefined,
     variantCode: v.variantCode || undefined,
@@ -264,8 +235,10 @@ export function normalizeShopVariant(v: RawShopVariant) {
     genericName: product.genericName || undefined,
     category: product.category || "OTHER",
     image: product.image || undefined,
-    measuringUnit: (product.measuringUnit || "Piece (pc)") as any,
-    stock: Number(v.totalProducts ?? 0),
+    measuringUnit: (product.measuringUnit || "Piece (pc)") as import("./types").MeasuringUnit,
+    stock: v.Lot ? v.Lot.reduce((n, lot) => n + lot.stock, 0) : Number(v.totalProducts ?? 0),
+    lots: v.Lot,
+    expiryDate: v.Lot?.find(l => l.stock > 0 && l.expDate)?.expDate || undefined,
     lowStockThreshold: Number(v.lowStock ?? 0),
     buyPrice,
     sellPrice,

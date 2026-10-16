@@ -3,18 +3,15 @@
 import * as React from "react"
 import {
   api,
+  ApiError,
   clearSession,
   getAccessToken,
   getShopId,
-  getTenantId,
-  isBackendReachable,
   loginWithCredentials,
-  normalizeShopVariant,
   setShopId,
   setTenantId,
-  silentDemoLogin,
   type AuthSession,
-  type RawShopVariant,
+  type AuthUser
 } from "./api"
 import {
   initialCustomers,
@@ -22,7 +19,7 @@ import {
   initialProducts,
   initialSuppliers,
   initialTransactions,
-  dashboardStats as defaultStats,
+  dashboardStats as defaultStats
 } from "./mock-data"
 import type {
   Product,
@@ -31,14 +28,26 @@ import type {
   Transaction,
   DashboardStats,
   Expense,
+  Employee,
+  ShopMessage,
+  ShopNotification
 } from "./types"
-
-type Source = "backend" | "mock" | "loading" | "auth"
+import { loadShopData } from "./shop-data"
+import {
+  checkoutBody,
+  purchaseBody,
+  createStockProduct,
+  makeLocalSale
+} from "./shop-writes"
+type Source = "backend" | "mock" | "loading" | "auth" | "error"
 
 interface DataContextValue {
   source: Source
   error: string | null
   session: AuthSession | null
+  login: (identifier: string, password: string) => Promise<void>
+  runDemo: () => void
+  logout: () => void
   refresh: () => Promise<void>
 
   products: Product[]
@@ -46,9 +55,14 @@ interface DataContextValue {
   suppliers: Supplier[]
   transactions: Transaction[]
   expenses: Expense[]
+  employees: Employee[]
+  messages: ShopMessage[]
+  notifications: ShopNotification[]
   stats: DashboardStats
 
-  addProduct: (product: Omit<Product, "id" | "createdAt" | "updatedAt">) => Promise<void>
+  addProduct: (
+    product: Omit<Product, "id" | "createdAt" | "updatedAt">
+  ) => Promise<void>
   updateProduct: (id: string, patch: Partial<Product>) => Promise<void>
   deleteProduct: (id: string) => Promise<void>
   addBuy: (payload: {
@@ -69,262 +83,423 @@ interface DataContextValue {
   }) => Promise<Transaction | null>
 }
 
+const emptyStats: DashboardStats = {
+  todaySell: 0,
+  todayProfit: 0,
+  todayDebt: 0,
+  todayDiscount: 0,
+  yesterdayProfit: 0,
+  totalProducts: 0,
+  lowStockCount: 0,
+  totalCustomers: 0,
+  totalSuppliers: 0
+}
 const DataContext = React.createContext<DataContextValue | null>(null)
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [source, setSource] = React.useState<Source>("loading")
   const [error, setError] = React.useState<string | null>(null)
   const [session, setSession] = React.useState<AuthSession | null>(null)
+  const [products, setProducts] = React.useState<Product[]>([])
+  const [customers, setCustomers] = React.useState<Customer[]>([])
+  const [suppliers, setSuppliers] = React.useState<Supplier[]>([])
+  const [transactions, setTransactions] = React.useState<Transaction[]>([])
+  const [expenses, setExpenses] = React.useState<Expense[]>([])
+  const [employees, setEmployees] = React.useState<Employee[]>([])
+  const [messages, setMessages] = React.useState<ShopMessage[]>([])
+  const [notifications, setNotifications] = React.useState<ShopNotification[]>(
+    []
+  )
+  const [stats, setStats] = React.useState<DashboardStats>(emptyStats)
+  const demoMode = React.useRef(false)
+  const generation = React.useRef(0)
 
-  const [products, setProducts] = React.useState<Product[]>(initialProducts)
-  const [customers] = React.useState<Customer[]>(initialCustomers)
-  const [suppliers] = React.useState<Supplier[]>(initialSuppliers)
-  const [transactions, setTransactions] = React.useState<Transaction[]>(initialTransactions)
-  const [expenses] = React.useState<Expense[]>(initialExpenses)
-  const [stats, setStats] = React.useState<DashboardStats>(defaultStats)
-
-  React.useEffect(() => {
-    const lowStockCount = products.filter((p) => p.stock <= p.lowStockThreshold).length
-    setStats((s) => ({ ...s, totalProducts: products.length, lowStockCount }))
-  }, [products])
-
-  const loadProducts = React.useCallback(async () => {
-    const shopId = getShopId()
-    if (!shopId) return []
-    const res = await api.get<any>(`/shop/${shopId}`, {
-      page: 1,
-      limit: 200,
-      sortOrder: "asc",
-    })
-    const payload: any = res.data
-    const rawList: RawShopVariant[] = Array.isArray(payload)
-      ? payload
-      : Array.isArray(payload?.data)
-        ? payload.data
-        : Array.isArray(payload?.shopVariants)
-          ? payload.shopVariants
-          : []
-    return rawList.map(normalizeShopVariant)
+  const resetData = React.useCallback(() => {
+    setProducts([])
+    setCustomers([])
+    setSuppliers([])
+    setTransactions([])
+    setExpenses([])
+    setEmployees([])
+    setMessages([])
+    setNotifications([])
+    setStats(emptyStats)
   }, [])
-
-  const refresh = React.useCallback(async () => {
-    setSource("loading")
+  const logout = React.useCallback(() => {
+    generation.current++
+    demoMode.current = false
+    clearSession()
+    setSession(null)
+    resetData()
     setError(null)
-    try {
-      const reachable = await isBackendReachable()
-      if (!reachable) {
-        setProducts(initialProducts)
-        setSource("mock")
-        setError("Backend unreachable. Showing demo data.")
+    setSource("auth")
+    void api.post("/auth/logout").catch(() => {})
+  }, [resetData])
+  const runDemo = React.useCallback(() => {
+    generation.current++
+    clearSession()
+    setSession(null)
+    demoMode.current = true
+    setProducts(initialProducts)
+    setCustomers(initialCustomers)
+    setSuppliers(initialSuppliers)
+    setTransactions(initialTransactions)
+    setExpenses(initialExpenses)
+    setStats(defaultStats)
+    setEmployees([])
+    setMessages([])
+    setNotifications([])
+    setError(null)
+    setSource("mock")
+  }, [])
+  const refresh = React.useCallback(
+    async (showLoading = true) => {
+      if (demoMode.current) return
+      const request = ++generation.current
+      if (!getAccessToken()) {
+        resetData()
+        setSource("auth")
         return
       }
-
-      // Try existing token first
-      if (!getAccessToken()) {
-        setSource("auth")
-        const s = await silentDemoLogin()
-        if (!s) {
-          setProducts(initialProducts)
-          setSource("mock")
-          setError("Not authenticated. Showing demo data.")
-          return
-        }
-        setSession(s)
-      }
-
-      // If we have a token but no tenant, fetch /auth/me to populate it
-      if (!getTenantId() || !getShopId()) {
-        const meRes = await api.get<any>("/auth/me")
-        const me = meRes.data as any
-        if (me?.defaultTenantId) setTenantId(me.defaultTenantId)
-        if (me?.defaultShopId) setShopId(me.defaultShopId)
-        setSession((s) => s ? { ...s, ...me } : null)
-      }
-
+      if (showLoading) setSource("loading")
+      setError(null)
       try {
-        const list = await loadProducts()
-        setProducts(list.length ? list : [])
-        setSource("backend")
-        setError(null)
-      } catch (e: any) {
-        // Token might be invalid -> try demo login once then retry
-        if (e?.status === 401 || e?.status === 403) {
-          clearSession()
-          const s = await silentDemoLogin()
-          if (s) {
-            setSession(s)
-            const list = await loadProducts()
-            setProducts(list.length ? list : [])
-            setSource("backend")
-            setError(null)
-            return
-          }
-        }
-        setProducts(initialProducts)
-        setSource("mock")
-        setError(e?.message || "Could not load data. Showing demo data.")
-      }
-    } catch (e: any) {
-      setProducts(initialProducts)
-      setSource("mock")
-      setError(e?.message || "Failed to load data.")
-    }
-  }, [loadProducts])
-
-  React.useEffect(() => { refresh() }, [refresh])
-
-  const addProduct: DataContextValue["addProduct"] = React.useCallback(
-    async (p) => {
-      const id = `p${Date.now()}`
-      const now = new Date().toISOString()
-      const optimistic: Product = { ...p, id, createdAt: now, updatedAt: now, stock: p.stock ?? 0 }
-      setProducts((prev) => [optimistic, ...prev])
-      if (source !== "backend") return
-
-      try {
-        const shopId = getShopId()
-        await api.post("/product/catalog", {
-          shopID: shopId,
-          product: {
-            productName: p.name,
-            barcode: p.barcode,
-            measuringUnit: p.measuringUnit,
-            genericName: (p as any).genericName || "",
-            category: p.category,
-            image: (p as any).image,
-          },
-          variants: [
-            {
-              variantName: p.variantName || "Default",
-              variantCode: p.variantCode || "",
-              packOf: 1,
-              lowStock: p.lowStockThreshold,
-              lowStockSMS: false,
-            },
-          ],
+        const res = await api.get<{
+          user: AuthUser
+          role: string
+          defaultTenantId: string | null
+          defaultShopId: string | null
+          tenants: AuthSession["tenants"]
+        }>("/auth/me")
+        if (request !== generation.current) return
+        const me = res.data
+        if (!me?.user || !me.defaultShopId || !me.defaultTenantId)
+          throw new Error(
+            "This account has no accessible shop. Ask the owner to assign a shop."
+          )
+        setTenantId(me.defaultTenantId)
+        setShopId(me.defaultShopId)
+        setSession({
+          accessToken: getAccessToken()!,
+          user: me.user,
+          role: me.role,
+          tenantId: me.defaultTenantId,
+          shopId: me.defaultShopId,
+          tenants: me.tenants
         })
-        await refresh()
-      } catch (e: any) {
-        setError(e?.message || "Failed to add product")
+        const data = await loadShopData(me.defaultShopId, me.role)
+        if (request !== generation.current) return
+        setProducts(data.products)
+        setCustomers(data.customers)
+        setSuppliers(data.suppliers)
+        setTransactions(data.transactions)
+        setExpenses(data.expenses)
+        setEmployees(data.employees)
+        setMessages(data.messages)
+        setNotifications(data.notifications)
+        setStats(data.stats)
+        setSource("backend")
+      } catch (e) {
+        if (request !== generation.current) return
+        setError(e instanceof Error ? e.message : "Unable to load shop data")
+        if (e instanceof ApiError && e.status === 401) {
+          clearSession()
+          setSession(null)
+          resetData()
+          setSource("auth")
+        } else setSource("error") // Don't present API failures as zero balances or demo data.
       }
     },
-    [source, refresh]
+    [resetData]
   )
-
-  const updateProduct: DataContextValue["updateProduct"] = React.useCallback(
-    async (id, patch) => {
-      setProducts((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, ...patch, updatedAt: new Date().toISOString() } : p))
-      )
-      if (source !== "backend") return
+  const login = React.useCallback(
+    async (identifier: string, password: string) => {
+      generation.current++
+      demoMode.current = false
+      clearSession()
+      resetData()
       try {
-        await api.put(`/product/${id}`, { shopID: getShopId(), ...patch })
-      } catch (e: any) { setError(e?.message || "Failed to update product") }
+        setSession(await loginWithCredentials(identifier, password))
+        await refresh()
+      } catch (e) {
+        clearSession()
+        setSession(null)
+        throw e
+      }
     },
-    [source]
+    [refresh, resetData]
   )
+  const invalidateRequests = React.useCallback(() => {
+    generation.current++
+  }, [])
+  React.useEffect(() => {
+    let active = true
+    queueMicrotask(() => {
+      if (active) void refresh()
+    })
+    return () => {
+      active = false
+      invalidateRequests()
+    }
+  }, [refresh, invalidateRequests])
 
-  const deleteProduct: DataContextValue["deleteProduct"] = React.useCallback(
-    async (id) => {
+  function shopId() {
+    const id = getShopId()
+    if (!id || source !== "backend")
+      throw new Error("Connect to your shop before making changes")
+    return id
+  }
+  async function save(operation: () => Promise<void>) {
+    setError(null)
+    try {
+      await operation()
+      await refresh(false)
+    } catch (e) {
+      await refresh(false)
+      setError(e instanceof Error ? e.message : "Save failed")
+      throw e
+    }
+  }
+  const addProduct: DataContextValue["addProduct"] = async (p) => {
+    if (demoMode.current) {
+      const now = new Date().toISOString()
+      setProducts((prev) => [
+        { ...p, id: crypto.randomUUID(), createdAt: now, updatedAt: now },
+        ...prev
+      ])
+      return
+    }
+    await save(async () => {
+      await createStockProduct(shopId(), p)
+    })
+  }
+  const updateProduct: DataContextValue["updateProduct"] = async (
+    id,
+    patch
+  ) => {
+    if (demoMode.current) {
+      setProducts((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, ...patch } : p))
+      )
+      return
+    }
+    const product = products.find((p) => p.id === id)
+    if (!product) throw new Error("Product not found")
+    // Purchase cost is historical, not an editable current price. Catalog fields
+    // aren't supported by the variant update endpoint either; don't fake success.
+    for (const field of [
+      "buyPrice",
+      "barcode",
+      "category",
+      "measuringUnit"
+    ] as const) {
+      if (patch[field] !== undefined && patch[field] !== product[field])
+        throw new Error(`${field} cannot be changed through the variant API`)
+    }
+    await save(async () => {
+      shopId()
+      await api.put(`/product/${encodeURIComponent(id)}`, {
+        name: patch.name,
+        variantName: patch.variantName,
+        variantCode: patch.variantCode,
+        lowStock: patch.lowStockThreshold
+      })
+      for (const lot of (product.lots || []).filter((lot) => lot.stock > 0))
+        if (patch.sellPrice !== undefined || patch.expiryDate !== undefined) {
+          await api.put(`/product/lot/${encodeURIComponent(lot.id)}`, {
+            sellPrice: patch.sellPrice,
+            retail: patch.sellPrice,
+            mrp: patch.sellPrice,
+            expDate: patch.expiryDate
+          })
+        }
+    })
+  }
+  const deleteProduct: DataContextValue["deleteProduct"] = async (id) => {
+    if (demoMode.current) {
       setProducts((prev) => prev.filter((p) => p.id !== id))
-      if (source !== "backend") return
-      try { await api.delete(`/product/${id}`) } catch (e: any) { setError(e?.message || "Failed to delete product") }
-    },
-    [source]
-  )
-
-  const addBuy: DataContextValue["addBuy"] = React.useCallback(
-    async ({ supplierId, supplierName, items, paid, note }) => {
-      let subtotal = 0
-      const txnItems: Transaction["items"] = []
-      setProducts((prev) => {
-        const copy = [...prev]
-        for (const it of items) {
-          const idx = copy.findIndex((p) => p.id === it.productId)
-          if (idx < 0) continue
-          const total = it.quantity * it.buyPrice
-          subtotal += total
-          txnItems.push({
-            productId: it.productId,
-            productName: copy[idx].name,
-            variantName: copy[idx].variantName,
-            quantity: it.quantity,
-            unitPrice: it.buyPrice,
-            total,
-          })
-          copy[idx] = { ...copy[idx], stock: copy[idx].stock + it.quantity, buyPrice: it.buyPrice, updatedAt: new Date().toISOString() }
+      return
+    }
+    await save(async () => {
+      shopId()
+      await api.delete(`/product/${encodeURIComponent(id)}`)
+    })
+  }
+  const addBuy: DataContextValue["addBuy"] = async (payload) => {
+    const { items, supplierId, supplierName, paid, note } = payload
+    const total = items.reduce((n, i) => n + i.quantity * i.buyPrice, 0)
+    if (demoMode.current) {
+      setProducts((prev) =>
+        prev.map((p) => ({
+          ...p,
+          stock:
+            p.stock +
+            items
+              .filter((i) => i.productId === p.id)
+              .reduce((n, i) => n + i.quantity, 0)
+        }))
+      )
+      setTransactions((prev) => [
+        {
+          id: crypto.randomUUID(),
+          type: "BUY",
+          supplierId,
+          supplierName,
+          items: items.map((i) => ({
+            productId: i.productId,
+            productName:
+              products.find((p) => p.id === i.productId)?.name || "Product",
+            quantity: i.quantity,
+            unitPrice: i.buyPrice,
+            total: i.quantity * i.buyPrice
+          })),
+          subtotal: total,
+          discount: 0,
+          total,
+          paid,
+          due: total - paid,
+          paymentMethod: "CASH",
+          note,
+          createdAt: new Date().toISOString()
+        },
+        ...prev
+      ])
+      return
+    }
+    const id = shopId()
+    // Validate all items before the first persisted purchase.
+    const bodies = items.map((i) => {
+      const product = products.find((p) => p.id === i.productId)
+      if (
+        !product ||
+        !Number.isInteger(i.quantity) ||
+        i.quantity <= 0 ||
+        i.buyPrice < 0
+      )
+        throw new Error("Invalid purchase item")
+      return purchaseBody(
+        id,
+        product,
+        i.quantity,
+        i.buyPrice,
+        suppliers.find((s) => s.id === supplierId),
+        note
+      )
+    })
+    if (paid !== total)
+      throw new Error(
+        "The backend tracks purchase costs, not supplier payment balances. Record a fully paid purchase; partial supplier payments are not supported."
+      )
+    await save(async () => {
+      let saved = 0
+      try {
+        for (const body of bodies) {
+          await api.post("/product", body)
+          saved++
         }
-        return copy
-      })
-      const total = subtotal
-      setTransactions((prev) => [{
-        id: `t${Date.now()}`, type: "BUY", supplierId, supplierName, items: txnItems,
-        subtotal, discount: 0, total, paid, due: total - paid, paymentMethod: "CASH", note,
-        createdAt: new Date().toISOString(),
-      }, ...prev])
-      // NOTE: backend purchase flow happens via lot creation; optimistic update is shown until a refresh.
-      if (source === "backend") refresh().catch(() => {})
-    },
-    [source, refresh]
-  )
-
-  const addSell: DataContextValue["addSell"] = React.useCallback<DataContextValue["addSell"]>(
-    async ({ customerId, customerName, items, discount, paid, paymentMethod, note }) => {
-      let subtotal = 0
-      const txnItems: Transaction["items"] = []
-      let success = true
-      setProducts((prev) => {
-        const copy = [...prev]
-        for (const it of items) {
-          const idx = copy.findIndex((p) => p.id === it.productId)
-          if (idx < 0) { success = false; continue }
-          if (copy[idx].stock < it.quantity) { success = false; continue }
-          const total = it.quantity * it.sellPrice
-          subtotal += total
-          txnItems.push({
-            productId: it.productId, productName: copy[idx].name, variantName: copy[idx].variantName,
-            quantity: it.quantity, unitPrice: it.sellPrice, total,
-          })
-          copy[idx] = { ...copy[idx], stock: copy[idx].stock - it.quantity, sellPrice: it.sellPrice, lastSoldDate: new Date().toISOString(), updatedAt: new Date().toISOString() }
-        }
-        return copy
-      })
-      if (!success || txnItems.length === 0) return null
-      const total = Math.max(0, subtotal - discount)
-      const due = total - paid
-      const txn: Transaction = {
-        id: `t${Date.now()}`, type: "SALE", customerId, customerName, items: txnItems,
-        subtotal, discount, total, paid, due, paymentMethod, note,
-        createdAt: new Date().toISOString(), soldBy: "You",
+      } catch (error) {
+        throw new Error(
+          `${saved} of ${bodies.length} purchase lines were saved. Do not resubmit saved lines. ${error instanceof Error ? error.message : "Purchase failed"}`
+        )
       }
+    })
+  }
+  const addSell: DataContextValue["addSell"] = async (payload) => {
+    const txn = makeLocalSale(products, payload)
+    if (demoMode.current) {
+      for (const item of payload.items)
+        if (
+          item.quantity >
+          (products.find((p) => p.id === item.productId)?.stock || 0)
+        )
+          throw new Error("Insufficient stock")
+      setProducts((prev) =>
+        prev.map((p) => ({
+          ...p,
+          stock:
+            p.stock -
+            payload.items
+              .filter((i) => i.productId === p.id)
+              .reduce((n, i) => n + i.quantity, 0)
+        }))
+      )
+      setStats((prev) => ({
+        ...prev,
+        todaySell: prev.todaySell + txn.total,
+        todayProfit:
+          prev.todayProfit +
+          txn.total -
+          txn.items.reduce(
+            (n, i) =>
+              n +
+              (products.find((p) => p.id === i.productId)?.buyPrice || 0) *
+                i.quantity,
+            0
+          ),
+        todayDiscount: prev.todayDiscount + txn.discount,
+        todayDebt: prev.todayDebt + txn.due
+      }))
+      setCustomers((prev) =>
+        prev.map((c) =>
+          c.id === txn.customerId
+            ? {
+                ...c,
+                totalPurchased: c.totalPurchased + txn.total,
+                totalDue: c.totalDue + txn.due
+              }
+            : c
+        )
+      )
       setTransactions((prev) => [txn, ...prev])
-      setStats((s) => ({ ...s, todaySell: s.todaySell + total, todayProfit: s.todayProfit + txnItems.reduce((a, ti) => { const prod = products.find(p => p.id === ti.productId); return a + (ti.unitPrice - (prod?.buyPrice ?? 0))*ti.quantity; }, 0), todayDebt: s.todayDebt + Math.max(0, due), todayDiscount: s.todayDiscount + discount }))
-
-      if (source === "backend") {
-        try {
-          await api.post("/checkout/quick", {
-            shopID: getShopId(),
-            buyerName: customerName,
-            buyerPhone: "",
-            items: txnItems.map((it) => ({ variantId: it.productId, quantity: it.quantity, price: it.unitPrice })),
-            discount, paid, paymentMethod, note,
-          })
-          await refresh()
-        } catch (e: any) { setError(e?.message || "Checkout failed (saved locally)") }
-      }
       return txn
-    },
-    [products, source, refresh]
-  )
-
+    }
+    const body = checkoutBody(shopId(), products, payload)
+    const result = await api.post<{
+      id: string
+      totalPrice: number
+      createdAt: string
+    }>("/checkout", body)
+    if (!result.data?.id)
+      throw new Error("Checkout response did not include a receipt ID")
+    await refresh(false)
+    return {
+      ...txn,
+      id: result.data.id,
+      total: result.data.totalPrice,
+      createdAt: result.data.createdAt,
+      paymentMethod: "UNKNOWN"
+    }
+  }
   const value: DataContextValue = {
-    source, error, session, refresh,
-    products, customers, suppliers, transactions, expenses, stats,
-    addProduct, updateProduct, deleteProduct, addBuy, addSell,
+    source,
+    error,
+    session,
+    login,
+    runDemo,
+    logout,
+    refresh,
+    products,
+    customers,
+    suppliers,
+    transactions,
+    expenses,
+    employees,
+    messages,
+    notifications,
+    stats: {
+      ...stats,
+      totalProducts: products.length,
+      lowStockCount: products.filter((p) => p.stock <= p.lowStockThreshold)
+        .length
+    },
+    addProduct,
+    updateProduct,
+    deleteProduct,
+    addBuy,
+    addSell
   }
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>
 }
-
 export function useStore() {
   const ctx = React.useContext(DataContext)
   if (!ctx) throw new Error("useStore must be used within StoreProvider")

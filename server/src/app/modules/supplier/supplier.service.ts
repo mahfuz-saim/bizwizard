@@ -142,12 +142,7 @@ const getSupplierByShopId = async (
 
     const result = await prisma.shopSupplier.findMany({
         where: whereConditions,
-        orderBy: {
-            lastSuppliedAt: {
-                sort: 'desc',
-                nulls: 'last',
-            },
-        },
+        orderBy: [{ lastSuppliedAt: { sort: 'desc', nulls: 'last' } }, { id: 'asc' }],
         include: {
             supplier: true,
         },

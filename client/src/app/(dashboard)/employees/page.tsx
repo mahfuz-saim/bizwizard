@@ -1,5 +1,6 @@
 "use client"
 
+import { useStore } from "@/lib/store"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { UserCog, Plus, Shield, Calendar, Phone } from "lucide-react"
@@ -7,12 +8,9 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { formatDate, generateAvatarColor, getInitials } from "@/lib/utils"
 
-const employees = [
-  { id: "e1", name: "Store Owner", phone: "01700000000", role: "OWNER" as const, joinedAt: new Date(Date.now() - 1000*60*60*24*365).toISOString() },
-  { id: "e2", name: "Rafiqul Islam", phone: "01811112222", role: "EMPLOYEE" as const, joinedAt: new Date(Date.now() - 1000*60*60*24*120).toISOString() },
-]
-
 export default function EmployeesPage() {
+  const { employees, session } = useStore()
+  if (session?.role === "EMPLOYEE") return <p>Staff records are available to the shop owner only.</p>
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -20,12 +18,12 @@ export default function EmployeesPage() {
           <h2 className="text-2xl font-bold tracking-tight">Employees</h2>
           <p className="text-sm text-muted-foreground">Manage staff, roles, attendance and permissions.</p>
         </div>
-        <Button><Plus className="mr-2 h-4 w-4" /> Invite Employee</Button>
+        <Button disabled title="Invitation workflow is not connected"><Plus className="mr-2 h-4 w-4" /> Invite Employee</Button>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 md:grid-cols-4">
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Total Staff</p><p className="mt-1 text-2xl font-bold">{employees.length}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Active Today</p><p className="mt-1 text-2xl font-bold text-success">{employees.length}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Staff Records</p><p className="mt-1 text-2xl font-bold text-success">{employees.length}</p></CardContent></Card>
       </div>
 
       <Card>

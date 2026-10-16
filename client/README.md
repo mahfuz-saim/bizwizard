@@ -32,7 +32,7 @@ cp .env.example .env.local
 # edit .env.local and set NEXT_PUBLIC_API_BASE_URL=http://localhost:5000/api/v1
 ```
 
-The backend Express server already CORS-allows `http://localhost:3000` with credentials, so the client calls it directly (no dev proxy is required).
+The browser uses the same-origin Next.js API proxy, so it does not need direct backend access or cross-origin CORS configuration.
 
 ```bash
 cd client
@@ -42,7 +42,7 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-A small status chip in the top bar shows whether you are running against the **Live** backend or **Demo data** (shown when the backend can&apos;t be reached or returns an auth error). Click the chip (or use the profile menu) to retry the connection.
+A small status chip in the top bar shows whether you are running against the **Live** backend or **Demo data** (only after explicitly clicking **Run Demo**). Click the chip (or use the profile menu) to retry the connection.
 
 ## Project Structure
 
@@ -82,7 +82,61 @@ The API client lives in `src/lib/api.ts`. It:
 - Attaches a bearer token from `localStorage` (set via `setAccessToken(...)` after login)
 - Normalises the backend&apos;s shop-variant response into the frontend `Product` type via `normalizeShopVariant()`
 
-The data layer (`src/lib/store.tsx`) always renders immediately:
-- **When the backend is reachable**, it loads `/product` (paginated shop variants) and best-effort loads `/analytics`, wiring Add/Sell mutations to `/product/catalog`, `/product/:id` and `/checkout/quick`.
-- **When the backend is unreachable or unauthenticated**, it falls back to realistic demo data (from `src/lib/mock-data.ts`) so the UI stays usable for development / demos. Mutations remain fully interactive against the local state.
-- The store exposes `source: "backend" | "mock" | "loading"` and `refresh()` for the UI status indicator and manual reconnect.
+The data layer validates `/auth/me`, resolves the tenant and shop, then loads real shop data.
+API failures show a retry screen; they are never represented as zero balances or demo data.
+Demo data is loaded only after **Run Demo** is clicked.
+
+### Connected reads
+
+- `/shop/:shopId?includeProduct=true` — products, FIFO lots and last-known prices
+- `/buyer/shop-buyer/:shopId` — shop customers, using `buyerID` for checkout identity
+- `/supplier/:shopId` — shop suppliers (purchase requests use the supplier's user ID)
+- `/checkout?shopId=...` — posted sales, line items, historical lot costs, debt payments, cashier
+- `/expense/shop/:shopId` — purchase history and operating expenses (owner only)
+- `/employee?shopID=...` — staff for the selected shop (owner only)
+- `/analytics?shopId=...&startDate=...&endDate=...` — today's and yesterday's analytics
+- `/message?shopId=...` and `/notifications/:shopId` — recorded messages and notifications
+
+Paginated service envelopes are nested under `response.data.{data,meta}`. The loader
+fetches every page with bounded concurrency, so a two-year history is not truncated
+at the first 10/200/500 records. Refresh uses a new server snapshot. Stale requests
+cannot overwrite a later login, logout, or demo selection.
+
+All browser requests use `/api/proxy/v1`, rewritten by Next.js to
+`NEXT_PUBLIC_API_BASE_URL`. That variable points to the backend **from the Next
+server**, not from the user's browser. Requests include credentials, bearer token,
+`x-tenant-id`, and `cache: no-store`. Restart/rebuild Next after changing the URL.
+
+### Connected writes and limitations
+
+- Add product / buy stock: `POST /product`, including the required lot payload.
+- Sell: `POST /checkout`, allocating requested quantities across real FIFO lot IDs;
+  partial payment uses `paidAmount` and requires an existing customer.
+- Edit variant: `PUT /product/:id` with backend field names such as `lowStock`;
+  sell prices/expiry use `PUT /product/lot/:lotId`.
+- Delete variant: `DELETE /product/:id`; errors are displayed, not silently removed locally.
+
+Dialogs await saves and display backend errors. There are no optimistic-only live
+transactions. A multi-item stock purchase uses one backend request per line; if a
+later line fails, the error reports the number saved so those lines aren't retried.
+The backend does not store supplier payment balances or payment channels. The UI
+labels these as not tracked/recorded instead of inventing a cash payment or settled
+balance. Live purchases currently require full payment. Catalog identity fields and
+historical purchase costs cannot be edited through the variant API. Invitation,
+message composition, payment-recording and export controls aren't connected yet.
+
+Reports use actual transaction dates and historical lot costs. They no longer
+multiply revenue or display placeholder growth percentages/charts. Daily analytics
+and report date boundaries currently use UTC, matching backend analytics.
+
+### Checks
+
+```bash
+npm test                       # transport, pagination, normalization, reads and FIFO writes
+npm run test:backend-contract   # actual backend Zod schemas; requires server dependencies/client generation
+npm run build
+```
+
+## Authentication
+
+Unauthenticated visits show login, Create account, Reset password (phone OTP), and Run Demo options. Stored sessions are validated against `/auth/me`. Backend failures never fall back to demo data. Demo changes are temporary and local; use the profile menu to exit demo or log out. Restricted staff and expense records are identified as owner-only.

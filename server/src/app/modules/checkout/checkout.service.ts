@@ -547,6 +547,10 @@ const getCheckOut = async (
                 ? { [sortBy]: sortOrder }
                 : { createdAt: 'desc' },
         include: {
+            items: { include: { Lot: { select: { buyPrice: true, shopVariantId: true } } } },
+            Debt: { select: { paidAmount: true, status: true } },
+            soldByOwner: { select: { name: true } },
+            soldByEmployee: { select: { name: true } },
             buyer: {
                 include: {
                     Shops: {

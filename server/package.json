@@ -15,7 +15,8 @@
         "prisma:migrate": "npx prisma migrate dev ",
         "prisma:generate": "npx prisma generate",
         "test": "echo \"Error: no test specified\" && exit 1",
-        "seed": "ts-node-dev --respawn --transpile-only prisma/seed.ts",
+        "seed": "prisma generate && ts-node --project prisma/tsconfig.json prisma/seed.ts",
+        "seed:test": "prisma generate && ts-node --project prisma/tsconfig.json prisma/seed/transaction-data.test.ts",
         "pris": "npx prisma migrate dev && npx prisma generate"
     },
     "dependencies": {
@@ -69,6 +70,6 @@
         "ts-node-dev": "^2.0.0"
     },
     "prisma": {
-        "seed": "ts-node prisma/seed.ts"
+        "seed": "ts-node --project prisma/tsconfig.json prisma/seed.ts"
     }
 }

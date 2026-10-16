@@ -283,9 +283,8 @@ const getProductInShop = async (
         ...filterData
     } = filters;
 
-    if (includeProduct === 'false') {
-        includeProduct = false;
-    }
+    // Query-string booleans arrive as strings; Prisma include requires a boolean.
+    includeProduct = includeProduct !== false && includeProduct !== 'false';
     if (expireSoon === 'true') {
         expireSoon = true;
     }
@@ -345,7 +344,7 @@ const getProductInShop = async (
                 : Prisma.empty
         }
         GROUP BY sv.id ${barcode || searchTerm ? Prisma.sql`, i.id` : Prisma.empty}
-        ORDER BY MIN(l."expDate") NULLS LAST
+        ORDER BY MIN(l."expDate") NULLS LAST, sv.id
         LIMIT ${limit} OFFSET ${skip}
     `;
 
@@ -365,7 +364,14 @@ const getProductInShop = async (
             id: { in: sortedIds },
             tenantID: tenantId,
         },
-        include: { product: includeProduct },
+        include: {
+            product: includeProduct,
+            Lot: {
+                // Keep exhausted lots for last-known prices; deleted stock is excluded.
+                where: { status: { in: ['ACTIVE', 'SOLD'] } },
+                orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+            },
+        },
     });
 
     // STEP 3: Preserve SQL sort order (Prisma doesn't guarantee order with IN clause)
