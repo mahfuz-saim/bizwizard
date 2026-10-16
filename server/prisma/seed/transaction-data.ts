@@ -144,6 +144,12 @@ export function buildTransactionData(account: SeedAccount, now = new Date()) {
         ledger: [] as Prisma.BuyerDebtLedgerCreateManyInput[],
         expenses: [] as Prisma.ExpenseCreateManyInput[],
         expenseItems: [] as Prisma.ExpenseItemCreateManyInput[],
+        employees: [] as Prisma.EmployeeCreateManyInput[],
+        attendance: [] as Prisma.AttendanceCreateManyInput[],
+        pickups: [] as Prisma.PickupCreateManyInput[],
+        pickupItems: [] as Prisma.PickupItemCreateManyInput[],
+        losses: [] as Prisma.LotDeletionCreateManyInput[],
+        notes: [] as Prisma.noteCreateManyInput[],
     };
     const stamp = (date: Date) => ({
         createdAt: new Date(date),
@@ -179,6 +185,31 @@ export function buildTransactionData(account: SeedAccount, now = new Date()) {
             number,
             name,
             address,
+            ...stamp(start),
+        });
+    }
+    for (let i = 0; i < 3; i++) {
+        const id = seedId(account, 'employee-user', i);
+        const number = `010${account.years ? '5' : '6'}${String(i).padStart(7, '0')}`;
+        const name = ['Sabbir Ahmed', 'Rokeya Begum', 'Faisal Islam'][i];
+        data.users.push({
+            id,
+            number,
+            name,
+            role: ['EMPLOYEE'],
+            status: 'ACTIVE',
+            OTP: 0,
+            ...stamp(start),
+        });
+        data.employees.push({
+            id: seedId(account, 'employee', i),
+            userID: id,
+            number,
+            name,
+            address: 'Gazipur, Dhaka Division',
+            dob: '1996-05-10',
+            tenantID,
+            shopID,
             ...stamp(start),
         });
     }
@@ -294,8 +325,10 @@ export function buildTransactionData(account: SeedAccount, now = new Date()) {
             ...stamp(date),
         });
     }
-    function restock(i: number, date: Date) {
-        const quantity = integer(55, 130);
+    function restock(i: number, date: Date, orderedQuantity?: number) {
+        const quantity =
+            orderedQuantity ??
+            (account.years ? integer(55, 130) : integer(12, 30));
         const buyPrice = money(prices[i] * (0.73 + random() * 0.1));
         const supplier = data.shopSuppliers[i % companies.length];
         supplier.lastSuppliedAt = date;
@@ -329,7 +362,11 @@ export function buildTransactionData(account: SeedAccount, now = new Date()) {
             supplierId: supplier.id,
         });
     }
-    data.variants.forEach((_, i) => restock(i, start));
+    // A new shop starts with small quantities of fast movers, so its first week
+    // includes genuine sell-through and repeat supplier purchases as well.
+    data.variants.forEach((_, i) =>
+        restock(i, start, !account.years && i < 40 ? integer(3, 9) : undefined),
+    );
     const balances = new Map<string, number>();
     function ledger(
         buyer: string,
@@ -363,7 +400,68 @@ export function buildTransactionData(account: SeedAccount, now = new Date()) {
         checkout: Prisma.CheckoutCreateManyInput;
     }[] = [];
     const day = new Date(start);
+    let dayIndex = 0;
     while (day <= now) {
+        const dateAt = (fraction: number) =>
+            new Date(
+                day.getTime() +
+                    Math.floor(
+                        Math.min(86399999, now.getTime() - day.getTime()) *
+                            fraction,
+                    ),
+            );
+        const presentEmployees = data.employees.filter((employee, i) => {
+            const present = (dayIndex + i) % 13 !== 12;
+            data.attendance.push({
+                id: seedId(account, 'attendance', data.attendance.length),
+                employeeId: employee.userID,
+                tenantID,
+                date: new Date(day),
+                month: day.getUTCMonth() + 1,
+                year: day.getUTCFullYear(),
+                inTime: present ? dateAt(0.25) : null,
+                outTime:
+                    present && day.getTime() + 86400000 <= now.getTime()
+                        ? dateAt(0.9)
+                        : null,
+                inStatus: present
+                    ? (dayIndex + i) % 7 === 0
+                        ? 'LATE'
+                        : 'PRESENT'
+                    : 'ABSENT',
+                outStatus:
+                    present && day.getTime() + 86400000 <= now.getTime()
+                        ? 'PRESENT'
+                        : 'ABSENT',
+                ...stamp(new Date(day)),
+            });
+            return present;
+        });
+        // Supplier delivery routes replenish low shelves before the day's sales.
+        // Historical restocks are linked to the exact lot and expense, not just notes.
+        if (dayIndex > 0 && dayIndex % 2 === 0) {
+            data.variants.forEach((_, i) => {
+                if (lotQueues[i].reduce((n, lot) => n + lot.stock, 0) < 12)
+                    restock(i, new Date(day));
+            });
+        }
+        if (dayIndex % 3 === 0)
+            data.notes.push({
+                id: seedId(account, 'note', data.notes.length),
+                shopID,
+                tenantID,
+                name:
+                    dayIndex % 2
+                        ? 'Supplier follow-up'
+                        : 'Customer credit follow-up',
+                note:
+                    dayIndex % 2
+                        ? 'Confirm next delivery and check fast-moving stock.'
+                        : 'Review outstanding customer balances and arrange collection.',
+                dueDate: dateAt(0.95),
+                isComplete: now.getTime() - day.getTime() > 86400000,
+                ...stamp(new Date(day)),
+            });
         // Expenses occur inside the selected history window, not at seed execution time.
         if (day.getTime() === start.getTime() || day.getUTCDate() === 1) {
             const ratio = account.years ? 1 : 7 / 30;
@@ -415,10 +513,19 @@ export function buildTransactionData(account: SeedAccount, now = new Date()) {
             const elapsed = Math.min(86399999, now.getTime() - day.getTime());
             const date = new Date(
                 day.getTime() +
-                    Math.floor((elapsed * (sale + 1)) / (sales + 1)),
+                    Math.floor(
+                        elapsed * (0.3 + (0.4 * (sale + 1)) / (sales + 1)),
+                    ),
             );
-            const buyerID =
-                data.buyers[integer(0, data.buyers.length - 1)].userID;
+            const buyerIndex =
+                data.checkouts.length < data.buyers.length
+                    ? data.checkouts.length
+                    : integer(0, data.buyers.length - 1);
+            const buyerID = data.buyers[buyerIndex].userID;
+            const cashier =
+                sale % 3 === 0
+                    ? null
+                    : presentEmployees[sale % presentEmployees.length];
             const checkout: Prisma.CheckoutCreateManyInput = {
                 id: seedId(account, 'checkout', data.checkouts.length),
                 shopID,
@@ -429,8 +536,9 @@ export function buildTransactionData(account: SeedAccount, now = new Date()) {
                 totalDiscount: 0,
                 discountType: 'AMOUNT',
                 status: 'PAID',
-                soldBy: 'OWNER',
-                soldByOwnerId: userID,
+                soldBy: cashier ? 'EMPLOYEE' : 'OWNER',
+                soldByOwnerId: cashier ? null : userID,
+                soldByEmployeeId: cashier?.userID,
                 isDraft: false,
                 ...stamp(date),
             };
@@ -517,6 +625,89 @@ export function buildTransactionData(account: SeedAccount, now = new Date()) {
                 outstanding.push({ debt, checkout });
             }
         }
+        // Pickup orders reserve stock just like the backend pickup flow. Canceled
+        // orders release reservations; completed orders are not duplicated as sales.
+        const pickupDate = dateAt(0.8);
+        const recent = now.getTime() - day.getTime() < 2 * 86400000;
+        const pickupStatus = recent
+            ? dayIndex % 2
+                ? 'PROCESSING'
+                : 'PENDING'
+            : dayIndex % 5 === 1
+              ? 'CANCELED'
+              : 'COMPLETE';
+        const buyer = data.buyers[dayIndex % data.buyers.length];
+        const pickup: Prisma.PickupCreateManyInput = {
+            id: seedId(account, 'pickup', data.pickups.length),
+            shopID,
+            tenantID,
+            buyerID: buyer.id!,
+            status: pickupStatus,
+            paymentStatus: pickupStatus === 'COMPLETE' ? 'PAID' : 'UNPAID',
+            totalPrice: 0,
+            totalQuantity: 0,
+            ...stamp(pickupDate),
+        };
+        for (let j = 0; j < 3; j++) {
+            const i = (dayIndex * 3 + j) % prices.length;
+            let lot = lotQueues[i].find(l => l.stock > 0);
+            if (!lot) {
+                restock(i, pickupDate);
+                lot = lotQueues[i][lotQueues[i].length - 1];
+            }
+            const quantity = Math.min(integer(1, 3), lot.stock);
+            data.pickupItems.push({
+                id: seedId(account, 'pickup-item', data.pickupItems.length),
+                pickupID: pickup.id!,
+                tenantID,
+                lotId: lot.id!,
+                inventoryId: data.inventory[i].id,
+                productName: data.inventory[i].productName,
+                unitPrice: prices[i],
+                quantity,
+                ...stamp(pickupDate),
+            });
+            if (pickupStatus !== 'CANCELED') {
+                lot.stock -= quantity;
+                lot.updatedAt = pickupDate;
+                lot.status = lot.stock ? 'ACTIVE' : 'SOLD';
+            }
+            pickup.totalPrice = money(
+                Number(pickup.totalPrice) + prices[i] * quantity,
+            );
+            pickup.totalQuantity = Number(pickup.totalQuantity) + quantity;
+        }
+        data.pickups.push(pickup);
+        // Periodic damaged deliveries and supplier returns with auditable stock losses.
+        if (dayIndex % 14 === 2 || dayIndex === 4) {
+            const date = dateAt(0.85);
+            const i = dayIndex % prices.length;
+            restock(i, date, integer(2, 6));
+            const lot = lotQueues[i][lotQueues[i].length - 1];
+            const returned = dayIndex % 28 === 2;
+            data.losses.push({
+                id: seedId(account, 'loss', data.losses.length),
+                tenantID,
+                shopVariantId: lot.shopVariantId,
+                lotId: lot.id!,
+                stock: lot.stock,
+                buyPrice: lot.buyPrice,
+                reason: returned ? 'RETURNED' : 'DAMAGED',
+                lossType: returned ? 'NO_LOSS' : 'FULL_LOSS',
+                lossAmount: returned ? 0 : money(lot.stock * lot.buyPrice),
+                note: returned
+                    ? 'Rejected delivery returned to supplier for full credit.'
+                    : 'Damaged packaging found during receiving inspection.',
+                deletedByType: 'OWNER',
+                deletedByOwnerId: userID,
+                deletionDate: date,
+                ...stamp(date),
+            });
+            lot.stock = 0;
+            lot.status = 'DELETED';
+            lot.updatedAt = date;
+        }
+        dayIndex++;
         day.setUTCDate(day.getUTCDate() + 1);
     }
     data.variants.forEach((variant, i) => {

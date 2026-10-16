@@ -67,7 +67,25 @@ for (const [
     }
     const saleDays = new Set<string>();
     for (const checkout of data.checkouts) {
-        assert.equal(checkout.soldByOwnerId, userID);
+        if (checkout.soldBy === 'OWNER')
+            assert.equal(checkout.soldByOwnerId, userID);
+        else {
+            assert.equal(checkout.soldBy, 'EMPLOYEE');
+            assert(
+                data.employees.some(
+                    e => e.userID === checkout.soldByEmployeeId,
+                ),
+            );
+            const date = new Date(checkout.createdAt!);
+            const shift = data.attendance.find(
+                a =>
+                    a.employeeId === checkout.soldByEmployeeId &&
+                    new Date(a.date!).toISOString().slice(0, 10) ===
+                        date.toISOString().slice(0, 10),
+            );
+            assert(shift && shift.inStatus !== 'ABSENT');
+            assert(new Date(shift.inTime!) <= date);
+        }
         assert.equal(checkout.shopID, shopID);
         assert(buyers.has(checkout.buyerID!));
         const lines = itemsByCheckout.get(checkout.id!)!;
@@ -86,21 +104,74 @@ for (const [
         saleDays.add(new Date(checkout.createdAt!).toISOString().slice(0, 10));
     }
     assert.equal(saleDays.size, account.years ? 731 : 7);
+    const activeBuyers = new Set(data.checkouts.map(c => c.buyerID));
+    assert.equal(
+        activeBuyers.size,
+        data.buyers.length,
+        'Every seeded customer must have purchase history',
+    );
+    assert(
+        data.checkouts.length > activeBuyers.size,
+        'Include returning customers',
+    );
     const purchases = new Map(
         data.expenseItems
             .filter(i => i.expenseType === 'PRODUCT')
             .map(i => [i.lotId, i]),
     );
+    const reservedByLot = new Map<string, number>();
+    const pickupById = new Map(data.pickups.map(p => [p.id, p]));
+    for (const item of data.pickupItems) {
+        const pickup = pickupById.get(item.pickupID)!;
+        assert(pickup);
+        assert(data.buyers.some(b => b.id === pickup.buyerID));
+        const lot = lots.get(item.lotId)!;
+        assert(lot && new Date(lot.createdAt!) <= new Date(item.createdAt!));
+        if (pickup.status !== 'CANCELED')
+            reservedByLot.set(
+                item.lotId,
+                (reservedByLot.get(item.lotId) || 0) + item.quantity,
+            );
+    }
+    for (const pickup of data.pickups) {
+        const items = data.pickupItems.filter(i => i.pickupID === pickup.id);
+        assert.equal(
+            pickup.totalQuantity,
+            items.reduce((n, i) => n + i.quantity, 0),
+        );
+        assert.equal(
+            pickup.totalPrice,
+            round(items.reduce((n, i) => n + i.unitPrice * i.quantity, 0)),
+        );
+    }
+    const lossesByLot = new Map(data.losses.map(l => [l.lotId, l]));
+    for (const loss of data.losses) {
+        assert(lots.has(loss.lotId));
+        assert.equal(
+            loss.lossAmount,
+            loss.lossType === 'NO_LOSS' ? 0 : round(loss.stock * loss.buyPrice),
+        );
+    }
     for (const lot of data.lots) {
         assert(lot.stock >= 0);
         const purchase = purchases.get(lot.id)!;
         assert(purchase);
         assert.equal(
-            lot.stock + (soldByLot.get(lot.id!) || 0),
+            lot.stock +
+                (soldByLot.get(lot.id!) || 0) +
+                (reservedByLot.get(lot.id!) || 0) +
+                (lossesByLot.get(lot.id!)?.stock || 0),
             purchase.quantity,
         );
         assert.equal(purchase.amount, round(purchase.quantity! * lot.buyPrice));
-        assert.equal(lot.status, lot.stock === 0 ? 'SOLD' : 'ACTIVE');
+        assert.equal(
+            lot.status,
+            lossesByLot.has(lot.id!)
+                ? 'DELETED'
+                : lot.stock === 0
+                  ? 'SOLD'
+                  : 'ACTIVE',
+        );
     }
     for (const variant of data.variants)
         assert.equal(
@@ -109,6 +180,55 @@ for (const [
                 .filter(l => l.shopVariantId === variant.id)
                 .reduce((n, l) => n + l.stock, 0),
         );
+    // Prove that both windows include actual sell-through followed by buying
+    // the same products again, rather than only initial inventory deposits.
+    const repeatPurchases = data.variants.filter(
+        v => data.lots.filter(l => l.shopVariantId === v.id).length > 1,
+    );
+    assert(
+        repeatPurchases.length >= 10,
+        'Expected repeat purchases in both accounts',
+    );
+    assert(
+        data.lots.some(
+            lot =>
+                new Date(lot.createdAt!) > start &&
+                data.items.some(
+                    item =>
+                        item.variantId === lot.shopVariantId &&
+                        new Date(item.createdAt!) < new Date(lot.createdAt!),
+                ),
+        ),
+        'A sold product must be purchased again later',
+    );
+    assert(data.checkouts.some(c => c.soldBy === 'EMPLOYEE'));
+    assert(data.pickups.some(p => p.status === 'COMPLETE'));
+    assert(data.pickups.some(p => p.status === 'CANCELED'));
+    assert(data.losses.some(l => l.reason === 'DAMAGED'));
+    assert(data.losses.some(l => l.reason === 'RETURNED'));
+    assert(data.pickups.some(p => p.status === 'PENDING'));
+    assert(data.pickups.some(p => p.status === 'PROCESSING'));
+    assert(data.debts.some(d => d.status === 'PAID'));
+    assert(data.debts.some(d => d.status === 'UNPAID'));
+    assert(data.debts.some(d => d.status === 'PARTIALLY_PAID'));
+    assert(data.notes.length > 0);
+    assert.equal(data.attendance.length, saleDays.size * data.employees.length);
+    assert(
+        data.payments.some(p => {
+            const debt = data.debts.find(d => d.id === p.debtId)!;
+            return new Date(p.createdAt!) > new Date(debt.createdAt!);
+        }),
+        'Customers should come back on later days to repay credit',
+    );
+    const purchaseMonths = new Set(
+        data.lots.map(l => new Date(l.createdAt!).toISOString().slice(0, 7)),
+    );
+    const saleMonths = new Set(
+        data.checkouts.map(c =>
+            new Date(c.createdAt!).toISOString().slice(0, 7),
+        ),
+    );
+    assert.deepEqual(purchaseMonths, saleMonths);
     const expectedDebtBalances = new Map<string, number>();
     for (const debt of data.debts) {
         const checkout = checkouts.get(debt.checkoutID)!;
@@ -164,7 +284,7 @@ for (const [
         }
     }
     console.log(
-        `${account.email}: validated ${data.checkouts.length} sales over ${saleDays.size} days, ${data.items.length} lines, ${data.lots.length} purchases, ${data.debts.length} debts.`,
+        `${account.email}: validated ${data.checkouts.length} sales over ${saleDays.size} days, ${data.items.length} lines, ${data.lots.length} purchases, ${data.debts.length} debts, ${repeatPurchases.length} re-purchased products, ${data.pickups.length} pickups, ${data.losses.length} stock adjustments.`,
     );
 }
 assert.notEqual(
