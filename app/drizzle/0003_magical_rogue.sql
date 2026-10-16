@@ -1,1 +1,0 @@
-ALTER TABLE `syncStatus` ADD `role` text DEFAULT 'pending' NOT NULL;

@@ -26,6 +26,12 @@ router.post(
     AuthController.loginUser,
 );
 
+router.post(
+    '/register',
+    validateRequest(AuthValidation.registerZodSchema),
+    AuthController.registerUser,
+);
+
 router.post('/logout', AuthController.logOutUser);
 
 router.post(

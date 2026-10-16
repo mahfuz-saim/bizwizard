@@ -85,16 +85,18 @@ model RefreshToken {
 }
 
 model User {
-  id        String     @id @default(uuid())
-  number    String     @unique
-  email     String?    @unique
-  password  String?
-  role      UserRole[]
-  status    UserStatus @default(PENDING)
-  OTP       Int
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  kyc       KYC?
+  id           String     @id @default(uuid())
+  number       String     @unique
+  email        String?    @unique
+  password     String?
+  passwordSalt String?
+  role         UserRole[]
+  status       UserStatus @default(PENDING)
+  OTP          Int
+  name         String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  kyc          KYC?
 
   admin               Admin?
   ForgetRequest       ForgetRequest[]

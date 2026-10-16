@@ -1,14 +1,36 @@
 import { z } from 'zod';
 
 const loginZodSchema = z.object({
-    body: z.object({
-        number: z.string({
-            required_error: 'Number is required',
+    body: z
+        .object({
+            number: z.string().optional(),
+            email: z.string().email('Invalid email').optional(),
+            password: z.string({
+                required_error: 'Password is required',
+            }),
+        })
+        .refine((data) => data.number || data.email, {
+            message: 'Either number or email is required',
+            path: ['number'],
         }),
-        password: z.string({
-            required_error: 'Password is required',
+});
+
+const registerZodSchema = z.object({
+    body: z
+        .object({
+            name: z.string().optional(),
+            number: z.string().optional(),
+            email: z.string().email('Invalid email').optional(),
+            password: z
+                .string({ required_error: 'Password is required' })
+                .min(6, 'Password must be at least 6 characters'),
+            shopName: z.string().optional(),
+            address: z.string().optional(),
+        })
+        .refine((data) => data.number || data.email, {
+            message: 'Either number or email is required',
+            path: ['number'],
         }),
-    }),
 });
 
 const refreshTokenZodSchema = z.object({
@@ -85,6 +107,7 @@ const setUserOTPZodSchema = z.object({
 
 export const AuthValidation = {
     loginZodSchema,
+    registerZodSchema,
     refreshTokenZodSchema,
     changePasswordZodSchema,
     forgetPasswordZodSchema,

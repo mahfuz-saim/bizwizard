@@ -1,1 +1,0 @@
-ALTER TABLE `shop_variants` ADD `notifyBeforeExp` integer;
