@@ -12,6 +12,7 @@ import {
   setShopId,
   setTenantId,
   type AuthSession,
+  type AuthUser,
   type RawShopVariant,
 } from "./api"
 import {
@@ -156,7 +157,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setError(null)
     try {
       // Validate every restored session, not just sessions missing shop metadata.
-      const res = await api.get<Record<string, unknown>>("/auth/me")
+      const res = await api.get<{ user: AuthUser | null; defaultTenantId: string | null; defaultShopId: string | null }>("/auth/me")
       const me = res.data
       setTenantId(typeof me?.defaultTenantId === "string" ? me.defaultTenantId : null)
       setShopId(typeof me?.defaultShopId === "string" ? me.defaultShopId : null)

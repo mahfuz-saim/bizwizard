@@ -31,7 +31,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
-import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useStore } from "@/lib/store"
 import { getApiBaseUrl } from "@/lib/api"
@@ -42,10 +41,18 @@ interface TopbarProps {
 }
 
 export function Topbar({ onOpenMobileNav, shopName = "My Store" }: TopbarProps) {
-  const { theme, setTheme, resolvedTheme } = useTheme()
+  const { setTheme, resolvedTheme } = useTheme()
   const pathname = usePathname()
-  const { source, error, refresh, logout } = useStore()
+  const { source, error, refresh, logout, session } = useStore()
   const [refreshing, setRefreshing] = React.useState(false)
+  const user = session?.user
+  const profileName = source === "mock"
+    ? "Demo User"
+    : user?.name?.trim() || user?.email || user?.number || "My account"
+  const profileContact = source === "mock"
+    ? "Local demo · No account connected"
+    : user?.email || user?.number || ""
+
 
   const pageTitle = React.useMemo(() => {
     if (pathname === "/") return "Dashboard"
@@ -168,10 +175,10 @@ export function Topbar({ onOpenMobileNav, shopName = "My Store" }: TopbarProps) 
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="rounded-full">
+            <Button variant="ghost" size="icon" className="rounded-full" aria-label={`Open profile menu for ${profileName}`}>
               <Avatar className="h-8 w-8">
                 <AvatarFallback className="bg-primary text-primary-foreground text-sm">
-                  {getInitials("Store Owner")}
+                  {getInitials(profileName)}
                 </AvatarFallback>
               </Avatar>
             </Button>
@@ -179,8 +186,8 @@ export function Topbar({ onOpenMobileNav, shopName = "My Store" }: TopbarProps) 
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
               <div className="flex flex-col">
-                <span className="text-sm font-medium">Store Owner</span>
-                <span className="text-xs text-muted-foreground">owner@bizwizard.app</span>
+                <span className="text-sm font-medium">{profileName}</span>
+                {profileContact && <span className="text-xs text-muted-foreground break-all">{profileContact}</span>}
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />

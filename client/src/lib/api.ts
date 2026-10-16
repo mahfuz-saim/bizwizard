@@ -144,11 +144,19 @@ export const api = {
 }
 
 // ---------- Auth helpers ----------
+export interface AuthUser {
+  id: string
+  name?: string | null
+  email?: string | null
+  number?: string | null
+  role?: string
+}
+
 export interface AuthSession {
   accessToken: string
   tenantId?: string | null
   shopId?: string | null
-  user?: unknown
+  user?: AuthUser | null
   profile?: unknown
   role?: string
   tenants?: { id: string; name: string; shops: { id: string; shopName: string }[] }[]
