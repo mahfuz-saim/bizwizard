@@ -249,7 +249,9 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
                     disabled={simActive || simLoading}
                     className={cn(
                       "rounded-md border px-2 py-1.5 text-left transition-colors disabled:pointer-events-none disabled:opacity-50",
-                      sim.template === t.id ? "border-brand-500 bg-brand-50 dark:bg-brand-950/40" : "border-border hover:bg-accent"
+                      sim.template === t.id
+                        ? "border-brand-500 bg-brand-50 text-brand-900 dark:border-brand-400 dark:bg-brand-900/40 dark:text-brand-100"
+                        : "border-border hover:bg-accent"
                     )}
                   >
                     <span className="flex items-center gap-1 text-xs font-medium">

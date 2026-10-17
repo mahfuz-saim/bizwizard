@@ -123,7 +123,7 @@ function AnalysisInsights() {
               const isSimPreview = i.id === simInsightPreview?.id
               const residualPct = i.verifiedMetrics && typeof i.verifiedMetrics.residualPct === "number" ? i.verifiedMetrics.residualPct : null
               return (
-                <div key={i.id} className={`rounded-lg border p-3 ${isSimPreview ? "animate-in slide-in-from-top-2 fade-in border-brand-400 bg-brand-50/50 duration-500 dark:bg-brand-950/20" : ""}`}>
+                <div key={i.id} className={`rounded-lg border p-3 ${isSimPreview ? "animate-in slide-in-from-top-2 fade-in border-brand-400 bg-brand-50/50 duration-500 dark:bg-brand-900/30" : ""}`}>
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-medium">{i.title}</p>
                     <div className="flex items-center gap-1.5">
