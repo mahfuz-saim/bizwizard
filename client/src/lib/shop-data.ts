@@ -11,7 +11,6 @@ import type {
   Expense,
   Transaction,
   DashboardStats,
-  ShopMessage,
   ShopNotification
 } from "./types"
 
@@ -196,7 +195,6 @@ export async function loadShopData(shopId: string, role: string) {
     rawEmployees,
     todayResponse,
     yesterdayResponse,
-    messageResponse,
     notificationResponse
   ] = await Promise.all([
     fetchAllPages<RawShopVariant>(`/shop/${shop}`, { includeProduct: true }),
@@ -219,7 +217,6 @@ export async function loadShopData(shopId: string, role: string) {
       startDate: yesterday,
       endDate: yesterday
     }),
-    api.get<ShopMessage[]>("/message", { shopId }),
     api.get<ShopNotification[]>(`/notifications/${shop}`)
   ])
   const products = variants.map(normalizeShopVariant)
@@ -337,7 +334,6 @@ export async function loadShopData(shopId: string, role: string) {
     expenses,
     employees,
     stats,
-    messages: required(messageResponse, "/message"),
     notifications: required(notificationResponse, "/notifications")
   }
 }

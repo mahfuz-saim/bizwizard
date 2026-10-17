@@ -60,12 +60,6 @@ router.post(
 );
 
 router.post(
-    '/verify-user',
-    validateRequest(UserValidation.verifyUser),
-    UserController.verifyUser,
-);
-
-router.post(
     '/create-user',
     validateRequest(UserValidation.createUser),
     UserController.createUser,

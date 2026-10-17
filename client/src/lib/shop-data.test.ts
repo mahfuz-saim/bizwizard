@@ -269,8 +269,6 @@ function installShopResponses() {
           totalDebt: 999,
           totalDiscount: 5
         })
-      case "/message":
-        return envelope([])
       case "/notifications/shop-1":
         return envelope([])
       default:
@@ -279,10 +277,10 @@ function installShopResponses() {
   }
 }
 
-test("owner loads products, customers, sales, purchases, expenses, employees, analytics and messages", async () => {
+test("owner loads products, customers, sales, purchases, expenses, employees and analytics", async () => {
   installShopResponses()
   const data = await loadShopData("shop-1", "OWNER")
-  assert.equal(calls.length, 10)
+  assert.equal(calls.length, 9)
   assert.equal(data.products[0].sellPrice, 100)
   assert.equal(data.customers[0].id, "customer-user")
   assert.equal(data.customers[0].totalPurchased, 175)
@@ -316,7 +314,7 @@ test("owner loads products, customers, sales, purchases, expenses, employees, an
 test("employee does not call owner-only employee/expense endpoints", async () => {
   installShopResponses()
   await loadShopData("shop-1", "EMPLOYEE")
-  assert.equal(calls.length, 8)
+  assert.equal(calls.length, 7)
   assert(
     !calls.some(
       (c) =>

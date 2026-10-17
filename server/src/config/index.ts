@@ -30,15 +30,8 @@ export default {
         api_key: process.env.CLOUDINARY_API_KEY,
         api_secret: process.env.CLOUDINARY_API_SECRET,
     },
-    mim_sms: {
-        user_name: process.env.MIM_USERNAME,
-        api_key: process.env.MIM_API_KEY,
-        sender_name: process.env.MIM_SENDER_NAME,
-    },
-    ssl: {
-        store_id: process.env.SSL_STORE_ID,
-        store_passwd: process.env.SSL_STORE_PASSWORD,
-        shopPaymentIPN: process.env.SHOP_PAYMENT_IPN,
+    payment: {
+        mode: process.env.PAYMENT_MODE || 'demo',
     },
     google_mailer: {
         token: process.env.GMAIL_APPLICATION_TOKEN,

@@ -21,7 +21,6 @@ import { creditRoutes } from '../modules/credit/credit.routes';
 import { supplierRoutes } from '../modules/supplier/supplier.routes';
 import { appVersionRoutes } from '../modules/appVersion/appVersion.routes';
 import { analyticsRoutes } from '../modules/analytics/analytics.routes';
-import { messageRoutes } from '../modules/message/message.routes';
 import { subscriptionRoutes } from '../modules/subscriptions/subscriptions.routes';
 import { notificationRoutes } from '../modules/notification/notification.routes';
 import { couponRoutes } from '../modules/coupon/coupon.routes';
@@ -123,10 +122,6 @@ const moduleRoutes = [
     {
         path: '/analytics',
         route: analyticsRoutes,
-    },
-    {
-        path: '/message',
-        route: messageRoutes,
     },
     {
         path: '/subscription',

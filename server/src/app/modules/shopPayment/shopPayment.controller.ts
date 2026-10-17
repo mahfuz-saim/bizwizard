@@ -14,27 +14,9 @@ const initPayment = catchAsync(async (req, res) => {
     sendResponse(res, {
         statusCode: httpStatus.OK,
         success: true,
-        message: 'Payment initialized successfully',
-        data: result,
-    });
-
-    //TODO: redirect after testing
-    //res.redirect(result);
-});
-
-const postIPN = catchAsync(async (req, res) => {
-    let ipnData = req.body;
-    ipnData.tran_date = new Date(ipnData.tran_date);
-    ipnData.amount = Number(ipnData.amount);
-    ipnData.store_amount = Number(ipnData.store_amount);
-
-    const result = await paymentService.postIPN(ipnData);
-    sendResponse(res, {
-        statusCode: httpStatus.OK,
-        success: true,
-        message: 'IPN Received successfully',
+        message: 'Demo payment completed successfully',
         data: result,
     });
 });
 
-export const paymentController = { initPayment, postIPN };
+export const paymentController = { initPayment };

@@ -101,8 +101,7 @@ export function checkoutBody(
     discountAmount: discount,
     discountPercentage: 0,
     discountType: "AMOUNT",
-    isDraft: false,
-    sendSMS: false
+    isDraft: false
   }
 }
 
@@ -120,7 +119,6 @@ export async function createStockProduct(
     variantCode: p.variantCode,
     packOf: 1,
     lowStock: p.lowStockThreshold,
-    lowStockSMS: false,
     lot: {
       stock: p.stock,
       buyPrice: p.buyPrice,

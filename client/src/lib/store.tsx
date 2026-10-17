@@ -29,7 +29,6 @@ import type {
   DashboardStats,
   Expense,
   Employee,
-  ShopMessage,
   ShopNotification
 } from "./types"
 import { loadShopData } from "./shop-data"
@@ -56,7 +55,6 @@ interface DataContextValue {
   transactions: Transaction[]
   expenses: Expense[]
   employees: Employee[]
-  messages: ShopMessage[]
   notifications: ShopNotification[]
   updateNotifications: React.Dispatch<React.SetStateAction<ShopNotification[]>>
   stats: DashboardStats
@@ -107,7 +105,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [transactions, setTransactions] = React.useState<Transaction[]>([])
   const [expenses, setExpenses] = React.useState<Expense[]>([])
   const [employees, setEmployees] = React.useState<Employee[]>([])
-  const [messages, setMessages] = React.useState<ShopMessage[]>([])
   const [notifications, setNotifications] = React.useState<ShopNotification[]>(
     []
   )
@@ -122,7 +119,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setTransactions([])
     setExpenses([])
     setEmployees([])
-    setMessages([])
     setNotifications([])
     setStats(emptyStats)
   }, [])
@@ -148,7 +144,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setExpenses(initialExpenses)
     setStats(defaultStats)
     setEmployees([])
-    setMessages([])
     setNotifications([])
     setError(null)
     setSource("mock")
@@ -196,7 +191,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         setTransactions(data.transactions)
         setExpenses(data.expenses)
         setEmployees(data.employees)
-        setMessages(data.messages)
         setNotifications(data.notifications)
         setStats(data.stats)
         setSource("backend")
@@ -485,7 +479,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     transactions,
     expenses,
     employees,
-    messages,
     notifications,
     updateNotifications: setNotifications,
     stats: {

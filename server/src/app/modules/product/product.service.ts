@@ -341,10 +341,8 @@ const createProductWithVariants = async (
                     variantCode,
                     packOf,
                     lowStock: lowStock as any,
-                    lowStockSMS: v.lowStockSMS,
                     notifyAfterNotSold: notifyAfterNotSold as any,
                     notifyBeforeExp: notifyBeforeExp as any,
-                    notSoldSMS: v.notSoldSMS,
                     totalProducts: 0,
                 },
             });

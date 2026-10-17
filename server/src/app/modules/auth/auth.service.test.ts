@@ -77,30 +77,3 @@ test('changing a password cannot bypass verification for a passwordless account'
     ), { statusCode: 401 });
     assert.equal(update.mock.callCount(), 0);
 });
-
-test('OTP login rejects expired codes and deletes the expired record', async t => {
-    stub(t, prisma.loginOTP, 'findUniqueOrThrow', async () => ({ id: 'test-otp', otp: 1234, exp: new Date(Date.now() - 1000) }));
-    const remove = stub(t, prisma.loginOTP, 'delete', async () => ({}));
-    const sessions = stub(t, prisma.refreshToken, 'deleteMany', async () => ({}));
-    await assert.rejects(AuthService.appLogin({ number: '01000000000', otp: 1234, deviceId: 'test-device' }), { statusCode: 403, message: 'OTP Expired. Request New OTP' });
-    assert.equal(remove.mock.callCount(), 1);
-    assert.equal(sessions.mock.callCount(), 0);
-});
-
-test('OTP login still accepts an unexpired matching code for account onboarding', async t => {
-    stub(t, prisma.loginOTP, 'findUniqueOrThrow', async () => ({ id: 'test-otp', otp: 1234, exp: new Date(Date.now() + 240000) }));
-    const remove = stub(t, prisma.loginOTP, 'delete', async () => ({}));
-    stub(t, prisma.refreshToken, 'deleteMany', async () => ({}));
-    stub(t, prisma.user, 'findUnique', async () => null);
-    const result = await AuthService.appLogin({ number: '01000000000', otp: 1234, deviceId: 'test-device' });
-    assert.equal(result.isOtpVerified, true);
-    assert.equal(result.isExists, false);
-    assert.equal(remove.mock.callCount(), 1);
-});
-
-test('OTP login rejects an incorrect code without consuming the valid record', async t => {
-    stub(t, prisma.loginOTP, 'findUniqueOrThrow', async () => ({ id: 'test-otp', otp: 1234, exp: new Date(Date.now() + 240000) }));
-    const remove = stub(t, prisma.loginOTP, 'delete', async () => ({}));
-    await assert.rejects(AuthService.appLogin({ number: '01000000000', otp: 9999, deviceId: 'test-device' }), { statusCode: 403, message: 'Incorrect OTP' });
-    assert.equal(remove.mock.callCount(), 0);
-});

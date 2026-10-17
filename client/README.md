@@ -19,7 +19,7 @@ Modern web frontend for BizWizard — an inventory & sales management system.
 - **Sell (POS)** — point-of-sale dialog with customer selection, payment method, discount, partial payment/due, over-stock validation, success screen
 - **Sales** — transactions list with tabs (All / Sales / Purchases), stats, search
 - **Customers / Suppliers** — contact cards with due balances
-- **Expenses / Debts / Employees / Messages / Reports** — supporting modules
+- **Expenses / Debts / Employees / Reports** — supporting modules
 - Collapsible sidebar, mobile drawer, theme toggle, top bar search
 - Mock data layer that can be swapped for real API calls in `src/lib/store.tsx`
 
@@ -53,7 +53,7 @@ src/
 │   │   ├── page.tsx          # Dashboard
 │   │   ├── inventory/        # Inventory list + [id] detail
 │   │   ├── sales/ customers/ suppliers/ expenses/ debts/
-│   │   ├── messages/ employees/ reports/
+│   │   ├── employees/ reports/
 │   │   ├── sell/  buy/       # Dedicated POS/purchase entry pages
 │   │   └── layout.tsx        # Sidebar + topbar shell
 │   ├── globals.css           # Tailwind + theme tokens
@@ -95,7 +95,7 @@ Demo data is loaded only after **Run Demo** is clicked.
 - `/expense/shop/:shopId` — purchase history and operating expenses (owner only)
 - `/employee?shopID=...` — staff for the selected shop (owner only)
 - `/analytics?shopId=...&startDate=...&endDate=...` — today's and yesterday's analytics
-- `/message?shopId=...` and `/notifications/:shopId` — recorded messages and notifications
+- `/notifications/:shopId` — recorded notifications
 
 Paginated service envelopes are nested under `response.data.{data,meta}`. The loader
 fetches every page with bounded concurrency, so a two-year history is not truncated
@@ -123,7 +123,7 @@ The backend does not store supplier payment balances or payment channels. The UI
 labels these as not tracked/recorded instead of inventing a cash payment or settled
 balance. Live purchases currently require full payment. Catalog identity fields and
 historical purchase costs cannot be edited through the variant API. Invitation,
-message composition, payment-recording and export controls aren't connected yet.
+payment-recording and export controls aren't connected yet.
 
 Reports use actual transaction dates and historical lot costs. They no longer
 multiply revenue or display placeholder growth percentages/charts. Daily analytics

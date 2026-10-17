@@ -2,14 +2,12 @@ export interface IUpdateSingleDebt {
     type: 'FULL' | 'PARTIAL';
     debtId: string;
     amount: number;
-    notifySms?: boolean;
 }
 
 export interface IUpdateBulkDebt {
     amount: number;
     buyerId: string;
     shopId: string;
-    notifySms?: boolean;
 }
 
 export interface IGetUserDebt {

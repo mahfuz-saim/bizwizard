@@ -3,7 +3,6 @@ import { test, type TestContext } from 'node:test';
 import { Prisma } from '@prisma/client';
 import { AuthUtils } from '../../../helpers/bcryptHelpers';
 import { JWTHelper } from '../../../helpers/jwtHelpers';
-import { smsHelper } from '../../../helpers/sendSMS';
 import type { IUploadFile } from '../../../interfaces/file';
 import prisma from '../../../shared/prisma';
 import { UserServices } from './user.service';
@@ -49,7 +48,6 @@ for (const [role, create] of cases) {
         };
         stub(t, prisma, '$transaction', async (callback: (client: Prisma.TransactionClient) => Promise<unknown>) => callback(tx as unknown as Prisma.TransactionClient));
         t.mock.method(JWTHelper, 'createToken', () => 'test-token');
-        t.mock.method(smsHelper, 'sendOTP', async () => null);
         await create();
         assert.ok(saved);
         assert.equal(typeof saved.create.password, 'string');

@@ -18,7 +18,6 @@ import { checkoutService } from '../checkout/checkout.service';
 import { JwtPayload } from '../../../interfaces/common';
 import ApiError from '../../../errors/ApiError';
 import httpStatus from 'http-status';
-import { smsHelper } from '../../../helpers/sendSMS';
 
 const getBuyerCurrentBalance = async (
     shopId: string,
@@ -76,59 +75,6 @@ const createLedgerEntry = async (
             metadata: data.metadata,
         },
     });
-};
-
-const notifyDebtPaymentBySms = async (
-    payload: { msgBody: string; number: string },
-    shopId: string,
-    tenantId: string,
-) => {
-    const shop = await prisma.shop.findFirstOrThrow({
-        where: {
-            id: shopId,
-            tenantID: tenantId,
-        },
-    });
-    // check sms credit
-    const totalSmsCredit = shop.credit || 0;
-    const msgCost = 1; //credit cost per msg, TODO: make dynamic later
-    if (totalSmsCredit < msgCost) {
-        return {
-            success: false,
-            msg: 'Insufficient SMS credit. Please recharge to send notifications.',
-        };
-    }
-
-    // send msg
-    const result = await smsHelper.sendGeneralMessage({
-        msgBody: payload.msgBody,
-        number: `88${payload.number}`,
-    });
-    //check result, if not success adjust credit back
-    if (!result?.success) {
-        return {
-            success: false,
-            msg: 'Failed to send SMS notifications.',
-        };
-    }
-
-    //update sms credit
-    await prisma.shop.update({
-        where: {
-            id: shopId,
-        },
-        data: {
-            credit: {
-                decrement: 1,
-            },
-        },
-    });
-
-    //return status
-    return {
-        success: true,
-        msg: 'SMS sent successfully',
-    };
 };
 
 const getAllDebt = async (
@@ -459,34 +405,6 @@ const resolveSingleDebt = async (
         });
     }
 
-    if (paylod.notifySms) {
-        const remainingDebt = await prisma.checkout.aggregate({
-            where: {
-                shopID: debt.shopID,
-                buyerID: debt.buyerID,
-                tenantID: tenantId,
-                status: PaymentStatus.UNPAID,
-            },
-            _sum: {
-                totalPrice: true,
-            },
-        });
-        const notifyResult = await notifyDebtPaymentBySms(
-            {
-                msgBody: `Your debt of amount ${debt.checkout.totalPrice.toFixed(2)} has been fully paid. Remaining ${remainingDebt._sum.totalPrice?.toFixed(2) ?? 0}. Thank you!`,
-                number: debt.buyer.number,
-            },
-            debt.shopID,
-            tenantId,
-        );
-
-        result = {
-            ...result,
-            smsNotificationSuccess: notifyResult.success,
-            smsNotificationMessage: notifyResult.msg,
-        };
-    }
-
     return result;
 };
 
@@ -609,40 +527,6 @@ const resolveBulkDebt = async (payload: IUpdateBulkDebt, tenantId: string) => {
         return { remainingBalance };
     });
 
-    if (payload.notifySms) {
-        const user = await prisma.shopBuyer.findFirstOrThrow({
-            where: {
-                buyerID: payload.buyerId,
-                shopID: payload.shopId,
-                tenantID: tenantId,
-            },
-        });
-        const remainingDebt = await prisma.checkout.aggregate({
-            where: {
-                shopID: payload.shopId,
-                buyerID: payload.buyerId,
-                tenantID: tenantId,
-                status: PaymentStatus.UNPAID,
-            },
-            _sum: {
-                totalPrice: true,
-            },
-        });
-        const notifyResult = await notifyDebtPaymentBySms(
-            {
-                msgBody: `Your debt of amount ${payload.amount.toFixed(2)} has been paid. Remaining ${remainingDebt._sum.totalPrice?.toFixed(2) ?? 0}. Thank you!`,
-                number: user.number,
-            },
-            payload.shopId,
-            tenantId,
-        );
-
-        result = {
-            ...result,
-            smsNotificationSuccess: notifyResult.success,
-            smsNotificationMessage: notifyResult.msg,
-        } as any;
-    }
     return result;
 };
 
@@ -705,7 +589,6 @@ const addPreviousDebt = async (
         status: 'UNPAID',
         buyerID: payload.buyerId,
         paidAmount: payload.paidAmount,
-        sendSMS: false,
         discountAmount: 0,
         discountPercentage: 0,
         discountType: 'AMOUNT',

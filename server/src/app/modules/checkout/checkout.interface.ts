@@ -20,7 +20,6 @@ export interface ICreateCheckout {
     status: 'PAID' | 'UNPAID';
     paidAmount?: number;
     buyerID?: string;
-    sendSMS: boolean;
     items: ICreateCheckoutItem[];
     customItems?: ICreateCustomCheckoutItem[];
     discountAmount: number;
