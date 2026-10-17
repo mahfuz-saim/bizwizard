@@ -5,7 +5,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ArrowUpRight, ArrowDownRight, Loader2, ReceiptText, Wallet, HandCoins, ShoppingCart } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
+import { ArrowUpRight, ArrowDownRight, Pause, Play, ReceiptText, Wallet, HandCoins, ShoppingCart } from "lucide-react"
 import { fmtBDT } from "@/lib/finance-api"
 import { useSimulator, type VisibleStreamEvent } from "@/lib/simulator-context"
 import type { StreamEventType } from "@/lib/simulator-api"
@@ -33,10 +34,29 @@ export function SimulatorDrawer() {
       <Sheet open={sim.drawerOpen} onOpenChange={sim.setDrawerOpen}>
         <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
           <SheetHeader className="border-b p-4">
-            <SheetTitle>Live Business Stream</SheetTitle>
+            <div className="flex items-center justify-between gap-2">
+              <SheetTitle>Live Business Stream</SheetTitle>
+              {(sim.status === "playing" || sim.status === "paused") && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1.5 px-2 text-xs"
+                  onClick={() => (sim.status === "playing" ? sim.pauseSimulation() : sim.resumeSimulation())}
+                >
+                  {sim.status === "playing" ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                  {sim.status === "playing" ? "Pause" : "Resume"}
+                </Button>
+              )}
+            </div>
             <SheetDescription>
               {sim.result
-                ? `Run ${sim.result.simulationRunID.slice(0, 14)}… · ${sim.status === "playing" ? `day ${sim.dayIndex} of 30` : `${sim.visibleEvents.length} rows written`}`
+                ? `Run ${sim.result.simulationRunID.slice(0, 14)}… · ${
+                    sim.status === "playing"
+                      ? `day ${sim.dayIndex} of 30 (${sim.revealedEvents}/${sim.totalEvents})`
+                      : sim.status === "paused"
+                        ? `paused at day ${sim.dayIndex} of 30 (${sim.revealedEvents}/${sim.totalEvents})`
+                        : `${sim.visibleEvents.length} rows written`
+                  }`
                 : "Hit \"Fast-forward 30 days\" to stream fabricated-but-real rows as they hit the database."}
             </SheetDescription>
           </SheetHeader>
@@ -111,7 +131,13 @@ function InspectDialog({ event, onClose }: { event: VisibleStreamEvent | null; o
             This is the actual {event ? LABELS[event.type].toLowerCase() : "record"} written by the simulator — not a mock. Proof the demo touches real tables.
           </DialogDescription>
         </DialogHeader>
-        {loading && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading record…</p>}
+        {loading && (
+          <div className="space-y-2" role="status" aria-label="Loading record">
+            <Skeleton className="h-4 w-2/3" />
+            <Skeleton className="h-4 w-1/2" />
+            <Skeleton className="h-24 w-full" />
+          </div>
+        )}
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         {row && (
           <pre className="max-h-96 overflow-auto rounded-lg bg-muted p-3 text-xs">

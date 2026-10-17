@@ -26,6 +26,8 @@ import {
   RotateCcw,
   Check,
   Loader2,
+  Pause,
+  Play,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -70,8 +72,10 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
   // while free typing in between stays local until Apply/Enter is pressed.
   const [customMs, setCustomMs] = React.useState(String(sim.speedMs))
   const simPlaying = sim.status === "playing"
+  const simPaused = sim.status === "paused"
+  const simActive = simPlaying || simPaused
   const simLoading = sim.status === "loading"
-  const simCanReset = sim.result != null && sim.status !== "loading"
+  const simCanReset = sim.result != null && !simActive && sim.status !== "loading"
 
   const applyCustomSpeed = () => {
     const parsed = Number(customMs)
@@ -80,9 +84,9 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
 
   const estimatedRowsForTemplate = TRANSACTION_TEMPLATES.find((t) => t.id === sim.template)?.estimatedRows ?? 90
   const totalForEstimate = sim.totalEvents || estimatedRowsForTemplate
-  const remainingForEstimate = simPlaying ? Math.max(0, totalForEstimate - sim.revealedEvents) : totalForEstimate
+  const remainingForEstimate = simActive ? Math.max(0, totalForEstimate - sim.revealedEvents) : totalForEstimate
   const estimateMs = remainingForEstimate * sim.speedMs
-  const estimateLabel = simPlaying ? "Time remaining" : sim.result ? "Total time (last run)" : "Estimated total time"
+  const estimateLabel = simActive ? "Time remaining" : sim.result ? "Total time (last run)" : "Estimated total time"
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/"
@@ -155,7 +159,11 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
               {!collapsed && (
                 <span className="flex flex-1 items-center justify-between">
                   Finance Simulator
-                  {simPlaying && <span className="text-xs font-normal text-sidebar-foreground/60">Day {sim.dayIndex}/30</span>}
+                  {simActive && (
+                    <span className="text-xs font-normal text-sidebar-foreground/60">
+                      {simPaused ? "Paused" : `Day ${sim.dayIndex}/30`}
+                    </span>
+                  )}
                 </span>
               )}
             </button>
@@ -177,7 +185,7 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
                 Live business stream
               </button>
 
-              {!simPlaying && !simLoading && (
+              {!simActive && !simLoading && (
                 <button
                   onClick={() => void sim.runFastForward()}
                   className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
@@ -194,12 +202,19 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
                 </div>
               )}
 
-              {simPlaying && (
+              {simActive && (
                 <>
                   <div className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Day {sim.dayIndex}/30 · {sim.revealedEvents}/{sim.totalEvents} transactions
+                    {simPlaying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pause className="h-3.5 w-3.5" />}
+                    {simPaused ? "Paused" : "Playing"} — day {sim.dayIndex}/30 · {sim.revealedEvents}/{sim.totalEvents} transactions
                   </div>
+                  <button
+                    onClick={() => (simPlaying ? sim.pauseSimulation() : sim.resumeSimulation())}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
+                  >
+                    {simPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                    {simPlaying ? "Pause" : "Resume"}
+                  </button>
                   <button
                     onClick={() => sim.skipToEnd()}
                     className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
@@ -210,7 +225,7 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
                 </>
               )}
 
-              {simCanReset && !simPlaying && (
+              {simCanReset && (
                 <button
                   onClick={() => void sim.resetSimulation()}
                   disabled={sim.status === "resetting"}
@@ -224,14 +239,14 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
 
             <div className="mt-3 border-t pt-2">
               <p className="mb-1 px-2 text-[11px] font-medium text-muted-foreground">
-                Transaction template {simPlaying || simLoading ? "(applies to next run)" : ""}
+                Transaction template {simActive || simLoading ? "(applies to next run)" : ""}
               </p>
               <div className="grid grid-cols-2 gap-1 px-1">
                 {TRANSACTION_TEMPLATES.map((t) => (
                   <button
                     key={t.id}
                     onClick={() => sim.setTemplate(t.id)}
-                    disabled={simPlaying || simLoading}
+                    disabled={simActive || simLoading}
                     className={cn(
                       "rounded-md border px-2 py-1.5 text-left transition-colors disabled:pointer-events-none disabled:opacity-50",
                       sim.template === t.id ? "border-brand-500 bg-brand-50 dark:bg-brand-950/40" : "border-border hover:bg-accent"
@@ -246,6 +261,7 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
                 ))}
               </div>
             </div>
+
 
             <div className="mt-3 border-t pt-2">
               <p className="mb-1 px-2 text-[11px] font-medium text-muted-foreground">Playback speed (delay per transaction)</p>

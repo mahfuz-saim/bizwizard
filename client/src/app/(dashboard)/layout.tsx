@@ -5,7 +5,7 @@ import { Suspense } from "react"
 import { AuthScreen } from "@/components/auth-screen"
 import { Sidebar } from "@/components/sidebar"
 import { Topbar, MobileNavSheet } from "@/components/topbar"
-import { Loader2 } from "lucide-react"
+import { DashboardSkeleton } from "@/components/dashboard-skeleton"
 import { Button } from "@/components/ui/button"
 import { useStore } from "@/lib/store"
 import { usePathname, useSearchParams } from "next/navigation"
@@ -26,7 +26,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
   if (source === "auth") return <AuthScreen />
   if (source === "error") return <main className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center"><h1 className="text-xl font-semibold">Unable to load your shop</h1><p role="alert" className="max-w-xl text-sm text-destructive">{error}</p><p className="text-sm text-muted-foreground">No zero balances or demo records are being substituted.</p><Button onClick={() => void refresh()}>Retry</Button><Button variant="outline" onClick={logout}>Log out</Button></main>
-  if (source === "loading" || (source === "backend" && needsHistory && !historyLoaded)) return <div className="flex min-h-screen items-center justify-center" role="status"><Loader2 className="mr-2 h-6 w-6 animate-spin" />{needsHistory ? "Loading complete shop history…" : "Loading your account…"}</div>
+  if (source === "loading" || (source === "backend" && needsHistory && !historyLoaded)) return <DashboardSkeleton />
 
   return (
     <FinanceSimulatorProvider>
@@ -62,13 +62,7 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   return (
-    <Suspense
-      fallback={
-        <div className="flex h-screen items-center justify-center bg-background">
-          <Loader2 className="h-8 w-8 animate-spin text-brand-600" />
-        </div>
-      }
-    >
+    <Suspense fallback={<DashboardSkeleton />}>
       <DashboardShell>{children}</DashboardShell>
     </Suspense>
   )

@@ -9,6 +9,7 @@ import { Bot, Download, Loader2 } from "lucide-react"
 import { agentsApi, fmtBDT } from "@/lib/finance-api"
 import { useSimulator } from "@/lib/simulator-context"
 import { useCountUp } from "@/lib/use-count-up"
+import { formatNumber } from "@/lib/utils"
 
 type Policy = { id: string; agentType: string; name: string; objective: string; riskAppetite: number; maxExposure: number | null; bufferTargetDays: number | null; version: number }
 type Perf = { agentType: string; decisionsCount: number; executedCount: number; guardRejects: number; realizedImpactSum: number; benchmarkImpact: number; alpha: number; score: number; benchmarkPolicyVersion: string }
@@ -135,10 +136,10 @@ export default function AgentLedgerPage() {
           <Card>
             <CardHeader><CardTitle className="text-base">AI runs &amp; budget</CardTitle></CardHeader>
             <CardContent>
-              <p className="text-sm">Spent this month: <strong>${(runs?.spentUsdThisMonth ?? 0).toFixed(4)}</strong> of ${(runs?.budgetUsd ?? 2).toFixed(2)} budget. Deterministic-fallback runs cost $0.</p>
+              <p className="text-sm">Spent this month: <strong>${formatNumber(runs?.spentUsdThisMonth ?? 0)}</strong> of ${formatNumber(runs?.budgetUsd ?? 2)} budget. Deterministic-fallback runs cost $0.</p>
               <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
                 {(runs?.runs ?? []).slice(0, 12).map((r) => (
-                  <p key={r.id} className="flex justify-between text-xs text-muted-foreground"><span>{r.purpose} · {r.model}</span><span>{r.status} · {r.latencyMs}ms · ${r.costUsd.toFixed(4)}</span></p>
+                  <p key={r.id} className="flex justify-between text-xs text-muted-foreground"><span>{r.purpose} · {r.model}</span><span>{r.status} · {r.latencyMs}ms · ${formatNumber(r.costUsd)}</span></p>
                 ))}
               </div>
             </CardContent>

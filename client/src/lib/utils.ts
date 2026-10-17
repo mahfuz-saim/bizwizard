@@ -9,6 +9,17 @@ export function formatCurrency(amount: number, currency: string = "৳") {
   return `${currency}${amount.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
 }
 
+/**
+ * Shared number formatter used everywhere a figure is shown in the UI: at
+ * most `maxDecimals` (default 2) fraction digits, and no trailing zero
+ * padding — a whole number stays whole ("5", not "5.00"), and a value with
+ * one meaningful decimal keeps just that one ("5.5", not "5.50").
+ */
+export function formatNumber(n: number | null | undefined, maxDecimals: number = 2): string {
+  if (n == null || Number.isNaN(n)) return "0"
+  return n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: maxDecimals })
+}
+
 export function formatDate(date: string | Date) {
   return new Date(date).toLocaleDateString("en-US", {
     year: "numeric",

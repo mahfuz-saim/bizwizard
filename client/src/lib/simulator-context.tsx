@@ -42,7 +42,7 @@ function flattenEvents(result: FastForwardResult): VisibleStreamEvent[] {
 }
 
 interface SimulatorState {
-  status: "idle" | "loading" | "playing" | "done" | "error" | "resetting"
+  status: "idle" | "loading" | "playing" | "paused" | "done" | "error" | "resetting"
   error: string | null
   result: FastForwardResult | null
   dayIndex: number
@@ -66,6 +66,8 @@ interface SimulatorState {
 interface SimulatorContextValue extends SimulatorState {
   runFastForward: () => Promise<void>
   skipToEnd: () => void
+  pauseSimulation: () => void
+  resumeSimulation: () => void
   resetSimulation: () => Promise<void>
   dismissToast: (id: string) => void
   setDrawerOpen: (open: boolean) => void
@@ -140,6 +142,17 @@ export function FinanceSimulatorProvider({ children }: { children: React.ReactNo
     }
   }, [state.template])
 
+  // Pausing just flips status away from "playing" — the ticking effect above
+  // already tears its interval down whenever status isn't "playing", and
+  // revealedRef/eventsRef are untouched, so resuming continues from exactly
+  // where it left off instead of losing or re-playing any rows.
+  const pauseSimulation = React.useCallback(() => {
+    setState((s) => (s.status === "playing" ? { ...s, status: "paused" } : s))
+  }, [])
+  const resumeSimulation = React.useCallback(() => {
+    setState((s) => (s.status === "paused" ? { ...s, status: "playing" } : s))
+  }, [])
+
   const skipToEnd = React.useCallback(() => {
     const result = state.result
     if (!result) return
@@ -175,8 +188,8 @@ export function FinanceSimulatorProvider({ children }: { children: React.ReactNo
   const setTemplate = React.useCallback((template: SimTemplate) => setState((s) => ({ ...s, template })), [])
 
   const value = React.useMemo<SimulatorContextValue>(() => ({
-    ...state, runFastForward, skipToEnd, resetSimulation, dismissToast, setDrawerOpen, setSpeedMs, setTemplate, inspect: simulatorApi.inspect,
-  }), [state, runFastForward, skipToEnd, resetSimulation, dismissToast, setDrawerOpen, setSpeedMs, setTemplate])
+    ...state, runFastForward, skipToEnd, pauseSimulation, resumeSimulation, resetSimulation, dismissToast, setDrawerOpen, setSpeedMs, setTemplate, inspect: simulatorApi.inspect,
+  }), [state, runFastForward, skipToEnd, pauseSimulation, resumeSimulation, resetSimulation, dismissToast, setDrawerOpen, setSpeedMs, setTemplate])
 
   return <SimulatorContext.Provider value={value}>{children}</SimulatorContext.Provider>
 }

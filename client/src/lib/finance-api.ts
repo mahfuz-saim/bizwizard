@@ -1,4 +1,5 @@
 import { api, getShopId } from "./api"
+import { formatNumber } from "./utils"
 
 /**
  * SME Finance Copilot API (PLAN §4.5/§5.5/§6.7/§7.4).
@@ -8,7 +9,8 @@ import { api, getShopId } from "./api"
  */
 export const fmtBDT = (n: number | null | undefined) =>
   `৳${Math.round(Number(n ?? 0)).toLocaleString("en-IN")}`
-export const fmtPct = (n: number | null | undefined) => `${Number(n ?? 0).toFixed(1)}%`
+// At most 2 fraction digits, no padded trailing zero (e.g. "12%" not "12.0%").
+export const fmtPct = (n: number | null | undefined) => `${formatNumber(n, 2)}%`
 export const fmtDecimal = (n: number | null | undefined) =>
   n == null ? "—" : n.toLocaleString("en-IN", { maximumFractionDigits: 2 })
 
