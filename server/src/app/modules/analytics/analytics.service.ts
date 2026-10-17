@@ -1,4 +1,4 @@
-import { ExpenseType } from '@prisma/client';
+import { ExpenseType, Prisma } from '@prisma/client';
 import { IDateFilters } from '../../../interfaces/common';
 import prisma from '../../../shared/prisma';
 import ApiError from '../../../errors/ApiError';
@@ -182,6 +182,54 @@ const getAnalytics = async (
     });
     return result;
 };
+const getDashboard = async (tenantId: string, shopId: string, includePurchases: boolean) => {
+    validateTenantId(tenantId);
+    if (!shopId) throw new ApiError(httpStatus.BAD_REQUEST, 'Shop ID is required');
+    await validateShopByTenant(tenantId, shopId);
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const salesWhere: Prisma.CheckoutWhereInput = {
+        tenantID: tenantId, shopID: shopId, isDraft: false,
+        status: { in: ['PAID', 'UNPAID', 'PENDING'] },
+    };
+    const [todayStats, yesterdayStats, buyers, totalSuppliers, recentCheckouts, recentPurchases, todaySales] = await Promise.all([
+        getAnalytics(tenantId, shopId, { startDate: new Date(today), endDate: new Date(today) }),
+        getAnalytics(tenantId, shopId, { startDate: new Date(yesterday), endDate: new Date(yesterday) }),
+        prisma.shopBuyer.findMany({ where: { tenantID: tenantId, shopID: shopId, isDeleted: false }, select: { buyerID: true } }),
+        prisma.shopSupplier.count({ where: { tenantID: tenantId, shopId, isDeleted: false } }),
+        prisma.checkout.findMany({
+            where: salesWhere, take: 10, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            include: {
+                items: { include: { Lot: { select: { buyPrice: true, shopVariantId: true } } } },
+                Debt: { select: { paidAmount: true, status: true } },
+                buyer: { select: { name: true } },
+                soldByOwner: { select: { name: true } }, soldByEmployee: { select: { name: true } },
+            },
+        }),
+        includePurchases ? prisma.expenseItem.findMany({
+            where: { tenantID: tenantId, expenseType: 'PRODUCT', expense: { shopID: shopId, tenantID: tenantId } },
+            take: 10, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            include: { supplier: { select: { supplierName: true } } },
+        }) : Promise.resolve([]),
+        prisma.checkout.findMany({
+            where: { ...salesWhere, createdAt: { gte: new Date(today), lt: new Date(new Date(today).getTime() + 86400000) } },
+            select: { totalDiscount: true, items: { select: { unitPrice: true, discountedPrice: true, quantity: true } } },
+        }),
+    ]);
+    const debts = await prisma.debt.findMany({
+        where: { tenantID: tenantId, shopID: shopId, checkout: { ...salesWhere, buyerID: { in: buyers.map(b => b.buyerID) } } },
+        select: { paidAmount: true, checkout: { select: { totalPrice: true } } },
+    });
+    const round = (n: number) => Math.round(n * 100) / 100;
+    return {
+        today: todayStats, yesterday: yesterdayStats,
+        totalCustomers: buyers.length, totalSuppliers,
+        outstandingDebt: round(debts.reduce((total, d) => total + Math.max(0, d.checkout.totalPrice - (d.paidAmount || 0)), 0)),
+        todayDiscount: round(todaySales.reduce((total, s) => total + s.totalDiscount + s.items.reduce((n, i) => n + (i.unitPrice - i.discountedPrice) * i.quantity, 0), 0)),
+        recentCheckouts, recentPurchases,
+    };
+};
+
 const getNotSoldProducts = async (tenantId: string, shopId: string) => {
     validateTenantId(tenantId);
     if (!shopId) {
@@ -396,6 +444,7 @@ const getVariantFinancials = async (tenantId: string, variantId: string) => {
 };
 
 export const analyticsService = {
+    getDashboard,
     getAnalytics,
     getNotSoldProducts,
     getExpiredProducts,

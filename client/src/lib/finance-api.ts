@@ -9,6 +9,8 @@ import { api, getShopId } from "./api"
 export const fmtBDT = (n: number | null | undefined) =>
   `৳${Math.round(Number(n ?? 0)).toLocaleString("en-IN")}`
 export const fmtPct = (n: number | null | undefined) => `${Number(n ?? 0).toFixed(1)}%`
+export const fmtDecimal = (n: number | null | undefined) =>
+  n == null ? "—" : n.toLocaleString("en-IN", { maximumFractionDigits: 2 })
 
 function shopParams(extra: Record<string, string | number | undefined> = {}) {
   return { shopId: getShopId() ?? "", ...extra }

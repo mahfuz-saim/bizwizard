@@ -1,6 +1,14 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { fmtBDT, fmtPct, normalizeRow } from "./finance-api"
+import { fmtBDT, fmtPct, fmtDecimal, normalizeRow } from "./finance-api"
+
+test("metric display rounds precision without changing the input", () => {
+  const value = 12.850999999999999
+  assert.equal(fmtDecimal(value), "12.85")
+  assert.equal(fmtDecimal(0), "0")
+  assert.equal(fmtDecimal(null), "—")
+  assert.equal(value, 12.850999999999999)
+})
 
 test("currency formatting uses taka sign and Indian grouping, null-safe", () => {
   assert.equal(fmtBDT(45000), "৳45,000")

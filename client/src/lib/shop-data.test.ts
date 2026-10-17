@@ -10,6 +10,7 @@ import {
 import {
   fetchAllPages,
   loadShopData,
+  loadDashboardData,
   normalizeCheckout,
   type RawCheckout
 } from "./shop-data"
@@ -322,6 +323,31 @@ test("employee does not call owner-only employee/expense endpoints", async () =>
         c.url.pathname.endsWith("/employee")
     )
   )
+})
+
+test("dashboard uses full summary totals without downloading or pretending to complete history", async () => {
+  installShopResponses()
+  const original = globalThis.fetch
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input))
+    if (url.pathname.endsWith("/analytics/dashboard")) {
+      calls.push({ url, init })
+      return envelope({
+        today: { totalSell: 175, profit: 55 }, yesterday: { profit: 40 },
+        outstandingDebt: 9000, todayDiscount: 25, totalCustomers: 180, totalSuppliers: 4,
+        recentCheckouts: [checkout], recentPurchases: []
+      })
+    }
+    return original(input, init)
+  }
+  const data = await loadDashboardData("shop-1")
+  assert.equal(data.stats.todayDebt, 9000)
+  assert.equal(data.stats.totalCustomers, 180)
+  assert.equal(data.stats.todayDiscount, 25)
+  assert.equal(data.transactions.length, 1)
+  assert.deepEqual(data.customers, [])
+  assert.equal(calls.length, 3)
+  assert(!calls.some(c => c.url.pathname.endsWith("/checkout") || c.url.pathname.includes("/expense/")))
 })
 
 test("checkout uses FIFO lot IDs, valid backend fields and existing customer IDs", () => {

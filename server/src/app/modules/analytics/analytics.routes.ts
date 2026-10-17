@@ -6,6 +6,12 @@ import { analyticsController } from './analytics.controller';
 import { verifyTenantAccess } from '../../middlewares/verifyTenant';
 
 const router = express.Router();
+router.get(
+    '/dashboard',
+    auth(UserRole.ADMIN, UserRole.OWNER, UserRole.EMPLOYEE),
+    verifyTenantAccess,
+    analyticsController.getDashboard,
+);
 
 router.get(
     '/variant/:variantId/purchases',

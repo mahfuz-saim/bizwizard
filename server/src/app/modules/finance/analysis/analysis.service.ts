@@ -41,7 +41,7 @@ async function loadProductSales(tenantId: string, shopId: string, days = 90): Pr
       productKey: key, productName: i.productName as string, revenue: 0, cogs: 0, units: 0,
       inventoryValue: invByVariant.get(key) ?? 0, daysSinceLastSale: null, lastSale: 0,
     };
-    cur.revenue += i.discountedPrice;
+    cur.revenue += i.quantity * i.discountedPrice;
     cur.cogs += i.quantity * (i.lotId ? (lotPrice.get(i.lotId) ?? i.discountedPrice * 0.7) : i.discountedPrice * 0.7);
     cur.units += i.quantity;
     cur.lastSale = Math.max(cur.lastSale, new Date(i.createdAt).getTime());
@@ -228,7 +228,7 @@ export const analysisService = {
       await pushInsight({
         insightType: 'MARGIN_LEAK', severity: 'WARNING',
         title: `${leaky.length} products earn far below shop margin`,
-        summary: `${leaky.map((l) => l.productName).slice(0, 3).join(', ')} run more than 8 points below your ${pack.profile.grossMargin}% gross margin.`,
+        summary: `${leaky.map((l) => l.productName).slice(0, 3).join(', ')} run more than 8 points below your ${pack.profile.grossMargin.toFixed(1)}% gross margin.`,
         metricSnapshot: { shopMargin: pack.profile.grossMargin, products: leaky.map((l) => ({ name: l.productName, margin: l.contributionMargin })) },
         hypothesis: 'Discounting or stale buy prices are leaking margin on these products.',
         candidates: [], verificationStatus: 'VERIFIED', verifiedMetrics: { shopMargin: pack.profile.grossMargin }, aiConfidence: 0.8,

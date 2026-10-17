@@ -31,7 +31,7 @@ import type {
   Employee,
   ShopNotification
 } from "./types"
-import { loadShopData } from "./shop-data"
+import { loadShopData, loadDashboardData } from "./shop-data"
 import {
   checkoutBody,
   purchaseBody,
@@ -48,6 +48,8 @@ interface DataContextValue {
   runDemo: () => void
   logout: () => void
   refresh: () => Promise<void>
+  historyLoaded: boolean
+  loadHistory: () => Promise<void>
 
   products: Product[]
   customers: Customer[]
@@ -111,8 +113,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [stats, setStats] = React.useState<DashboardStats>(emptyStats)
   const demoMode = React.useRef(false)
   const generation = React.useRef(0)
+  const [historyLoaded, setHistoryLoaded] = React.useState(false)
+  const historyLoadedRef = React.useRef(false)
 
   const resetData = React.useCallback(() => {
+    historyLoadedRef.current = false
+    setHistoryLoaded(false)
     setProducts([])
     setCustomers([])
     setSuppliers([])
@@ -149,7 +155,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setSource("mock")
   }, [])
   const refresh = React.useCallback(
-    async (showLoading = true) => {
+    async (showLoading = true, fullHistory = historyLoadedRef.current) => {
       if (demoMode.current) return
       const request = ++generation.current
       if (!getAccessToken()) {
@@ -183,7 +189,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           shopId: me.defaultShopId,
           tenants: me.tenants
         })
-        const data = await loadShopData(me.defaultShopId, me.role)
+        const data = fullHistory
+          ? await loadShopData(me.defaultShopId, me.role)
+          : await loadDashboardData(me.defaultShopId)
         if (request !== generation.current) return
         setProducts(data.products)
         setCustomers(data.customers)
@@ -193,6 +201,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         setEmployees(data.employees)
         setNotifications(data.notifications)
         setStats(data.stats)
+        historyLoadedRef.current = fullHistory
+        setHistoryLoaded(fullHistory)
         setSource("backend")
       } catch (e) {
         if (request !== generation.current) return
@@ -207,6 +217,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     },
     [resetData]
   )
+  const loadHistory = React.useCallback(() => refresh(true, true), [refresh])
   const login = React.useCallback(
     async (identifier: string, password: string) => {
       generation.current++
@@ -466,6 +477,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }
   const value: DataContextValue = {
+    historyLoaded,
+    loadHistory,
     source,
     error,
     session,
