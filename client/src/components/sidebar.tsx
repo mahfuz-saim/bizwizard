@@ -10,7 +10,6 @@ import {
   Users,
   Truck,
   Receipt,
-  FileBarChart,
   Wallet,
   MessageSquare,
   UserCog,
@@ -45,10 +44,9 @@ const primaryNav: NavItem[] = [
   { label: "Debts", href: "/debts", icon: Receipt },
   { label: "Messages", href: "/messages", icon: MessageSquare },
   { label: "Employees", href: "/employees", icon: UserCog },
-  { label: "Reports", href: "/reports", icon: FileBarChart },
   { label: "Cash Flow", href: "/finance/cashflow", icon: PiggyBank },
   { label: "Financing", href: "/finance/matching", icon: Landmark },
-  { label: "Analysis", href: "/finance/analysis", icon: TrendingUp },
+  { label: "Analysis & Reports", href: "/finance/analysis", icon: TrendingUp },
   { label: "AI Agents", href: "/finance/agent", icon: Bot },
 ]
 

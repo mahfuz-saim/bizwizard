@@ -104,3 +104,7 @@ sales, 1,833 purchase lots, 731 pickup orders, and 54 stock adjustments. The
 one-week shop has 124 sales, 208 purchase lots, seven pickup orders, and two stock
 adjustments; 50 products have repeat purchases within that week. Exact counts
 vary with the seed date.
+
+## Real-time notifications
+
+See [webhook setup, browser delivery, and verification](docs/NOTIFICATIONS.md).

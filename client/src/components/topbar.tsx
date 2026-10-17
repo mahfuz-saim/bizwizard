@@ -4,7 +4,6 @@ import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
-  Bell,
   Menu,
   Moon,
   Search,
@@ -33,6 +32,7 @@ import {
 import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useStore } from "@/lib/store"
+import { NotificationBell } from "@/components/notification-bell"
 import { getApiBaseUrl } from "@/lib/api"
 
 interface TopbarProps {
@@ -56,6 +56,7 @@ export function Topbar({ onOpenMobileNav, shopName = "My Store" }: TopbarProps) 
 
   const pageTitle = React.useMemo(() => {
     if (pathname === "/") return "Dashboard"
+    if (pathname === "/finance/analysis") return "Analysis & Reports"
     const segment = pathname.split("/").filter(Boolean)[0]
     return segment.charAt(0).toUpperCase() + segment.slice(1)
   }, [pathname])
@@ -167,11 +168,7 @@ export function Topbar({ onOpenMobileNav, shopName = "My Store" }: TopbarProps) 
           <span className="sr-only">Toggle theme</span>
         </Button>
 
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5" />
-          <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-destructive" />
-          <span className="sr-only">Notifications</span>
-        </Button>
+        <NotificationBell />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -226,10 +223,9 @@ export function MobileNavSheet({ open, onOpenChange }: MobileNavSheetProps) {
     { label: "Debts", href: "/debts" },
     { label: "Messages", href: "/messages" },
     { label: "Employees", href: "/employees" },
-    { label: "Reports", href: "/reports" },
     { label: "Cash Flow", href: "/finance/cashflow" },
     { label: "Financing", href: "/finance/matching" },
-    { label: "Analysis", href: "/finance/analysis" },
+    { label: "Analysis & Reports", href: "/finance/analysis" },
     { label: "AI Agents", href: "/finance/agent" },
   ]
   return (
