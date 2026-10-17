@@ -168,7 +168,7 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
               )}
             </button>
           </PopoverTrigger>
-          <PopoverContent side="top" align="start" sideOffset={10} className="w-80 text-foreground">
+          <PopoverContent side="top" align="start" sideOffset={10} collisionPadding={16} className="w-80 text-foreground">
             <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-brand-700 dark:text-brand-300">
               <Zap className="h-4 w-4" /> Finance Simulator
             </div>
