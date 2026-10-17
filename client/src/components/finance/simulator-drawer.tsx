@@ -33,14 +33,14 @@ export function SimulatorDrawer() {
     <>
       <Sheet open={sim.drawerOpen} onOpenChange={sim.setDrawerOpen}>
         <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
-          <SheetHeader className="border-b p-4">
+          <SheetHeader className="border-b p-4 pr-12">
             <div className="flex items-center justify-between gap-2">
               <SheetTitle>Live Business Stream</SheetTitle>
               {(sim.status === "playing" || sim.status === "paused") && (
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 gap-1.5 px-2 text-xs"
+                  className="h-7 shrink-0 gap-1.5 px-2 text-xs"
                   onClick={() => (sim.status === "playing" ? sim.pauseSimulation() : sim.resumeSimulation())}
                 >
                   {sim.status === "playing" ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
