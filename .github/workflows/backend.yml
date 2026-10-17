@@ -1,0 +1,78 @@
+name: Backend CI and deployment
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['server/**', '.github/workflows/backend.yml']
+  push:
+    branches: [main]
+    paths: ['server/**', '.github/workflows/backend.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit
+        working-directory: server
+      - run: npm run prisma:generate
+        working-directory: server
+      - run: npm test
+        working-directory: server
+      - run: npm run build
+        working-directory: server
+      - run: python3 -m py_compile server/deploy/deploy.py
+      - name: Package backend only
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: tar -czf backend.tar.gz -C server dist package.json package-lock.json prisma/schema.prisma prisma/migrations
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        with:
+          name: backend-${{ github.sha }}
+          path: backend.tar.gz
+          retention-days: 1
+          if-no-files-found: error
+
+  deploy:
+    needs: verify
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    concurrency:
+      group: backend-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: backend-${{ github.sha }}
+      - name: Deploy through restricted SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.BACKEND_DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.BACKEND_DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ secrets.BACKEND_DEPLOY_HOST }}
+          COMMIT_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/backend_deploy
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/backend_deploy ~/.ssh/known_hosts
+          trap 'rm -f ~/.ssh/backend_deploy' EXIT
+          checksum=$(sha256sum backend.tar.gz | cut -d ' ' -f 1)
+          ssh -i ~/.ssh/backend_deploy -o IdentitiesOnly=yes -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
+            "bizwizard@$DEPLOY_HOST" "deploy $COMMIT_SHA $checksum" < backend.tar.gz
+          curl --fail --silent --show-error --max-time 15 https://hackathon.bebsapati.com/test
