@@ -25,7 +25,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   }, [source, needsHistory, historyLoaded, loadHistory])
 
   if (source === "auth") return <AuthScreen />
-  if (source === "error") return <main className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center"><h1 className="text-xl font-semibold">Unable to load your shop</h1><p role="alert" className="max-w-xl text-sm text-destructive">{error}</p><p className="text-sm text-muted-foreground">No zero balances or demo records are being substituted.</p><Button onClick={() => void refresh()}>Retry</Button><Button variant="outline" onClick={logout}>Log out</Button></main>
+  if (source === "error") return <main className="flex h-screen flex-col items-center justify-center gap-4 overflow-y-auto p-6 text-center"><h1 className="text-xl font-semibold">Unable to load your shop</h1><p role="alert" className="max-w-xl text-sm text-destructive">{error}</p><p className="text-sm text-muted-foreground">No zero balances or demo records are being substituted.</p><Button onClick={() => void refresh()}>Retry</Button><Button variant="outline" onClick={logout}>Log out</Button></main>
   if (source === "loading" || (source === "backend" && needsHistory && !historyLoaded)) return <DashboardSkeleton />
 
   return (

@@ -50,7 +50,7 @@ export function AuthScreen() {
   const title = mode === "login" ? "Log in to BizWizard" : "Create your account"
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
+    <main className="flex h-screen items-center justify-center overflow-y-auto bg-muted/30 p-4">
       <section className="w-full max-w-md rounded-xl border bg-background p-6 shadow-sm sm:p-8" aria-labelledby="auth-title">
         <div className="mb-6 flex items-center gap-3">
           <div className="rounded-lg bg-primary p-3 text-primary-foreground"><Store className="h-6 w-6" /></div>
