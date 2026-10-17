@@ -71,7 +71,7 @@ executed actions after 7 days.
 ### 4. Test
 
 ```bash
-cd server && npm test           # 29 node:test cases: money/concurrency/engines/eligibility/guard/verifier/benchmarks/negotiation/AI-runtime/naming
+cd server && npm test           # node:test cases: money/concurrency/engines/eligibility/guard/verifier/benchmarks/negotiation/AI-runtime/naming/simulator-plan
 cd client && npm test           # payload normalization + existing suites
 cd client && npm run test:backend-contract   # client payloads vs real server Zod schemas
 ```
@@ -95,6 +95,43 @@ universe, same PD/LGD model, benchmark charged for loans the AI declined).
   lender (clamped to band), round-0 lowest-APR borrower, hold/collect-at-60d
   treasurer, equal-weight analyst. Changing them requires a version bump so
   historical alpha stays interpretable.
+
+## Judge demo: the 30-day simulator
+
+A judge-facing "fast-forward" button that drives the *real* pipeline above
+with fabricated-but-real data, instead of asking anyone to wait 30 actual
+days or stare at an empty shop. Nothing about the three pillars changes for
+this: the simulator writes ordinary rows into the owner's own currently open
+shop, then calls the same `cashflowService.runTreasury`,
+`analysisService.generateInsights`-grade verifier, and
+`agentsService.performance` that real usage calls.
+
+| Piece | Where |
+| --- | --- |
+| Deterministic 30-day plan (sales/expenses/debts/engineered anomaly/guard-blocked offer/reconciled collection), seeded from `shopId + runID` | `server/src/app/modules/finance/simulator/simulatorEngine.ts` (pure, unit-tested, no DB) |
+| Orchestration: writes real `Checkout`/`ExpenseItem`/`Debt`/`DebtPayments`/`CashTransaction` rows in one transaction, then re-runs `cashflowService.runTreasury`, builds a guard-verified `TreasuryAction`, a guard-rejected lender `AiDecision`, a VERIFIED `Insight`, and `agentsService.performance` | `server/src/app/modules/finance/simulator/simulator.service.ts` |
+| API | `POST /finance/simulator/fast-forward` (runs all 30 days, <1s typical on a local DB — see caveat below), `GET /finance/simulator/inspect?type=&id=` (returns the real row), `POST /finance/simulator/reset` (wipes only simulator-tagged rows) |
+| Client | `client/src/lib/simulator-context.tsx` drip-feeds the single response at 150ms/day (~4.5s) into three layers: a collapsible "Live Business Stream" drawer with a `[↗]` inspect action per row (Layer 1), in-place chart/gauge/insight/scorecard morphing on `/finance/cashflow`, `/finance/analysis`, `/finance/agent` (Layer 2), and up to two high-signal milestone toasts — 🚨 critical shortfall, 🛡️ guardrail-blocked offer, 📈 reconciled alpha (Layer 3) |
+
+**How "real, not staged" is enforced:** every row the simulator writes gets
+`isSimulated: true` + `simulationRunID` (additive migration, see
+`20261017120000_finance_simulator`); the `[↗]` icon in the stream opens the
+literal database record via `GET /finance/simulator/inspect`. The CRITICAL
+alert, the guard rejection, and the reconciled treasury action are not
+hand-rolled strings — they come out of the same `evaluateAlerts`,
+`guardOffer`/`guardTreasuryActions`, and `verifyHypothesis` functions real
+traffic uses; the simulator only engineers the *inputs* (a shortfall-shaped
+30 days, a high-APR product pricing) that make those real functions land on
+the demo-relevant branch. `reset()` diffs against alerts that were already
+OPEN before the run so it only deletes what the run actually created.
+
+**Honest caveat:** "fast backend transaction" here means one Postgres
+transaction, not a literal sub-200ms wall-clock guarantee — on a remote/managed
+database the ~150 sequential writes a 30-day run performs will typically take
+low seconds, not milliseconds; the transaction timeout is set generously
+(30s) to avoid failing on slower connections. The drip-feed animation starts
+as soon as the single response arrives, so the perceived 4.5s playback is
+accurate regardless of backend latency.
 
 ## Honest limitations (v1, per PLAN §12)
 
