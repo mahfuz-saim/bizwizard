@@ -10,12 +10,15 @@ import {
 } from "@/components/ui/table"
 import { useStore } from "@/lib/store"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import { usePagination } from "@/lib/use-pagination"
+import { PaginationBar } from "@/components/ui/pagination-bar"
 
 export default function ExpensesPage() {
   const { expenses, session } = useStore()
   const currentMonth = new Date().toISOString().slice(0, 7)
   const monthTotal = expenses.filter(e => e.date.slice(0, 7) === currentMonth).reduce((n, e) => n + e.amount, 0)
-  const total = expenses.reduce((s, e) => s + e.amount, 0)
+  const totalAmount = expenses.reduce((s, e) => s + e.amount, 0)
+  const { page, setPage, pageCount, pageItems, rangeStart, rangeEnd, total: totalCount } = usePagination(expenses, 10)
   if (session?.role === "EMPLOYEE") return <p>Expense records are available to the shop owner only.</p>
 
   return (
@@ -29,7 +32,7 @@ export default function ExpensesPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Card><CardContent className="p-4"><p className="text-xs font-medium text-muted-foreground">Total Expenses</p><p className="mt-1 text-2xl font-bold text-destructive">{formatCurrency(total)}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs font-medium text-muted-foreground">Total Expenses</p><p className="mt-1 text-2xl font-bold text-destructive">{formatCurrency(totalAmount)}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs font-medium text-muted-foreground">This Month</p><p className="mt-1 text-2xl font-bold">{formatCurrency(monthTotal)}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs font-medium text-muted-foreground">Categories</p><p className="mt-1 text-2xl font-bold">{new Set(expenses.map(e => e.category)).size}</p></CardContent></Card>
       </div>
@@ -48,7 +51,9 @@ export default function ExpensesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {expenses.map((e) => (
+                {pageItems.length === 0 ? (
+                  <TableRow><TableCell colSpan={4} className="py-10 text-center text-muted-foreground">No expenses recorded yet.</TableCell></TableRow>
+                ) : pageItems.map((e) => (
                   <TableRow key={e.id}>
                     <TableCell className="text-sm">{formatDate(e.date)}</TableCell>
                     <TableCell><Badge variant="secondary">{e.category}</Badge></TableCell>
@@ -58,6 +63,15 @@ export default function ExpensesPage() {
                 ))}
               </TableBody>
             </Table>
+            <PaginationBar
+              page={page}
+              pageCount={pageCount}
+              onPageChange={setPage}
+              rangeStart={rangeStart}
+              rangeEnd={rangeEnd}
+              total={totalCount}
+              itemLabel="expenses"
+            />
           </div>
         </CardContent>
       </Card>

@@ -32,6 +32,8 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { useStore } from "@/lib/store"
+import { usePagination } from "@/lib/use-pagination"
+import { PaginationBar } from "@/components/ui/pagination-bar"
 
 export default function SalesPage() {
   const { transactions } = useStore()
@@ -53,6 +55,12 @@ export default function SalesPage() {
     }
     return list
   }, [transactions, tab, search])
+
+  const { page, setPage, pageCount, pageItems, rangeStart, rangeEnd, total } = usePagination(
+    filtered,
+    10,
+    `${tab}|${search}`
+  )
 
   const totalSales = transactions.filter((t) => t.type === "SALE").reduce((s, t) => s + t.total, 0)
   const totalPurchases = transactions.filter((t) => t.type === "BUY").reduce((s, t) => s + t.total, 0)
@@ -128,7 +136,7 @@ export default function SalesPage() {
                     No transactions yet
                   </TableCell></TableRow>
                 ) : (
-                  filtered.map((t) => {
+                  pageItems.map((t) => {
                     const isSale = t.type === "SALE"
                     return (
                       <TableRow key={t.id}>
@@ -158,6 +166,15 @@ export default function SalesPage() {
                 )}
               </TableBody>
             </Table>
+            <PaginationBar
+              page={page}
+              pageCount={pageCount}
+              onPageChange={setPage}
+              rangeStart={rangeStart}
+              rangeEnd={rangeEnd}
+              total={total}
+              itemLabel="transactions"
+            />
           </div>
         </CardContent>
       </Card>

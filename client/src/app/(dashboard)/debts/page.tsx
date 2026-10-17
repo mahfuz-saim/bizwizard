@@ -10,6 +10,8 @@ import { useStore } from "@/lib/store"
 import { formatCurrency } from "@/lib/utils"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { generateAvatarColor, getInitials } from "@/lib/utils"
+import { usePagination } from "@/lib/use-pagination"
+import { PaginationBar } from "@/components/ui/pagination-bar"
 
 export default function DebtsPage() {
   const { customers, suppliers, source } = useStore()
@@ -18,6 +20,9 @@ export default function DebtsPage() {
   const payable = suppliers.filter(s => s.totalDue > 0)
   const totalReceivable = receivable.reduce((s, c) => s + c.totalDue, 0)
   const totalPayable = payable.reduce((s, x) => s + x.totalDue, 0)
+
+  const receivablePage = usePagination(receivable, 10)
+  const payablePage = usePagination(payable, 10)
 
   return (
     <div className="space-y-6">
@@ -52,29 +57,53 @@ export default function DebtsPage() {
             </TabsList>
             <TabsContent value="receivable" className="mt-4 space-y-2">
               {receivable.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground"><Receipt className="mx-auto mb-2 h-8 w-8 opacity-50"/>No pending dues. 🎉</p> :
-                receivable.map((c) => (
-                  <div key={c.id} className="flex items-center gap-3 rounded-lg border p-3">
-                    <Avatar className="h-10 w-10" style={{ backgroundColor: generateAvatarColor(c.name) }}>
-                      <AvatarFallback className="bg-transparent text-white">{getInitials(c.name)}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1"><p className="font-medium text-sm">{c.name}</p><p className="text-xs text-muted-foreground">{c.phone}</p></div>
-                    <div className="text-right">
-                      <Badge variant="destructive">{formatCurrency(c.totalDue)}</Badge>
+                <>
+                  {receivablePage.pageItems.map((c) => (
+                    <div key={c.id} className="flex items-center gap-3 rounded-lg border p-3">
+                      <Avatar className="h-10 w-10" style={{ backgroundColor: generateAvatarColor(c.name) }}>
+                        <AvatarFallback className="bg-transparent text-white">{getInitials(c.name)}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1"><p className="font-medium text-sm">{c.name}</p><p className="text-xs text-muted-foreground">{c.phone}</p></div>
+                      <div className="text-right">
+                        <Badge variant="destructive">{formatCurrency(c.totalDue)}</Badge>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                  <PaginationBar
+                    page={receivablePage.page}
+                    pageCount={receivablePage.pageCount}
+                    onPageChange={receivablePage.setPage}
+                    rangeStart={receivablePage.rangeStart}
+                    rangeEnd={receivablePage.rangeEnd}
+                    total={receivablePage.total}
+                    itemLabel="customers"
+                    className="border-t-0 px-0"
+                  />
+                </>}
             </TabsContent>
             <TabsContent value="payable" className="mt-4 space-y-2">
               {payable.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">{source === "mock" ? "No pending payables." : "Supplier payment balances are not tracked by the backend."}</p> :
-                payable.map((s) => (
-                  <div key={s.id} className="flex items-center gap-3 rounded-lg border p-3">
-                    <Avatar className="h-10 w-10" style={{ backgroundColor: generateAvatarColor(s.name) }}>
-                      <AvatarFallback className="bg-transparent text-white">{getInitials(s.name)}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1"><p className="font-medium text-sm">{s.name}</p><p className="text-xs text-muted-foreground">{s.phone}</p></div>
-                    <Badge variant="warning">{formatCurrency(s.totalDue)}</Badge>
-                  </div>
-                ))}
+                <>
+                  {payablePage.pageItems.map((s) => (
+                    <div key={s.id} className="flex items-center gap-3 rounded-lg border p-3">
+                      <Avatar className="h-10 w-10" style={{ backgroundColor: generateAvatarColor(s.name) }}>
+                        <AvatarFallback className="bg-transparent text-white">{getInitials(s.name)}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1"><p className="font-medium text-sm">{s.name}</p><p className="text-xs text-muted-foreground">{s.phone}</p></div>
+                      <Badge variant="warning">{formatCurrency(s.totalDue)}</Badge>
+                    </div>
+                  ))}
+                  <PaginationBar
+                    page={payablePage.page}
+                    pageCount={payablePage.pageCount}
+                    onPageChange={payablePage.setPage}
+                    rangeStart={payablePage.rangeStart}
+                    rangeEnd={payablePage.rangeEnd}
+                    total={payablePage.total}
+                    itemLabel="suppliers"
+                    className="border-t-0 px-0"
+                  />
+                </>}
             </TabsContent>
           </Tabs>
         </CardContent>
