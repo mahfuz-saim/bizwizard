@@ -18,7 +18,6 @@ export default {
         refresh_secret: process.env.REFRESH_SECRET,
         refresh_expires_in: process.env.REFRESH_EXPIRES_IN,
     },
-    alert_recipients: process.env.ALERT_RECIPIENT_EMAILS,
     cloudinary: {
         cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
         api_key: process.env.CLOUDINARY_API_KEY,
@@ -26,10 +25,6 @@ export default {
     },
     payment: {
         mode: process.env.PAYMENT_MODE || 'demo',
-    },
-    google_mailer: {
-        token: process.env.GMAIL_APPLICATION_TOKEN,
-        credentials: process.env.GMAIL_APPLICATION_CREDENTIALS,
     },
     ai: {
         openaiApiKey: process.env.OPENAI_API_KEY,
