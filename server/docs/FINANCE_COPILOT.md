@@ -110,8 +110,10 @@ shop, then calls the same `cashflowService.runTreasury`,
 | --- | --- |
 | Deterministic 30-day plan (sales/expenses/debts/engineered anomaly/guard-blocked offer/reconciled collection), seeded from `shopId + runID` | `server/src/app/modules/finance/simulator/simulatorEngine.ts` (pure, unit-tested, no DB) |
 | Orchestration: writes real `Checkout`/`ExpenseItem`/`Debt`/`DebtPayments`/`CashTransaction` rows in one transaction, then re-runs `cashflowService.runTreasury`, builds a guard-verified `TreasuryAction`, a guard-rejected lender `AiDecision`, a VERIFIED `Insight`, and `agentsService.performance` | `server/src/app/modules/finance/simulator/simulator.service.ts` |
-| API | `POST /finance/simulator/fast-forward` (runs all 30 days, <1s typical on a local DB — see caveat below), `GET /finance/simulator/inspect?type=&id=` (returns the real row), `POST /finance/simulator/reset` (wipes only simulator-tagged rows) |
-| Client | `client/src/lib/simulator-context.tsx` drip-feeds the single response at 150ms/day (~4.5s) into three layers: a collapsible "Live Business Stream" drawer with a `[↗]` inspect action per row (Layer 1), in-place chart/gauge/insight/scorecard morphing on `/finance/cashflow`, `/finance/analysis`, `/finance/agent` (Layer 2), and up to two high-signal milestone toasts — 🚨 critical shortfall, 🛡️ guardrail-blocked offer, 📈 reconciled alpha (Layer 3) |
+| API | `POST /finance/simulator/fast-forward` (body: `{ shopId, template? }`, runs all 30 days, <1s typical on a local DB — see caveat below), `GET /finance/simulator/inspect?type=&id=` (returns the real row), `POST /finance/simulator/reset` (wipes only simulator-tagged rows) |
+| Launcher | Click the "Finance Simulator" entry at the bottom-left of the sidebar (above Help & Support) — a popup above the button runs/resets the simulator, toggles the live stream drawer, and holds the speed/template controls below |
+| Client | `client/src/lib/simulator-context.tsx` drip-feeds the response **one individual transaction row at a time** (not a whole day at once) at an adjustable delay — four presets (Slow/Normal/Fast/Turbo, 400/180/70/20 ms per transaction) plus a manual millisecond input, both live-adjustable mid-run — into three layers: a collapsible "Live Business Stream" drawer with a `[↗]` inspect action per row (Layer 1), in-place chart/gauge/insight/scorecard morphing on `/finance/cashflow`, `/finance/analysis`, `/finance/agent` (Layer 2), and up to two high-signal milestone toasts — 🚨 critical shortfall, 🛡️ guardrail-blocked offer, 📈 reconciled alpha (Layer 3) |
+| Transaction templates | `template: 'LESS'` (default, present pace — one sale + occasional expense/day) or `template: 'MORE'` (same daily totals fanned out into ~3x as many smaller, real rows/day) — chosen from the sidebar popup before a run; implemented in `simulatorEngine.ts`'s `sales[]`/`expenses[]` fan-out so the narrative/insight math (`sale`/`expense` aggregates) is unaffected by the template |
 
 **How "real, not staged" is enforced:** every row the simulator writes gets
 `isSimulated: true` + `simulationRunID` (additive migration, see
@@ -127,11 +129,14 @@ OPEN before the run so it only deletes what the run actually created.
 
 **Honest caveat:** "fast backend transaction" here means one Postgres
 transaction, not a literal sub-200ms wall-clock guarantee — on a remote/managed
-database the ~150 sequential writes a 30-day run performs will typically take
-low seconds, not milliseconds; the transaction timeout is set generously
-(30s) to avoid failing on slower connections. The drip-feed animation starts
-as soon as the single response arrives, so the perceived 4.5s playback is
-accurate regardless of backend latency.
+database the ~90 ('LESS') to ~280 ('MORE') sequential writes a 30-day run
+performs will typically take low seconds, not milliseconds; the transaction
+timeout is set generously (30s) to avoid failing on slower connections. The
+drip-feed animation starts as soon as the single response arrives and plays
+back at whatever per-transaction delay is currently selected, so perceived
+playback time is independent of backend latency — the sidebar popup shows a
+live "estimated total/remaining time" based on the chosen delay and the
+actual (or, before a run, a typical) transaction count.
 
 ## Honest limitations (v1, per PLAN §12)
 

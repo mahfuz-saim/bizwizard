@@ -16,6 +16,7 @@ import {
   buildGuardBlockedOfferScenario,
   buildReconciledTreasuryAction,
   type SimDayPlan,
+  type SimTemplate,
 } from './simulatorEngine';
 
 const db = () => prisma as any;
@@ -101,10 +102,15 @@ export const simulatorService = {
    * CashTransaction), then re-runs the real deterministic pipeline
    * (cashEngine projection, 9 alert rules, guard, counterfactual verifier,
    * agent scorecards) on top of it. Returns a day-by-day event list the
-   * frontend drip-feeds at 150ms/day, plus the final state every finance page
-   * needs to morph into (no extra round-trips).
+   * frontend drip-feeds at a user-adjustable per-transaction delay, plus the
+   * final state every finance page needs to morph into (no extra round-trips).
+   *
+   * `template` picks the transaction density: 'LESS' (default — present pace,
+   * one sale + occasional expense/day) or 'MORE' (~3x more, smaller rows/day).
+   * Either way every row is a real, tagged (isSimulated/simulationRunID) write
+   * into the owner's own shop — the template only changes how many rows.
    */
-  async fastForward(tenantId: string, shopId: string) {
+  async fastForward(tenantId: string, shopId: string, template?: SimTemplate) {
     const shop = await assertShop(tenantId, shopId);
     await ensureDefaultPolicies(db());
     await ensureCatalog(db());
@@ -119,7 +125,7 @@ export const simulatorService = {
 
     const simulationRunID = newRunId();
     const seed = seedFromString(`${shopId}:${simulationRunID}`);
-    const plan = buildSimulationPlan({ seed, asOf: new Date(), baselineDailyRevenue, baselineDailyOutflow });
+    const plan = buildSimulationPlan({ seed, asOf: new Date(), baselineDailyRevenue, baselineDailyOutflow, template });
 
     const buyer = await ensureSimulatorBuyer(tenantId);
     await ensureShopBuyerLink(tenantId, shopId, buyer);
@@ -135,56 +141,64 @@ export const simulatorService = {
         const events: DailyStreamEvent[] = [];
         let revenue = 0;
         let expenseTotal = 0;
+        // Every row within a day gets its own minute offset, in creation
+        // order (sales, then expenses, then debt issue/collect) — this keeps
+        // a stable, readable timestamp order for a day with several small
+        // transactions instead of everything landing at the same instant.
+        let minute = 1;
 
-        if (day.sale) {
+        for (const sale of day.sales) {
+          const checkoutAt = dayTimestamp(day.date, minute++);
           const checkout = await tx.checkout.create({
             data: {
               shopID: shopId, tenantID: tenantId, buyerID: null,
-              totalPrice: day.sale.amount, totalQuantity: day.sale.quantity, status: 'PAID',
-              isSimulated: true, simulationRunID, createdAt: dayTimestamp(day.date, 1),
-              items: { create: [{ tenantID: tenantId, productName: 'Simulated walk-in sale', unitPrice: day.sale.unitPrice, discountedPrice: day.sale.unitPrice, quantity: day.sale.quantity, createdAt: dayTimestamp(day.date, 1) }] },
+              totalPrice: sale.amount, totalQuantity: sale.quantity, status: 'PAID',
+              isSimulated: true, simulationRunID, createdAt: checkoutAt,
+              items: { create: [{ tenantID: tenantId, productName: 'Simulated walk-in sale', unitPrice: sale.unitPrice, discountedPrice: sale.unitPrice, quantity: sale.quantity, createdAt: checkoutAt }] },
             },
           });
           const cashTxn = await tx.cashTransaction.create({
             data: {
-              tenantID: tenantId, shopID: shopId, accountID: primary.id, direction: 'IN', amount: day.sale.amount,
-              category: 'SALES_COLLECTION', occurredAt: dayTimestamp(day.date, 2), description: 'Simulated daily sales',
+              tenantID: tenantId, shopID: shopId, accountID: primary.id, direction: 'IN', amount: sale.amount,
+              category: 'SALES_COLLECTION', occurredAt: dayTimestamp(day.date, minute++), description: 'Simulated daily sales',
               source: 'SIMULATOR', sourceRefID: checkout.id, status: 'CLEARED', isSimulated: true, simulationRunID,
             },
           });
-          revenue += day.sale.amount;
-          events.push({ type: 'CHECKOUT', id: checkout.id, amount: day.sale.amount, direction: 'IN', description: `Sale receipt · ${day.sale.quantity} item(s)`, occurredAt: cashTxn.occurredAt.toISOString() });
-          events.push({ type: 'CASH_TRANSACTION', id: cashTxn.id, amount: day.sale.amount, direction: 'IN', description: 'Sales collection cleared', occurredAt: cashTxn.occurredAt.toISOString() });
+          revenue += sale.amount;
+          events.push({ type: 'CHECKOUT', id: checkout.id, amount: sale.amount, direction: 'IN', description: `Sale receipt · ${sale.quantity} item(s)`, occurredAt: cashTxn.occurredAt.toISOString() });
+          events.push({ type: 'CASH_TRANSACTION', id: cashTxn.id, amount: sale.amount, direction: 'IN', description: 'Sales collection cleared', occurredAt: cashTxn.occurredAt.toISOString() });
         }
 
-        if (day.expense) {
+        for (const expense of day.expenses) {
           const expenseBucketID = await ensureExpenseBucket(tx, tenantId, shopId, day.date, expenseBucketCache);
+          const itemAt = dayTimestamp(day.date, minute++);
           const item = await tx.expenseItem.create({
             data: {
-              expenseID: expenseBucketID, tenantID: tenantId, amount: day.expense.amount, name: day.expense.label,
-              expenseType: day.expense.expenseType, isSimulated: true, simulationRunID, createdAt: dayTimestamp(day.date, 3),
+              expenseID: expenseBucketID, tenantID: tenantId, amount: expense.amount, name: expense.label,
+              expenseType: expense.expenseType, isSimulated: true, simulationRunID, createdAt: itemAt,
             },
           });
-          await tx.expense.update({ where: { id: expenseBucketID }, data: { totalAmount: { increment: day.expense.amount } } });
+          await tx.expense.update({ where: { id: expenseBucketID }, data: { totalAmount: { increment: expense.amount } } });
           const cashTxn = await tx.cashTransaction.create({
             data: {
-              tenantID: tenantId, shopID: shopId, accountID: primary.id, direction: 'OUT', amount: day.expense.amount,
-              category: CASH_CATEGORY_FOR_EXPENSE[day.expense.expenseType] ?? 'OPERATING_EXPENSE', occurredAt: dayTimestamp(day.date, 4),
-              description: day.expense.label, source: 'SIMULATOR', sourceRefID: item.id, status: 'CLEARED', isSimulated: true, simulationRunID,
+              tenantID: tenantId, shopID: shopId, accountID: primary.id, direction: 'OUT', amount: expense.amount,
+              category: CASH_CATEGORY_FOR_EXPENSE[expense.expenseType] ?? 'OPERATING_EXPENSE', occurredAt: dayTimestamp(day.date, minute++),
+              description: expense.label, source: 'SIMULATOR', sourceRefID: item.id, status: 'CLEARED', isSimulated: true, simulationRunID,
             },
           });
-          expenseTotal += day.expense.amount;
-          events.push({ type: 'EXPENSE_ITEM', id: item.id, amount: day.expense.amount, direction: 'OUT', description: day.expense.label, occurredAt: cashTxn.occurredAt.toISOString() });
-          events.push({ type: 'CASH_TRANSACTION', id: cashTxn.id, amount: day.expense.amount, direction: 'OUT', description: `${day.expense.label} cleared`, occurredAt: cashTxn.occurredAt.toISOString() });
+          expenseTotal += expense.amount;
+          events.push({ type: 'EXPENSE_ITEM', id: item.id, amount: expense.amount, direction: 'OUT', description: expense.label, occurredAt: cashTxn.occurredAt.toISOString() });
+          events.push({ type: 'CASH_TRANSACTION', id: cashTxn.id, amount: expense.amount, direction: 'OUT', description: `${expense.label} cleared`, occurredAt: cashTxn.occurredAt.toISOString() });
         }
 
         if (day.debtIssued) {
+          const checkoutAt = dayTimestamp(day.date, minute++);
           const checkout = await tx.checkout.create({
             data: {
               shopID: shopId, tenantID: tenantId, buyerID: buyer.userID,
               totalPrice: day.debtIssued.amount, totalQuantity: 1, status: 'UNPAID',
-              isSimulated: true, simulationRunID, createdAt: dayTimestamp(day.date, 5),
-              items: { create: [{ tenantID: tenantId, productName: day.debtIssued.label, unitPrice: day.debtIssued.amount, discountedPrice: day.debtIssued.amount, quantity: 1, createdAt: dayTimestamp(day.date, 5) }] },
+              isSimulated: true, simulationRunID, createdAt: checkoutAt,
+              items: { create: [{ tenantID: tenantId, productName: day.debtIssued.label, unitPrice: day.debtIssued.amount, discountedPrice: day.debtIssued.amount, quantity: 1, createdAt: checkoutAt }] },
             },
           });
           const debt = await tx.debt.create({
@@ -199,12 +213,12 @@ export const simulatorService = {
           const debt = await tx.debt.findUnique({ where: { id: smallDebtId } });
           if (debt && debt.status !== 'PAID') {
             const amount = roundCurrency(plan.smallDebtAmount);
-            const payment = await tx.debtPayments.create({ data: { debtId: smallDebtId, amount, isSimulated: true, simulationRunID, createdAt: dayTimestamp(day.date, 6) } });
+            const payment = await tx.debtPayments.create({ data: { debtId: smallDebtId, amount, isSimulated: true, simulationRunID, createdAt: dayTimestamp(day.date, minute++) } });
             await tx.debt.update({ where: { id: smallDebtId }, data: { paidAmount: amount, status: 'PAID' } });
             const cashTxn = await tx.cashTransaction.create({
               data: {
                 tenantID: tenantId, shopID: shopId, accountID: primary.id, direction: 'IN', amount,
-                category: 'INVOICE_PAYMENT', occurredAt: dayTimestamp(day.date, 7), description: 'Customer settled credit sale',
+                category: 'INVOICE_PAYMENT', occurredAt: dayTimestamp(day.date, minute++), description: 'Customer settled credit sale',
                 source: 'SIMULATOR', sourceRefID: payment.id, status: 'CLEARED', isSimulated: true, simulationRunID,
               },
             });

@@ -13,7 +13,7 @@ const guard = [auth(UserRole.ADMIN, UserRole.OWNER, UserRole.EMPLOYEE), verifyTe
 // business days into the owner's currently open shop in one fast transaction, then
 // re-runs the real deterministic pipeline (cashEngine, alerts, guard, verifier,
 // agent scorecards) on top of it. See server/docs/FINANCE_COPILOT.md.
-router.post('/fast-forward', ...guard, validateRequest(simulatorValidation.shopBody), simulatorController.fastForward);
+router.post('/fast-forward', ...guard, validateRequest(simulatorValidation.fastForward), simulatorController.fastForward);
 router.get('/inspect', ...guard, validateRequest(simulatorValidation.inspect), simulatorController.inspect);
 router.post('/reset', ...guard, validateRequest(simulatorValidation.shopBody), simulatorController.reset);
 

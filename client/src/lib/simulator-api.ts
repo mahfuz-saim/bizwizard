@@ -11,6 +11,11 @@ import { api, getShopId } from "./api"
 
 export type StreamEventType = "CHECKOUT" | "EXPENSE_ITEM" | "DEBT_PAYMENT" | "CASH_TRANSACTION"
 
+/** 'LESS' (default) keeps today's pace — one sale + occasional expense/day.
+ *  'MORE' fans the same daily totals out into ~3x as many smaller rows for a
+ *  visibly busier live stream. Either way every row is a real, tagged write. */
+export type SimTemplate = "LESS" | "MORE"
+
 export interface SimDailyStreamEvent {
   type: StreamEventType
   id: string
@@ -97,7 +102,8 @@ async function data(p: Promise<{ data?: unknown }>): Promise<any> {
 }
 
 export const simulatorApi = {
-  fastForward: () => data(api.post("/finance/simulator/fast-forward", { shopId: getShopId() })) as Promise<FastForwardResult>,
+  fastForward: (template?: SimTemplate) =>
+    data(api.post("/finance/simulator/fast-forward", { shopId: getShopId(), template })) as Promise<FastForwardResult>,
   reset: () => data(api.post("/finance/simulator/reset", { shopId: getShopId() })),
   inspect: (type: StreamEventType, id: string) =>
     data(api.get("/finance/simulator/inspect", { shopId: getShopId() ?? "", type, id })),

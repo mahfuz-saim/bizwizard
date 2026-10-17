@@ -29,9 +29,10 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { SPEED_PRESETS, useSimulator } from "@/lib/simulator-context"
+import { formatDurationMs, MAX_SPEED_MS, MIN_SPEED_MS, SPEED_PRESETS, TRANSACTION_TEMPLATES, useSimulator } from "@/lib/simulator-context"
 
 interface NavItem {
   label: string
@@ -64,9 +65,24 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
   const pathname = usePathname()
   const sim = useSimulator()
   const [simOpen, setSimOpen] = React.useState(false)
+  // Uncontrolled-by-design: keyed on sim.speedMs so picking a preset (or
+  // Apply succeeding) refreshes the shown default without needing an effect,
+  // while free typing in between stays local until Apply/Enter is pressed.
+  const [customMs, setCustomMs] = React.useState(String(sim.speedMs))
   const simPlaying = sim.status === "playing"
   const simLoading = sim.status === "loading"
   const simCanReset = sim.result != null && sim.status !== "loading"
+
+  const applyCustomSpeed = () => {
+    const parsed = Number(customMs)
+    if (Number.isFinite(parsed) && parsed > 0) sim.setSpeedMs(parsed)
+  }
+
+  const estimatedRowsForTemplate = TRANSACTION_TEMPLATES.find((t) => t.id === sim.template)?.estimatedRows ?? 90
+  const totalForEstimate = sim.totalEvents || estimatedRowsForTemplate
+  const remainingForEstimate = simPlaying ? Math.max(0, totalForEstimate - sim.revealedEvents) : totalForEstimate
+  const estimateMs = remainingForEstimate * sim.speedMs
+  const estimateLabel = simPlaying ? "Time remaining" : sim.result ? "Total time (last run)" : "Estimated total time"
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/"
@@ -149,7 +165,7 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
               <Zap className="h-4 w-4" /> Finance Simulator
             </div>
             <p className="mb-3 text-xs text-muted-foreground">
-              Runs 30 days of real, tagged transactions against your shop and streams them live — nothing here is staged.
+              Runs 30 days of real, tagged transactions against your shop and streams them in one at a time — nothing here is staged.
             </p>
 
             <div className="space-y-1">
@@ -182,7 +198,7 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
                 <>
                   <div className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Playing — day {sim.dayIndex}/30
+                    Day {sim.dayIndex}/30 · {sim.revealedEvents}/{sim.totalEvents} transactions
                   </div>
                   <button
                     onClick={() => sim.skipToEnd()}
@@ -207,7 +223,32 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
             </div>
 
             <div className="mt-3 border-t pt-2">
-              <p className="mb-1 px-2 text-[11px] font-medium text-muted-foreground">Playback speed (per simulated day)</p>
+              <p className="mb-1 px-2 text-[11px] font-medium text-muted-foreground">
+                Transaction template {simPlaying || simLoading ? "(applies to next run)" : ""}
+              </p>
+              <div className="grid grid-cols-2 gap-1 px-1">
+                {TRANSACTION_TEMPLATES.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => sim.setTemplate(t.id)}
+                    disabled={simPlaying || simLoading}
+                    className={cn(
+                      "rounded-md border px-2 py-1.5 text-left transition-colors disabled:pointer-events-none disabled:opacity-50",
+                      sim.template === t.id ? "border-brand-500 bg-brand-50 dark:bg-brand-950/40" : "border-border hover:bg-accent"
+                    )}
+                  >
+                    <span className="flex items-center gap-1 text-xs font-medium">
+                      {sim.template === t.id && <Check className="h-3 w-3" />}
+                      {t.label}
+                    </span>
+                    <span className="text-[10px] leading-snug text-muted-foreground">{t.description}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-3 border-t pt-2">
+              <p className="mb-1 px-2 text-[11px] font-medium text-muted-foreground">Playback speed (delay per transaction)</p>
               <div className="space-y-1">
                 {SPEED_PRESETS.map((p) => (
                   <button
@@ -217,10 +258,33 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
                   >
                     <span className="flex h-4 w-4 items-center justify-center">{sim.speedMs === p.ms ? <Check className="h-4 w-4" /> : null}</span>
                     {p.label}
-                    <span className="ml-auto text-xs text-muted-foreground">{p.ms}ms/day · {p.hint}</span>
+                    <span className="ml-auto text-xs text-muted-foreground">{p.ms}ms/txn · {p.hint}</span>
                   </button>
                 ))}
               </div>
+
+              <div className="mt-2 flex items-center gap-1.5 px-2">
+                <Input
+                  key={sim.speedMs}
+                  type="number"
+                  min={MIN_SPEED_MS}
+                  max={MAX_SPEED_MS}
+                  defaultValue={sim.speedMs}
+                  onChange={(e) => setCustomMs(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") applyCustomSpeed() }}
+                  className="h-7 w-20 text-xs"
+                  aria-label="Custom delay in milliseconds per transaction"
+                />
+                <span className="text-xs text-muted-foreground">ms/txn</span>
+                <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={applyCustomSpeed}>
+                  Apply
+                </Button>
+              </div>
+
+              <p className="mt-1.5 px-2 text-[11px] text-muted-foreground">
+                {sim.speedMs}ms/transaction · {estimateLabel.toLowerCase()}: ~{formatDurationMs(estimateMs)}
+                {!sim.result && " (estimate)"}
+              </p>
             </div>
 
             {sim.error && <p role="alert" className="mt-2 text-xs text-destructive">{sim.error}</p>}

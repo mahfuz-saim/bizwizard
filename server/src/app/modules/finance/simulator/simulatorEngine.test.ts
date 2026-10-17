@@ -78,6 +78,43 @@ test('buildSimulationPlan falls back to sane floors for a brand-new shop with ~0
   assert.ok(plan.anomalyAmount > 0);
 });
 
+test("buildSimulationPlan 'LESS' template mirrors sale/expense 1:1 and is identical to the untemplated plan", () => {
+  const input = { seed: seedFromString('shop-template'), asOf: ASOF, baselineDailyRevenue: 7000, baselineDailyOutflow: 4500 };
+  const untemplated = buildSimulationPlan(input);
+  const less = buildSimulationPlan({ ...input, template: 'LESS' as const });
+  assert.deepEqual(untemplated, less, "omitting template must behave exactly like template: 'LESS'");
+  for (const d of less.days) {
+    assert.equal(d.sales.length, d.sale ? 1 : 0);
+    assert.equal(d.expenses.length, d.expense ? 1 : 0);
+    if (d.sale) assert.equal(d.sales[0].amount, d.sale.amount);
+    if (d.expense) assert.equal(d.expenses[0].amount, d.expense.amount);
+  }
+});
+
+test("buildSimulationPlan 'MORE' template produces roughly 3x the transaction rows of 'LESS', and every day's split rows reconstruct that day's own sale total", () => {
+  const input = { seed: seedFromString('shop-template-2'), asOf: ASOF, baselineDailyRevenue: 9000, baselineDailyOutflow: 5500 };
+  const less = buildSimulationPlan({ ...input, template: 'LESS' as const });
+  const more = buildSimulationPlan({ ...input, template: 'MORE' as const });
+
+  const countRows = (plan: typeof less) => plan.days.reduce((n, d) => n + d.sales.length + d.expenses.length, 0);
+  const lessCount = countRows(less);
+  const moreCount = countRows(more);
+  assert.ok(moreCount > lessCount * 2, `expected 'MORE' (${moreCount} rows) to be well over 2x 'LESS' (${lessCount} rows)`);
+  // 'MORE' always fans a sale out into (at least) 3 rows/day.
+  assert.ok(more.days.every((d) => d.sales.length === 3));
+
+  // Each day's split sale rows must reconstruct that same day's own aggregate
+  // total exactly (no money invented or lost by the fan-out), for both plans.
+  for (const d of more.days) {
+    const splitTotal = d.sales.reduce((a, s) => a + s.amount, 0);
+    assert.ok(Math.abs(splitTotal - (d.sale?.amount ?? 0)) < 0.01);
+  }
+  for (const d of less.days) {
+    const splitTotal = d.sales.reduce((a, s) => a + s.amount, 0);
+    assert.ok(Math.abs(splitTotal - (d.sale?.amount ?? 0)) < 0.01);
+  }
+});
+
 test('amplifierTopUp grows with each retry attempt and stays deterministic per attempt', () => {
   const a1 = amplifierTopUp(1, 5000, 42);
   const a2 = amplifierTopUp(2, 5000, 42);

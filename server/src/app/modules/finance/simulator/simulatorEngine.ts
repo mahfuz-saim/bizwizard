@@ -41,12 +41,43 @@ const between = (rand: () => number, lo: number, hi: number) => lo + rand() * (h
 
 export type SimPhase = 'HEALTHY' | 'ANOMALY' | 'STRAIN' | 'CRISIS';
 
+/** 'LESS' keeps today's pace (one sale + occasional expense per day — this is
+ *  the "present data" behaviour). 'MORE' fans the SAME daily totals (plus a
+ *  touch of extra incidental spend) out into several smaller transactions so
+ *  the live stream feels roughly 3x busier, for shops that want a richer demo. */
+export type SimTemplate = 'LESS' | 'MORE';
+
+export const TRANSACTION_TEMPLATES: Array<{ id: SimTemplate; label: string; description: string }> = [
+  { id: 'LESS', label: 'Less transactions', description: 'Present pace — one sale and occasional expenses per day.' },
+  { id: 'MORE', label: 'More transactions', description: '~3x busier — several sales and expenses every day.' },
+];
+
+export interface SimSaleEntry {
+  amount: number;
+  quantity: number;
+  unitPrice: number;
+}
+
+export interface SimExpenseEntry {
+  amount: number;
+  label: string;
+  expenseType: 'GENERAL' | 'PRODUCT' | 'EMPLOYEE_SALARY';
+}
+
 export interface SimDayPlan {
   day: number; // 1..30
   date: string; // YYYY-MM-DD, day 30 === asOf
   phase: SimPhase;
-  sale: { amount: number; quantity: number; unitPrice: number } | null;
-  expense: { amount: number; label: string; expenseType: 'GENERAL' | 'PRODUCT' | 'EMPLOYEE_SALARY' } | null;
+  /** Aggregate daily figures — always a single number, independent of the
+   *  transaction template. The narrative/insight/test logic reads these. */
+  sale: SimSaleEntry | null;
+  expense: SimExpenseEntry | null;
+  /** What actually gets persisted as individual rows/stream events. Under the
+   *  'LESS' template these mirror `sale`/`expense` exactly (0 or 1 entries) so
+   *  behaviour is byte-identical to before this field existed. Under 'MORE'
+   *  the same totals (plus a little extra) are split into several entries. */
+  sales: SimSaleEntry[];
+  expenses: SimExpenseEntry[];
   debtIssued: { amount: number; label: string } | null;
   debtCollectsEarlierDebt: boolean; // true on the day the small demo debt is collected
 }
@@ -73,9 +104,36 @@ export interface SimulationPlanInput {
   baselineDailyRevenue: number;
   baselineDailyOutflow: number;
   horizonDays?: number;
+  /** Defaults to 'LESS' — unchanged present-day behaviour. */
+  template?: SimTemplate;
 }
 
 const EXPENSE_LABELS = ['Packaging materials', 'Utility bill', 'Staff tea & snacks', 'Transport & delivery', 'Shop maintenance'];
+
+/** Splits `total` into `parts` positive amounts that sum back to exactly
+ *  `roundCurrency(total)`. parts<=1 returns a single-element array without
+ *  consuming any randomness, so the 'LESS' template's rand() sequence (and
+ *  therefore every amount it produces) is completely unaffected by this
+ *  helper existing. */
+function splitAmount(rand: () => number, total: number, parts: number): number[] {
+  if (parts <= 1 || total <= 0) return [roundCurrency(total)];
+  const weights = Array.from({ length: parts }, () => between(rand, 0.55, 1.45));
+  const weightSum = weights.reduce((a, b) => a + b, 0);
+  const amounts = weights.map((w) => roundCurrency((total * w) / weightSum));
+  const sumSoFar = amounts.slice(0, -1).reduce((a, b) => a + b, 0);
+  amounts[amounts.length - 1] = roundCurrency(Math.max(0, total - sumSoFar));
+  return amounts;
+}
+
+/** Splits an integer quantity into `parts` whole pieces (min 1 each). Purely
+ *  cosmetic (feeds CheckoutItem.quantity) — never touches `rand`. */
+function splitQuantity(total: number, parts: number): number[] {
+  if (parts <= 1) return [Math.max(1, Math.round(total))];
+  const base = Math.max(1, Math.floor(total / parts));
+  const out = Array.from({ length: parts }, () => base);
+  out[out.length - 1] = Math.max(1, Math.round(total) - base * (parts - 1));
+  return out;
+}
 
 /**
  * Builds a 30-day (default) narrative that is guaranteed, by construction, to
@@ -87,6 +145,7 @@ const EXPENSE_LABELS = ['Packaging materials', 'Utility bill', 'Staff tea & snac
  */
 export function buildSimulationPlan(input: SimulationPlanInput): SimulationPlan {
   const horizonDays = input.horizonDays ?? 30;
+  const template: SimTemplate = input.template === 'MORE' ? 'MORE' : 'LESS';
   const rand = mulberry32(input.seed);
   const rev = Math.max(1500, roundCurrency(input.baselineDailyRevenue));
   const out = Math.max(800, roundCurrency(input.baselineDailyOutflow));
@@ -129,12 +188,47 @@ export function buildSimulationPlan(input: SimulationPlanInput): SimulationPlan 
     if (day === bigDebtDay) debtIssued = { amount: bigDebtAmount, label: 'Wholesale order on credit — Rahim Traders' };
     else if (day === smallDebtDay) debtIssued = { amount: smallDebtAmount, label: 'Local shop credit sale' };
 
+    const saleEntry: SimSaleEntry = { amount: saleAmount, quantity, unitPrice: roundCurrency(saleAmount / quantity) };
+
+    // --- Transaction-template fan-out: 'LESS' mirrors sale/expense 1:1 (zero
+    // extra rand() calls, so it is byte-identical to the pre-template plan).
+    // 'MORE' splits the same totals into several smaller rows, plus a small
+    // incidental expense on days that otherwise wouldn't have one. ---
+    const salesPerDay = template === 'MORE' ? 3 : 1;
+    const saleAmounts = splitAmount(rand, saleEntry.amount, salesPerDay);
+    const saleQuantities = splitQuantity(saleEntry.quantity, salesPerDay);
+    const sales: SimSaleEntry[] = saleAmounts.map((amount, i) => ({
+      amount,
+      quantity: saleQuantities[i],
+      unitPrice: roundCurrency(amount / Math.max(1, saleQuantities[i])),
+    }));
+
+    const expenses: SimExpenseEntry[] = [];
+    if (expense) {
+      const resolvedExpense = expense;
+      const expenseParts = template === 'MORE' && phase !== 'ANOMALY' ? 2 : 1;
+      const amounts = splitAmount(rand, resolvedExpense.amount, expenseParts);
+      amounts.forEach((amount, i) => expenses.push({
+        amount,
+        label: expenseParts > 1 ? `${resolvedExpense.label} (${i + 1}/${expenseParts})` : resolvedExpense.label,
+        expenseType: resolvedExpense.expenseType,
+      }));
+    } else if (template === 'MORE' && phase === 'HEALTHY') {
+      expenses.push({
+        amount: roundCurrency(out * between(rand, 0.12, 0.28)),
+        label: EXPENSE_LABELS[(day + 2) % EXPENSE_LABELS.length],
+        expenseType: 'GENERAL',
+      });
+    }
+
     days.push({
       day,
       date,
       phase,
-      sale: { amount: saleAmount, quantity, unitPrice: roundCurrency(saleAmount / quantity) },
+      sale: saleEntry,
       expense,
+      sales,
+      expenses,
       debtIssued,
       debtCollectsEarlierDebt: day === smallDebtCollectDay,
     });

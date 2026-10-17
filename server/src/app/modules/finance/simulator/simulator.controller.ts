@@ -9,7 +9,7 @@ const shop = (req: Request) => (req.query.shopId ?? req.body?.shopId) as string;
 
 export const simulatorController = {
   fastForward: catchAsync(async (req: Request, res: Response) => {
-    const result = await simulatorService.fastForward(tenant(req), req.body.shopId);
+    const result = await simulatorService.fastForward(tenant(req), req.body.shopId, req.body.template);
     sendResponse(res, {
       success: true,
       statusCode: httpStatus.OK,
