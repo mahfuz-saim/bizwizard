@@ -123,90 +123,102 @@ const sendNotification = async (payload: INotification) => {
     return notifyResult;
 };
 
+export const notificationVisibility = (
+    shopId: string,
+    user: JwtPayload,
+    tenantId: string,
+): Prisma.NotificationWhereInput => ({
+    tenantID: tenantId,
+    AND: [
+        { OR: [{ userId: null }, { userId: user.userID }] },
+        { OR: [{ shopId: null }, { shopId }] },
+        {
+            OR: [
+                { userId: user.userID },
+                { shopId },
+                { role: { has: user.role } },
+                { isPublic: true },
+            ],
+        },
+    ],
+});
+
+const assertShopAccess = async (
+    shopId: string,
+    user: JwtPayload,
+    tenantId: string,
+) => {
+    const shop = await prisma.shop.findFirst({
+        where: { id: shopId, tenantID: tenantId },
+        select: { id: true },
+    });
+    if (!shop) throw new ApiError(httpStatus.NOT_FOUND, 'Shop not found');
+    if (user.role === 'EMPLOYEE') {
+        const employee = await prisma.employee.findFirst({
+            where: {
+                userID: user.userID,
+                tenantID: tenantId,
+                shopID: shopId,
+                isDeleted: false,
+            },
+        });
+        if (!employee)
+            throw new ApiError(
+                httpStatus.FORBIDDEN,
+                'You do not have access to this shop',
+            );
+    }
+};
+
 const getNotifications = async (
     shopId: string,
     user: JwtPayload,
     tenantId: string,
 ) => {
-    // Validate shop belongs to tenant if shopId is provided
-    if (shopId) {
-        const shop = await prisma.shop.findFirst({
-            where: {
-                id: shopId,
-                tenantID: tenantId,
-            },
-            select: { id: true },
-        });
-        if (!shop) {
-            throw new ApiError(
-                httpStatus.NOT_FOUND,
-                'Shop not found or does not belong to this tenant',
-            );
-        }
-    }
-    const notifications = await prisma.notification.findMany({
-        where: {
-            tenantID: tenantId,
-            OR: [
-                {
-                    shopId: shopId,
-                },
-                {
-                    role: {
-                        has: user.role,
-                    },
-                },
-                {
-                    isPublic: true,
-                },
-            ],
-        },
+    await assertShopAccess(shopId, user, tenantId);
+    return prisma.notification.findMany({
+        where: notificationVisibility(shopId, user, tenantId),
         include: {
-            ReadStatus: {
-                where: {
-                    userId: user.userID,
-                    tenantID: tenantId,
-                },
-            },
+            ReadStatus: { where: { userId: user.userID, tenantID: tenantId } },
         },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
-    return notifications;
 };
 
 const markNotificationAsRead = async (
     notificationId: string,
     user: JwtPayload,
     tenantId: string,
+    shopId: string,
 ) => {
+    await assertShopAccess(shopId, user, tenantId);
     const notification = await prisma.notification.findFirst({
         where: {
             id: notificationId,
-            tenantID: tenantId,
-            OR: [
-                {
-                    role: {
-                        has: user.role,
-                    },
-                },
-                {
-                    isPublic: true,
-                },
-            ],
+            ...notificationVisibility(shopId, user, tenantId),
         },
     });
-
-    if (!notification) {
+    if (!notification)
         throw new ApiError(httpStatus.NOT_FOUND, 'Notification not found');
-    }
-    const result = await prisma.notificationRead.create({
-        data: {
-            notificationId: notification.id,
-            isRead: true,
+    // Serialize per notification so retries/concurrent tabs do not create duplicate read rows.
+    return prisma.$transaction(async tx => {
+        await tx.notification.update({
+            where: { id: notificationId },
+            data: { updatedAt: new Date() },
+        });
+        const where = {
+            notificationId,
             userId: user.userID,
             tenantID: tenantId,
-        },
+        };
+        const existing = await tx.notificationRead.findFirst({ where });
+        if (existing)
+            return tx.notificationRead.update({
+                where: { id: existing.id },
+                data: { isRead: true },
+            });
+        return tx.notificationRead.create({ data: { ...where, isRead: true } });
     });
-    return result;
 };
 
 const sendSyncTrigger = async (
