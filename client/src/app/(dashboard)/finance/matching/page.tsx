@@ -132,7 +132,7 @@ export default function MatchingPage() {
           <CardHeader><CardTitle className="text-base">Negotiation — Lender agent vs Borrower agent</CardTitle></CardHeader>
           <CardContent className="space-y-2">
             {transcript.map((t, i) => (
-              <div key={t.id ?? i} className={`max-w-[85%] rounded-lg p-3 text-sm ${t.fromParty === "LENDER_AGENT" ? "bg-muted" : "ml-auto bg-brand-50 dark:bg-brand-950"}`}>
+              <div key={t.id ?? i} className={`max-w-[85%] rounded-lg p-3 text-sm ${t.fromParty === "LENDER_AGENT" ? "bg-muted" : "ml-auto bg-brand-50 text-brand-900 dark:bg-brand-900/40 dark:text-brand-100"}`}>
                 <p className="text-xs font-medium">{t.fromParty.replace("_", " ")} · round {t.round}</p>
                 <p>{t.message}</p><p className="text-xs text-muted-foreground">{t.reasoning}</p>
               </div>

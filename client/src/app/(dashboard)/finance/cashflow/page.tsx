@@ -5,14 +5,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { AlertTriangle, Bot, Check, Loader2, Play, RefreshCw, Wallet, X } from "lucide-react"
+import { AlertTriangle, Bot, Check, Loader2, Play, RefreshCw, TrendingDown, Wallet, X } from "lucide-react"
 import { cashflowApi, fmtBDT, type CashAlert } from "@/lib/finance-api"
+import { lerp, useSimulator } from "@/lib/simulator-context"
 
 type Bucket = { date: string; inflow: number; outflow: number; closingBalance: number }
+type Projection = { dailyBuckets: Bucket[]; daysOfBuffer: number; minProjectedBalance: number; troughDate: string | null; shortfallDate: string | null; closingBalance: number; currentCash: number; narrative?: string | null }
 
 export default function CashflowPage() {
+  const sim = useSimulator()
   const [accounts, setAccounts] = React.useState<{ accounts: { id: string; name: string; accountType: string; currentBalance: number }[]; totalCash: number } | null>(null)
-  const [projection, setProjection] = React.useState<{ dailyBuckets: Bucket[]; daysOfBuffer: number; minProjectedBalance: number; troughDate: string | null; shortfallDate: string | null; closingBalance: number; currentCash: number; narrative?: string | null } | null>(null)
+  const [projection, setProjection] = React.useState<Projection | null>(null)
   const [alerts, setAlerts] = React.useState<CashAlert[]>([])
   const [actions, setActions] = React.useState<{ id: string; title: string; rationale: string; projectedImpact: number; realizedImpact: number | null; status: string }[]>([])
   const [commitments, setCommitments] = React.useState<{ id: string; name: string; amount: number; dueDate: string }[]>([])
@@ -41,15 +44,44 @@ export default function CashflowPage() {
   }, [])
 
   React.useEffect(() => { void load() }, [load])
+  // Refetch the real, persisted numbers once a simulator run (or reset) lands —
+  // the drip-feed below only animates between two authentic states, it never
+  // invents its own data.
+  React.useEffect(() => { if (sim.completedAt > 0) void load() }, [sim.completedAt, load])
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true)
     try { await fn(); await load() } catch (e) { setError(e instanceof Error ? e.message : "Action failed") } finally { setBusy(false) }
   }
 
-  const buckets = projection?.dailyBuckets ?? []
+  // Layer 2: while a simulator run is playing, morph the chart/gauge from the
+  // pre-run projection to the simulator's real post-run projection in lockstep
+  // with the day-by-day drip feed, instead of jump-cutting at the end.
+  const [baseline, setBaseline] = React.useState<Projection | null>(null)
+  React.useEffect(() => {
+    if (sim.status === "playing" && sim.dayIndex === 0) setBaseline(projection)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sim.status, sim.dayIndex === 0])
+
+  const simProjection = sim.result?.finalState.projection
+  const morphing = sim.status === "playing" && !!simProjection && !!baseline
+  const displayProjection: Projection | null = morphing
+    ? {
+        ...simProjection!,
+        daysOfBuffer: Math.round(lerp(baseline!.daysOfBuffer, simProjection!.daysOfBuffer, sim.progress)),
+        dailyBuckets: simProjection!.dailyBuckets.map((b, i) => ({
+          ...b,
+          closingBalance: lerp(baseline!.dailyBuckets[i]?.closingBalance ?? b.closingBalance, b.closingBalance, sim.progress),
+        })),
+      }
+    : projection
+
+  const buckets = displayProjection?.dailyBuckets ?? []
   const min = Math.min(0, ...buckets.map((b) => b.closingBalance))
   const max = Math.max(1, ...buckets.map((b) => b.closingBalance))
+  const troughIndex = displayProjection?.troughDate ? buckets.findIndex((b) => b.date === displayProjection.troughDate) : -1
+  const showTroughMarker = troughIndex >= 0 && (sim.progress > 0.35 || sim.status !== "playing") && (displayProjection?.minProjectedBalance ?? 1) < (displayProjection?.currentCash ?? 1) * 0.3
+  const bufferLow = (displayProjection?.daysOfBuffer ?? 99) < 14
 
   return (
     <div className="space-y-6">
@@ -67,19 +99,28 @@ export default function CashflowPage() {
       {error && <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-        <Card><CardContent className="p-4"><p className="flex items-center gap-1 text-xs text-muted-foreground"><Wallet className="h-3.5 w-3.5" /> Cash now</p><p className="mt-1 text-2xl font-bold">{fmtBDT(projection?.currentCash ?? accounts?.totalCash)}</p>{(accounts?.accounts ?? []).map((a) => <p key={a.id} className="text-xs text-muted-foreground">{a.name}: {fmtBDT(a.currentBalance)}</p>)}</CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Days of buffer</p><p className="mt-1 text-2xl font-bold">{projection?.daysOfBuffer ?? "—"}</p><p className="text-xs text-muted-foreground">Target: 14 days</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Lowest point (90d)</p><p className="mt-1 text-2xl font-bold">{fmtBDT(projection?.minProjectedBalance)}</p><p className="text-xs text-muted-foreground">{projection?.troughDate ?? ""}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Shortfall</p><p className="mt-1 text-2xl font-bold">{projection?.shortfallDate ?? "None"}</p><p className="text-xs text-muted-foreground">Projected closing: {fmtBDT(projection?.closingBalance)}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="flex items-center gap-1 text-xs text-muted-foreground"><Wallet className="h-3.5 w-3.5" /> Cash now</p><p className="mt-1 text-2xl font-bold">{fmtBDT(displayProjection?.currentCash ?? accounts?.totalCash)}</p>{(accounts?.accounts ?? []).map((a) => <p key={a.id} className="text-xs text-muted-foreground">{a.name}: {fmtBDT(a.currentBalance)}</p>)}</CardContent></Card>
+        <Card className={bufferLow ? "border-destructive/50" : undefined}><CardContent className="p-4"><p className="text-xs text-muted-foreground">Days of buffer</p><p className={`mt-1 text-2xl font-bold transition-colors duration-500 ${bufferLow ? "text-destructive" : ""}`}>{displayProjection?.daysOfBuffer ?? "—"}</p><p className="text-xs text-muted-foreground">Target: 14 days{bufferLow ? " · below target" : ""}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Lowest point (90d)</p><p className="mt-1 text-2xl font-bold">{fmtBDT(displayProjection?.minProjectedBalance)}</p><p className="text-xs text-muted-foreground">{displayProjection?.troughDate ?? ""}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Shortfall</p><p className="mt-1 text-2xl font-bold">{displayProjection?.shortfallDate ?? "None"}</p><p className="text-xs text-muted-foreground">Projected closing: {fmtBDT(displayProjection?.closingBalance)}</p></CardContent></Card>
       </div>
 
       <Card>
         <CardHeader><CardTitle className="text-base">Projected balance — next 90 days</CardTitle></CardHeader>
         <CardContent>
-          {projection?.narrative && <p className="mb-3 flex gap-2 text-sm text-muted-foreground"><Bot className="mt-0.5 h-4 w-4 shrink-0" />{projection.narrative}</p>}
-          <div className="flex h-48 items-end gap-[2px]" role="img" aria-label="90-day projected cash balance chart">
-            {buckets.map((b) => (
-              <div key={b.date} title={`${b.date}: ${fmtBDT(b.closingBalance)}`} className={`flex-1 rounded-t ${b.closingBalance < 0 ? "bg-destructive" : "bg-gradient-to-t from-brand-600 to-brand-400"}`} style={{ height: `${Math.max(2, ((b.closingBalance - min) / (max - min || 1)) * 100)}%` }} />
+          {displayProjection?.narrative && <p className="mb-3 flex gap-2 text-sm text-muted-foreground"><Bot className="mt-0.5 h-4 w-4 shrink-0" />{displayProjection.narrative}</p>}
+          <div className="relative flex h-48 items-end gap-[2px]" role="img" aria-label="90-day projected cash balance chart">
+            {showTroughMarker && (
+              <div
+                className="animate-in fade-in pointer-events-none absolute -top-6 flex -translate-x-1/2 flex-col items-center text-destructive duration-500"
+                style={{ left: `${(troughIndex / Math.max(1, buckets.length - 1)) * 100}%` }}
+              >
+                <span className="flex items-center gap-1 whitespace-nowrap rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-semibold"><TrendingDown className="h-3 w-3" /> trough {fmtBDT(displayProjection?.minProjectedBalance)}</span>
+                <span className="h-5 w-px bg-destructive" />
+              </div>
+            )}
+            {buckets.map((b, i) => (
+              <div key={b.date} title={`${b.date}: ${fmtBDT(b.closingBalance)}`} className={`flex-1 rounded-t transition-[height] duration-150 ${b.closingBalance < 0 ? "bg-destructive" : i === troughIndex && showTroughMarker ? "bg-destructive/70" : "bg-gradient-to-t from-brand-600 to-brand-400"}`} style={{ height: `${Math.max(2, ((b.closingBalance - min) / (max - min || 1)) * 100)}%` }} />
             ))}
           </div>
           <div className="mt-2 flex justify-between text-[10px] text-muted-foreground"><span>Today</span><span>+45d</span><span>+90d</span></div>

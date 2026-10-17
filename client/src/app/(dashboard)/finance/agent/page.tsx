@@ -7,11 +7,15 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Bot, Download, Loader2 } from "lucide-react"
 import { agentsApi, fmtBDT } from "@/lib/finance-api"
+import { useSimulator } from "@/lib/simulator-context"
+import { useCountUp } from "@/lib/use-count-up"
+import { formatNumber } from "@/lib/utils"
 
 type Policy = { id: string; agentType: string; name: string; objective: string; riskAppetite: number; maxExposure: number | null; bufferTargetDays: number | null; version: number }
 type Perf = { agentType: string; decisionsCount: number; executedCount: number; guardRejects: number; realizedImpactSum: number; benchmarkImpact: number; alpha: number; score: number; benchmarkPolicyVersion: string }
 
 export default function AgentLedgerPage() {
+  const sim = useSimulator()
   const [policies, setPolicies] = React.useState<Policy[]>([])
   const [performance, setPerformance] = React.useState<Perf[]>([])
   const [decisions, setDecisions] = React.useState<{ id: string; agentType: string; action: string; rationale: string; confidence: number; projectedImpact: number; realizedImpact: number | null; guardResult: string; status: string; model: string }[]>([])
@@ -33,6 +37,10 @@ export default function AgentLedgerPage() {
     } catch (e) { setError(e instanceof Error ? e.message : "Could not load the agent ledger.") }
   }, [])
   React.useEffect(() => { void load() }, [load])
+  // The simulator's TREASURER_AGENT reconciliation lands realizedImpact and
+  // moves alpha for real — refetch once the run (or a reset) completes so
+  // the scorecard below animates from the actual before/after, not a guess.
+  React.useEffect(() => { if (sim.completedAt > 0) void load() }, [sim.completedAt, load])
 
   const save = async (policy: Policy) => {
     const draft = drafts[policy.id]
@@ -79,15 +87,7 @@ export default function AgentLedgerPage() {
           <table className="w-full text-sm">
             <thead><tr className="text-left text-muted-foreground"><th className="py-1">Agent</th><th>Decisions</th><th>Executed</th><th>Guard rejects</th><th>Realized</th><th>Benchmark</th><th>Alpha</th><th>Score</th></tr></thead>
             <tbody>
-              {performance.map((p) => (
-                <tr key={p.agentType} className="border-t">
-                  <td className="py-2 font-medium">{p.agentType.replaceAll("_", " ")}</td>
-                  <td>{p.decisionsCount}</td><td>{p.executedCount}</td><td>{p.guardRejects}</td>
-                  <td>{fmtBDT(p.realizedImpactSum)}</td><td>{fmtBDT(p.benchmarkImpact)}</td>
-                  <td className={p.alpha >= 0 ? "font-semibold text-emerald-600" : "font-semibold text-destructive"}>{fmtBDT(p.alpha)}</td>
-                  <td>{p.score.toFixed(0)}/100</td>
-                </tr>
-              ))}
+              {performance.map((p) => <PerfRow key={p.agentType} p={p} />)}
               {performance.length === 0 && <tr><td colSpan={8} className="py-3 text-muted-foreground">No scorecard yet — run a treasury, matching or analysis flow first.</td></tr>}
             </tbody>
           </table>
@@ -136,10 +136,10 @@ export default function AgentLedgerPage() {
           <Card>
             <CardHeader><CardTitle className="text-base">AI runs &amp; budget</CardTitle></CardHeader>
             <CardContent>
-              <p className="text-sm">Spent this month: <strong>${(runs?.spentUsdThisMonth ?? 0).toFixed(4)}</strong> of ${(runs?.budgetUsd ?? 2).toFixed(2)} budget. Deterministic-fallback runs cost $0.</p>
+              <p className="text-sm">Spent this month: <strong>${formatNumber(runs?.spentUsdThisMonth ?? 0)}</strong> of ${formatNumber(runs?.budgetUsd ?? 2)} budget. Deterministic-fallback runs cost $0.</p>
               <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
                 {(runs?.runs ?? []).slice(0, 12).map((r) => (
-                  <p key={r.id} className="flex justify-between text-xs text-muted-foreground"><span>{r.purpose} · {r.model}</span><span>{r.status} · {r.latencyMs}ms · ${r.costUsd.toFixed(4)}</span></p>
+                  <p key={r.id} className="flex justify-between text-xs text-muted-foreground"><span>{r.purpose} · {r.model}</span><span>{r.status} · {r.latencyMs}ms · ${formatNumber(r.costUsd)}</span></p>
                 ))}
               </div>
             </CardContent>
@@ -147,5 +147,21 @@ export default function AgentLedgerPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+/** One scorecard row — isolated so its alpha/realized counters can animate independently when the simulator reconciles a treasury action. */
+function PerfRow({ p }: { p: Perf }) {
+  const realized = useCountUp(p.realizedImpactSum)
+  const alpha = useCountUp(p.alpha)
+  const justUpdated = Math.abs(alpha - p.alpha) > 0.5
+  return (
+    <tr className="border-t">
+      <td className="py-2 font-medium">{p.agentType.replaceAll("_", " ")}</td>
+      <td>{p.decisionsCount}</td><td>{p.executedCount}</td><td>{p.guardRejects}</td>
+      <td className={justUpdated ? "text-emerald-600 transition-colors" : ""}>{fmtBDT(realized)}</td><td>{fmtBDT(p.benchmarkImpact)}</td>
+      <td className={`font-semibold transition-colors ${alpha >= 0 ? "text-emerald-600" : "text-destructive"}`}>{fmtBDT(alpha)}</td>
+      <td>{p.score.toFixed(0)}/100</td>
+    </tr>
   )
 }

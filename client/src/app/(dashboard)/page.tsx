@@ -22,7 +22,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { cn, formatCurrency } from "@/lib/utils"
+import { cn, formatCurrency, formatNumber } from "@/lib/utils"
 import { useStore } from "@/lib/store"
 import { RecentTransactions } from "@/components/recent-transactions"
 import { LowStockAlert } from "@/components/low-stock-alert"
@@ -135,7 +135,7 @@ export default function DashboardPage() {
           label="Today's Profit"
           value={formatCurrency(stats.todayProfit)}
           subLabel="vs yesterday"
-          subValue={`${profitChange >= 0 ? "+" : ""}${profitChange.toFixed(1)}%`}
+          subValue={`${profitChange >= 0 ? "+" : ""}${formatNumber(profitChange)}%`}
           icon={TrendingUp}
           trend={profitChange >= 0 ? "up" : "down"}
         />

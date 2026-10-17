@@ -166,6 +166,12 @@
   }
   html, body {
     height: 100%;
+    /* The dashboard shell owns a single internal scroll region (<main>),
+       and every pre-auth/error screen below scrolls itself too. Without
+       this, a sub-pixel/portal overflow could let the document grow past
+       the viewport and show its own scrollbar alongside the shell's —
+       a "double scrollbar" that scrolled inconsistently from the real one. */
+    overflow: hidden;
   }
   body {
     background-color: var(--background);

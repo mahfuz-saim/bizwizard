@@ -7,9 +7,12 @@ import { UserCog, Plus, Shield, Calendar, Phone } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { formatDate, generateAvatarColor, getInitials } from "@/lib/utils"
+import { usePagination } from "@/lib/use-pagination"
+import { PaginationBar } from "@/components/ui/pagination-bar"
 
 export default function EmployeesPage() {
   const { employees, session } = useStore()
+  const { page, setPage, pageCount, pageItems, rangeStart, rangeEnd, total } = usePagination(employees, 10)
   if (session?.role === "EMPLOYEE") return <p>Staff records are available to the shop owner only.</p>
   return (
     <div className="space-y-6">
@@ -28,8 +31,11 @@ export default function EmployeesPage() {
 
       <Card>
         <CardHeader><CardTitle className="text-base">Team Members</CardTitle></CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-2">
-          {employees.map((e) => (
+        <CardContent className="p-0">
+        <div className="grid gap-3 p-6 md:grid-cols-2">
+          {employees.length === 0 ? (
+            <p className="col-span-full py-10 text-center text-sm text-muted-foreground">No staff records yet.</p>
+          ) : pageItems.map((e) => (
             <div key={e.id} className="flex items-center gap-3 rounded-lg border p-4">
               <Avatar className="h-12 w-12" style={{ backgroundColor: generateAvatarColor(e.name) }}>
                 <AvatarFallback className="bg-transparent text-white">{getInitials(e.name)}</AvatarFallback>
@@ -44,6 +50,16 @@ export default function EmployeesPage() {
               </Badge>
             </div>
           ))}
+        </div>
+          <PaginationBar
+            page={page}
+            pageCount={pageCount}
+            onPageChange={setPage}
+            rangeStart={rangeStart}
+            rangeEnd={rangeEnd}
+            total={total}
+            itemLabel="employees"
+          />
         </CardContent>
       </Card>
     </div>

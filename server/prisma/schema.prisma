@@ -442,6 +442,10 @@ model Debt {
   debtPayments DebtPayments[]
   status       DebtStatus     @default(UNPAID)
 
+  // Finance Copilot simulator flag — see Checkout.isSimulated.
+  isSimulated     Boolean @default(false)
+  simulationRunID String?
+
   @@unique([checkoutID, buyerID, shopID])
   @@index([tenantID])
   @@index([shopID])
@@ -465,7 +469,12 @@ model DebtPayments {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Finance Copilot simulator flag — see Checkout.isSimulated.
+  isSimulated     Boolean @default(false)
+  simulationRunID String?
+
   @@index([debtId])
+  @@index([isSimulated])
 }
 
 model BuyerDebtLedger {
@@ -681,10 +690,17 @@ model Checkout {
   soldByEmployee   Employee?      @relation(fields: [soldByEmployeeId], references: [userID])
   pin              Int? // Personal Identification Number for verification
 
+  // SME Finance Copilot simulator (judge-facing demo tool, PLAN simulator addendum):
+  // rows written by POST /finance/simulator/fast-forward are flagged so they can
+  // be told apart from real bookkeeping and wiped by POST /finance/simulator/reset.
+  isSimulated     Boolean @default(false)
+  simulationRunID String?
+
   @@index([tenantID])
   @@index([shopID, createdAt])
   @@index([buyerID])
   @@index([status])
+  @@index([shopID, isSimulated])
   @@map("checkouts")
 }
 
@@ -1050,11 +1066,16 @@ model ExpenseItem {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Finance Copilot simulator flag — see Checkout.isSimulated.
+  isSimulated     Boolean @default(false)
+  simulationRunID String?
+
   @@index([tenantID])
   @@index([expenseID])
   @@index([shopVariantId])
   @@index([lotId])
   @@index([supplierId])
+  @@index([isSimulated])
   @@map("expense_item")
 }
 
@@ -1649,6 +1670,7 @@ enum CashTransactionSource {
   TRANSFER
   AI_SUGGESTED
   BACKFILL
+  SIMULATOR
 }
 
 enum CashTransactionStatus {
@@ -1983,6 +2005,10 @@ model FinancingOffer {
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
 
+  // Finance Copilot simulator flag — see Checkout.isSimulated.
+  isSimulated     Boolean @default(false)
+  simulationRunID String?
+
   @@index([tenantID, shopID])
   @@index([financeProductID])
   @@map("financing_offers")
@@ -2089,9 +2115,14 @@ model CashTransaction {
   createdAt          DateTime              @default(now())
   updatedAt          DateTime              @updatedAt
 
+  // Finance Copilot simulator flag — see Checkout.isSimulated.
+  isSimulated     Boolean @default(false)
+  simulationRunID String?
+
   @@index([tenantID, shopID, occurredAt])
   @@index([accountID])
   @@index([sourceRefID])
+  @@index([isSimulated])
   @@map("cash_transactions")
 }
 
@@ -2162,6 +2193,10 @@ model CashAlert {
   notificationID     String?
   createdAt          DateTime        @default(now())
 
+  // Finance Copilot simulator flag — see Checkout.isSimulated.
+  isSimulated     Boolean @default(false)
+  simulationRunID String?
+
   @@index([tenantID, shopID, status])
   @@map("cash_alerts")
 }
@@ -2186,6 +2221,10 @@ model TreasuryAction {
   executedAt            DateTime?
   reconciledAt          DateTime?
   createdAt             DateTime             @default(now())
+
+  // Finance Copilot simulator flag — see Checkout.isSimulated.
+  isSimulated     Boolean @default(false)
+  simulationRunID String?
 
   @@index([tenantID, shopID, status])
   @@index([agentPolicyID])
@@ -2229,6 +2268,10 @@ model Insight {
   status             InsightStatus      @default(NEW)
   linkedActionID     String?
   createdAt          DateTime           @default(now())
+
+  // Finance Copilot simulator flag — see Checkout.isSimulated.
+  isSimulated     Boolean @default(false)
+  simulationRunID String?
 
   @@index([tenantID, shopID, verificationStatus])
   @@map("insights")
@@ -2333,6 +2376,10 @@ model AiDecision {
   status         AiDecisionStatus @default(PROPOSED)
   decidedAt      DateTime         @default(now())
   reconciledAt   DateTime?
+
+  // Finance Copilot simulator flag — see Checkout.isSimulated.
+  isSimulated     Boolean @default(false)
+  simulationRunID String?
 
   @@index([tenantID, shopID, agentType])
   @@map("ai_decisions")

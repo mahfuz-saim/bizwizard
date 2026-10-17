@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useStore } from "@/lib/store"
 import { formatCurrency, generateAvatarColor, getInitials } from "@/lib/utils"
+import { usePagination } from "@/lib/use-pagination"
+import { PaginationBar } from "@/components/ui/pagination-bar"
 
 export default function CustomersPage() {
   const { customers } = useStore()
@@ -21,6 +23,12 @@ export default function CustomersPage() {
       (c) => c.name.toLowerCase().includes(q) || c.phone.includes(q)
     )
   }, [customers, search])
+
+  const { page, setPage, pageCount, pageItems, rangeStart, rangeEnd, total } = usePagination(
+    filtered,
+    12,
+    search
+  )
 
   const totalDue = customers.reduce((s, c) => s + c.totalDue, 0)
 
@@ -62,13 +70,14 @@ export default function CustomersPage() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+        <CardContent className="p-0">
+        <div className="grid grid-cols-1 gap-3 p-6 md:grid-cols-2 lg:grid-cols-3">
           {filtered.length === 0 ? (
             <p className="col-span-full py-10 text-center text-sm text-muted-foreground">
               <Users className="mx-auto mb-2 h-8 w-8 opacity-50" />
               No customers found
             </p>
-          ) : filtered.map((c) => (
+          ) : pageItems.map((c) => (
             <div key={c.id} className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:border-brand-400 hover:shadow-sm">
               <Avatar className="h-11 w-11" style={{ backgroundColor: generateAvatarColor(c.name) }}>
                 <AvatarFallback className="bg-transparent text-white">{getInitials(c.name)}</AvatarFallback>
@@ -88,6 +97,16 @@ export default function CustomersPage() {
               </div>
             </div>
           ))}
+        </div>
+          <PaginationBar
+            page={page}
+            pageCount={pageCount}
+            onPageChange={setPage}
+            rangeStart={rangeStart}
+            rangeEnd={rangeEnd}
+            total={total}
+            itemLabel="customers"
+          />
         </CardContent>
       </Card>
     </div>

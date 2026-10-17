@@ -40,6 +40,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatCurrency, generateAvatarColor, getInitials } from "@/lib/utils"
 import { useStore } from "@/lib/store"
+import { usePagination } from "@/lib/use-pagination"
+import { PaginationBar } from "@/components/ui/pagination-bar"
 import type { Product } from "@/lib/types"
 import { AddProductDialog } from "@/components/inventory/add-product-dialog"
 import { BuyStockDialog } from "@/components/inventory/buy-stock-dialog"
@@ -118,6 +120,12 @@ export default function InventoryPage() {
     }
     return list
   }, [products, search, categoryFilter, stockFilter, sortBy])
+
+  const { page, setPage, pageCount, pageItems, rangeStart, rangeEnd, total } = usePagination(
+    filtered,
+    10,
+    `${search}|${categoryFilter}|${stockFilter}|${sortBy}`
+  )
 
   const totalStockValue = products.reduce((s, p) => s + p.stock * p.buyPrice, 0)
   const lowCount = products.filter((p) => p.stock <= p.lowStockThreshold).length
@@ -263,7 +271,7 @@ export default function InventoryPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filtered.map((p) => {
+                  pageItems.map((p) => {
                     const lowStock = p.stock <= p.lowStockThreshold
                     const outOfStock = p.stock === 0
                     return (
@@ -367,6 +375,15 @@ export default function InventoryPage() {
                 )}
               </TableBody>
             </Table>
+            <PaginationBar
+              page={page}
+              pageCount={pageCount}
+              onPageChange={setPage}
+              rangeStart={rangeStart}
+              rangeEnd={rangeEnd}
+              total={total}
+              itemLabel="products"
+            />
           </div>
         </CardContent>
       </Card>

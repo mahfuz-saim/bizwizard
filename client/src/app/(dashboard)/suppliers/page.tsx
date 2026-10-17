@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useStore } from "@/lib/store"
 import { formatCurrency, generateAvatarColor, getInitials } from "@/lib/utils"
+import { usePagination } from "@/lib/use-pagination"
+import { PaginationBar } from "@/components/ui/pagination-bar"
 
 export default function SuppliersPage() {
   const { suppliers, source } = useStore()
@@ -20,6 +22,12 @@ export default function SuppliersPage() {
       (s) => s.name.toLowerCase().includes(q) || s.phone.includes(q)
     )
   }, [suppliers, search])
+
+  const { page, setPage, pageCount, pageItems, rangeStart, rangeEnd, total } = usePagination(
+    filtered,
+    12,
+    search
+  )
 
   const totalDue = suppliers.reduce((s, x) => s + x.totalDue, 0)
   const totalPaid = suppliers.reduce((s, x) => s + x.totalPaid, 0)
@@ -47,8 +55,11 @@ export default function SuppliersPage() {
             <Input placeholder="Search suppliers..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((s) => (
+        <CardContent className="p-0">
+        <div className="grid grid-cols-1 gap-3 p-6 md:grid-cols-2 lg:grid-cols-3">
+          {filtered.length === 0 ? (
+            <p className="col-span-full py-10 text-center text-sm text-muted-foreground">No suppliers found</p>
+          ) : pageItems.map((s) => (
             <div key={s.id} className="flex items-center gap-3 rounded-lg border p-3 hover:border-brand-400 hover:shadow-sm">
               <Avatar className="h-11 w-11" style={{ backgroundColor: generateAvatarColor(s.name) }}>
                 <AvatarFallback className="bg-transparent text-white">{getInitials(s.name)}</AvatarFallback>
@@ -68,6 +79,16 @@ export default function SuppliersPage() {
               </div>
             </div>
           ))}
+        </div>
+          <PaginationBar
+            page={page}
+            pageCount={pageCount}
+            onPageChange={setPage}
+            rangeStart={rangeStart}
+            rangeEnd={rangeEnd}
+            total={total}
+            itemLabel="suppliers"
+          />
         </CardContent>
       </Card>
     </div>

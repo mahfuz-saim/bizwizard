@@ -46,6 +46,7 @@ export function Topbar({ onOpenMobileNav, shopName = "My Store" }: TopbarProps) 
   const { source, error, refresh, logout, session } = useStore()
   const [refreshing, setRefreshing] = React.useState(false)
   const user = session?.user
+
   const profileName = source === "mock"
     ? "Demo User"
     : user?.name?.trim() || user?.email || user?.number || "My account"

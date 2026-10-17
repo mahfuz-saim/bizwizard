@@ -13,7 +13,7 @@ import { ensureDefaultPolicies } from '../shared/catalog';
 const db = () => prisma as any;
 const DAY = 86400000;
 
-async function ensureAccounts(tenantId: string, shopId: string) {
+export async function ensureAccounts(tenantId: string, shopId: string) {
   let accounts = await db().cashAccount.findMany({ where: { tenantID: tenantId, shopID: shopId, isActive: true } });
   if (!accounts.length) {
     const defaults = [
@@ -28,7 +28,7 @@ async function ensureAccounts(tenantId: string, shopId: string) {
   return accounts;
 }
 
-async function refreshBalances(tenantId: string, shopId: string) {
+export async function refreshBalances(tenantId: string, shopId: string) {
   const accounts = await ensureAccounts(tenantId, shopId);
   const txns = await db().cashTransaction.findMany({ where: { tenantID: tenantId, shopID: shopId, status: 'CLEARED' }, select: { accountID: true, direction: true, amount: true } });
   for (const a of accounts) {
