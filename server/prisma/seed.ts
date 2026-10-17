@@ -231,18 +231,27 @@ async function seedAccount(account: SeedAccount, now: Date, refresh: boolean) {
 }
 
 async function main() {
-    if (process.env.NODE_ENV === 'production') {
+    const args = process.argv.slice(2);
+    if (
+        process.env.NODE_ENV === 'production' &&
+        !args.includes('--allow-public-demo-accounts')
+    ) {
         throw new Error(
-            'Development seed accounts have public passwords. Refusing to seed in production.',
+            'Development seed accounts have public passwords. Refusing to seed in production without --allow-public-demo-accounts.',
         );
     }
     if (!process.env.DATABASE_URL)
         throw new Error(
             'Set DATABASE_URL in server/.env before running npm run seed.',
         );
-    const args = process.argv.slice(2);
-    if (args.some(arg => arg !== '--refresh'))
-        throw new Error('Only --refresh is supported.');
+    if (
+        args.some(arg =>
+            !['--refresh', '--allow-public-demo-accounts'].includes(arg),
+        )
+    )
+        throw new Error(
+            'Only --refresh and --allow-public-demo-accounts are supported.',
+        );
     const refresh = args.includes('--refresh');
     if (refresh)
         console.warn(
