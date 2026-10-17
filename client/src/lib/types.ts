@@ -117,5 +117,4 @@ export interface DashboardStats {
   totalSuppliers: number
 }
 
-export interface ShopMessage { id: string; message: string; createdAt: string; approvalStatus?: string; sentStatus?: string }
 export interface ShopNotification { id: string; title: string; body: string; createdAt: string; ReadStatus?: { isRead: boolean }[] }

@@ -4,14 +4,12 @@ const fullPaymentSchema = z.object({
     type: z.literal('FULL'),
     debtId: z.string(),
     amount: z.number().optional(), // optional or can validate fixed value
-    notifySms: z.boolean().optional(),
 });
 
 const partialPaymentSchema = z.object({
     type: z.literal('PARTIAL'),
     debtId: z.string(),
     amount: z.number().positive(), // required and must be positive
-    notifySms: z.boolean().optional(),
 });
 
 const singleDebtResolveSchema = z.object({
@@ -26,8 +24,7 @@ const bulkDebtResolveSchema = z.object({
         amount: z.number(),
         buyerId: z.string(),
         shopId: z.string(),
-        notifySms: z.boolean().optional(),
-    }),
+        }),
 });
 
 const getUserDebtZodSchema = z.object({

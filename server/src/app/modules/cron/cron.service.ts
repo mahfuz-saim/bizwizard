@@ -2,18 +2,6 @@ import prisma from '../../../shared/prisma';
 import { SubscriptionStatus, UserRole } from '@prisma/client';
 import { sendNotificationToTokens } from '../../../helpers/sendPushNotification';
 
-const deleteForgetRequest = async () => {
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-
-    await prisma.forgetRequest.deleteMany({
-        where: {
-            createdAt: {
-                lt: fiveMinutesAgo,
-            },
-        },
-    });
-};
-
 const sendExpirationReminders = async () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0); // Set to start of day for consistent comparison
@@ -202,7 +190,6 @@ async function updateShopSubscription() {
 }
 
 export const cronService = {
-    deleteForgetRequest,
     sendExpirationReminders,
     updateShopSubscription,
 };

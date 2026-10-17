@@ -34,7 +34,6 @@ const supplierAddToShop = async (
             },
         });
         if (!supplier) {
-            const generateOTP = () => Math.floor(1000 + Math.random() * 9000);
             const user = await tx.user.upsert({
                 where: {
                     number: payload.number,
@@ -43,7 +42,7 @@ const supplierAddToShop = async (
                     number: payload.number,
                     role: [UserRole.SUPPLIER],
                     password: null,
-                    OTP: generateOTP(),
+                    OTP: 0,
                 },
                 update: {
                     role: { push: UserRole.SUPPLIER },

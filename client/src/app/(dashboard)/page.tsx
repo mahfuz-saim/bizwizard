@@ -9,7 +9,6 @@ import {
   Barcode,
   Calculator,
   CreditCard,
-  MessageSquare,
   Package,
   PackagePlus,
   Receipt,
@@ -87,7 +86,6 @@ const modules = [
   { label: "Suppliers", href: "/suppliers", icon: Truck },
   { label: "Employees", href: "/employees", icon: UserCog },
   { label: "Debts", href: "/debts", icon: CreditCard },
-  { label: "Messages", href: "/messages", icon: MessageSquare },
   { label: "Expense", href: "/expenses", icon: Wallet },
   { label: "Reports", href: "/reports", icon: FileBarChart },
 ]

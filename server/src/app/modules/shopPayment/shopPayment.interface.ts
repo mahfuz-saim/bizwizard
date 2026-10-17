@@ -11,14 +11,3 @@ export interface IPayment {
     shopId: string;
     coupon: string;
 }
-
-export interface IIPN {
-    status: string;
-    tran_date: Date;
-    tran_id: string;
-    val_id: string;
-    amount: number;
-    store_amount: number;
-    risk_level: number;
-    risk_title: string;
-}

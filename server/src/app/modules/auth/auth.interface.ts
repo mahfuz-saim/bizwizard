@@ -33,9 +33,3 @@ export type IChangePassword = {
     oldPassword: string;
     newPassword: string;
 };
-
-export type IAppLogin = {
-    number: string;
-    otp: number;
-    deviceId: string;
-};

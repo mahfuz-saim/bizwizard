@@ -46,12 +46,6 @@ const createEmployee = z.object({
     }),
 });
 
-const verifyUser = z.object({
-    body: z.object({
-        OTP: z.number().int(),
-    }),
-});
-
 const createUser = z.object({
     body: z.object({
         user: z.object({
@@ -85,7 +79,6 @@ export const UserValidation = {
     createSale,
     createBuyer,
     createEmployee,
-    verifyUser,
     createUser,
     createSupplier,
 };

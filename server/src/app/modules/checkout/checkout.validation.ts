@@ -7,7 +7,6 @@ const createCheckoutValidation = z
             status: z.enum(['PAID', 'UNPAID']),
             paidAmount: z.number().optional(),
             buyerID: z.string().optional(),
-            sendSMS: z.boolean().optional(),
             items: z.array(
                 z.object({
                     lotId: z.string(),

@@ -8,6 +8,8 @@ import { verifyTenantAccess } from '../../middlewares/verifyTenant';
 
 const router = express.Router();
 
+// Demo checkout: validates the purchase and applies it immediately.
+// There is no external payment gateway or IPN callback anymore.
 router.post(
     '/init',
     auth(UserRole.OWNER),
@@ -16,39 +18,10 @@ router.post(
     paymentController.initPayment,
 );
 
-router.post(
-    '/ipn',
-    validateRequest(paymentValidationSchema.IPNSchema),
-    paymentController.postIPN,
-);
-
-//TEST ROUTES
-router.post('/success', (req, res) => {
-    res.send(req.body);
-});
-
-router.post('/fail', (req, res) => {
-    res.send(req.body);
-});
-
-router.post('/cancel', (req, res) => {
-    res.send(req.body);
-});
-
 export const shopPaymentRoutes = router;
 
 //PAYMENT PROCESS
-//1. initiate payment by calling /init endpoint with payment details
-//2. init will redirect user to payment gateway
-//3. after payment, gateway will call /ipn endpoint with payment details
-//4. /ipn will process the payment and return success or failure. Or redirect user to success or failure page
-//5. user can check payment status by calling /validate endpoint with validationId
-//
-//TODO:
-//[x] 1. generate unique tran_id for each payment -> use nanoId
-//[x] 2. set ipn_url in env
-//[x] 3. pass fixed data in paymentSchema
-//
-//4. store payment details in db in /init
-//5. implement postIPN to handle payment success/failure -> update db
-//6. implement validatePayment to check payment status
+//1. initiate a purchase by calling /init with payment details
+//2. the server records a ShopPayment row and applies the plan/credit immediately
+//3. the response is the caller's success_url with tran_id and status=VALID
+//4. set PAYMENT_MODE=demo (default) in the server environment

@@ -4,15 +4,11 @@ import { JwtPayload } from '../../../interfaces/common';
 import { IPaginationOptions } from '../../../interfaces/pagination';
 import prisma from '../../../shared/prisma';
 import { ICreateCheckout } from './checkout.interface';
-import { smsHelper } from '../../../helpers/sendSMS';
 import ApiError from '../../../errors/ApiError';
 import httpStatus from 'http-status';
 import { SyncTriggerPayload } from '../../../interfaces/notificationPayload';
 import { notificationService } from '../notification/notification.service';
-import { number, string } from 'zod';
-import { getNameOfDeclaration } from 'typescript';
 import { INotification } from '../notification/notification.interface';
-import { database } from 'firebase-admin';
 
 function generatePIN() {
     return Math.floor(1000 + Math.random() * 9000);
@@ -25,17 +21,10 @@ const createCheckout = async (
 ) => {
     //console.log('🚀 checkout status : ', payload.status);
     const syncData: SyncTriggerPayload[] = [];
-    const msgData: {
-        number: string;
-        totalPrice: number;
-    } = { number: '', totalPrice: 0 };
-    let sendSMSVerified = false;
-
     type LowStockProduct = {
         variantName: string;
         notifyAt: number;
         currentStock: number;
-        sendSms?: boolean;
     };
 
     const lowStockProucts: LowStockProduct[] = [];
@@ -115,14 +104,6 @@ const createCheckout = async (
                     );
                 }
 
-                // if (lot.stock - item.quantity <= (shopVariant?.lowStock || 0) {
-                //     lowStockProucts.push({
-                //         lotId: lot.id,
-                //         notifyAt: shopVariant.lowStock || 0,
-                //         availableStock: lot.stock - item.quantity,
-                //         sendSms: shopVariant.lowStockSMS || false,
-                //     });
-                // }
                 const totalLotAfterSale =
                     (lowStockProuctsMap.get(shopVariant.id)?.currentStock ||
                         shopVariant.totalProducts) - item.quantity;
@@ -131,7 +112,6 @@ const createCheckout = async (
                     variantName: shopVariant.variantName || '',
                     notifyAt: shopVariant.lowStock || 0,
                     currentStock: totalLotAfterSale,
-                    sendSms: shopVariant.lowStockSMS || false,
                 });
 
                 let lineDiscount = 0;
@@ -358,20 +338,6 @@ const createCheckout = async (
                 });
             }
 
-            // Optional: Send SMS receipt
-            if (
-                payload.sendSMS &&
-                newCheckout.buyer?.number &&
-                payload.isDraft === false
-            ) {
-                const items = newCheckout.items.map(item => ({
-                    itemName: item.productName,
-                    quantity: item.quantity,
-                }));
-                msgData.number = newCheckout.buyer.number;
-                msgData.totalPrice = newCheckout.totalPrice;
-                sendSMSVerified = true;
-            }
             if (debt) {
                 const result = { ...newCheckout, Debt: debt };
                 return result;
@@ -385,32 +351,6 @@ const createCheckout = async (
         },
     );
 
-    if (sendSMSVerified) {
-        // this try catch is to ensure that even if sms fails, checkout is created successfully
-        try {
-            const smsResponse = await smsHelper.sendReceipt({
-                number: msgData.number,
-                totalPrice: msgData.totalPrice!,
-                pin: checkoutPIN,
-                receiptId: result.id,
-                shopName: result.shop.shopName,
-            });
-            //NOTE: decrease shop credit
-            if (smsResponse?.success) {
-                await prisma.shop.update({
-                    where: { id: payload.shopID },
-                    data: {
-                        credit: {
-                            decrement: 1,
-                        },
-                    },
-                });
-            }
-        } catch (err) {
-            //TODO:  notify user?
-            console.error('Failed to send SMS receipt:', err);
-        }
-    }
     // await notificationService.sendSyncTrigger(syncData, payload.shopID);
     lowStockProuctsMap.forEach((values, key) => {
         if (values.currentStock <= values.notifyAt) {
@@ -418,7 +358,6 @@ const createCheckout = async (
                 variantName: values.variantName,
                 notifyAt: values.notifyAt,
                 currentStock: values.currentStock,
-                sendSms: values.sendSms,
             });
         }
     });

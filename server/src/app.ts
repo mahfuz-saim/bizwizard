@@ -41,15 +41,6 @@ app.get('/test', async (req: Request, res: Response) => {
     });
 });
 
-// Schedule to run every minute
-cron.schedule('* * * * *', async (): Promise<void> => {
-    try {
-        await cronService.deleteForgetRequest();
-    } catch (error) {
-        errorlogger.error(error);
-    }
-});
-
 // Finance Copilot: daily 06:00 treasury run (projection -> alerts -> actions)
 cron.schedule('0 6 * * *', async (): Promise<void> => {
     try {

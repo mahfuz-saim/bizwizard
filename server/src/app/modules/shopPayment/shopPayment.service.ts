@@ -9,8 +9,7 @@ import {
     CouponStatus,
 } from '@prisma/client';
 import prisma from '../../../shared/prisma';
-import { sslcz } from '../../../shared/sslCommerz';
-import { IIPN, IPayment } from './shopPayment.interface';
+import { IPayment } from './shopPayment.interface';
 import { JwtPayload } from '../../../interfaces/common';
 import config from '../../../config';
 import { nanoIdHelper } from '../../../helpers/nanoidHelper';
@@ -40,23 +39,33 @@ const calculateDiscount = (coupon: Coupon | undefined, amount: number) => {
     return discountedPrice;
 };
 
+const assertDemoMode = () => {
+    if (config.payment.mode !== 'demo') {
+        throw new ApiError(
+            httpStatus.SERVICE_UNAVAILABLE,
+            'No payment gateway is configured. Set PAYMENT_MODE=demo to use demo payments.',
+        );
+    }
+};
+
+const buildSuccessUrl = (successUrl: string, transactionId: string) => {
+    // Keep returning a single URL for API compatibility with existing clients.
+    // Demo payments complete at initialization, so the client can go straight
+    // to its success page with the transaction id attached.
+    const url = new URL(successUrl);
+    url.searchParams.set('tran_id', transactionId);
+    url.searchParams.set('status', 'VALID');
+    return url.toString();
+};
+
 const initPayment = async (
     payload: IPayment,
     user: JwtPayload,
     tenantId: string,
 ) => {
+    assertDemoMode();
+
     const tranId = await nanoIdHelper.generateNanoid(12);
-    const initPayload: any = {
-        total_amount: payload.total_amount,
-        success_url: payload.success_url,
-        fail_url: payload.fail_url,
-        cancel_url: payload.cancel_url,
-        shipping_method: 'NO',
-        ipn_url: config.ssl.shopPaymentIPN,
-        currency: 'BDT',
-        tran_id: tranId,
-        product_profile: 'general',
-    };
 
     const shop = await prisma.shop.findFirst({
         where: {
@@ -148,8 +157,6 @@ const initPayment = async (
             );
         }
 
-        initPayload.product_name = subscriptionPlan.name;
-        initPayload.product_category = 'SUBSCRIPTION';
         planData = {
             planId: subscriptionPlan.id,
             planName: subscriptionPlan.name,
@@ -198,8 +205,6 @@ const initPayment = async (
             );
         }
 
-        initPayload.product_name = employeePlan.name;
-        initPayload.product_category = 'EMPLOYEE';
         planData = {
             planId: employeePlan.id,
             planName: employeePlan.name,
@@ -254,8 +259,6 @@ const initPayment = async (
             );
         }
 
-        initPayload.product_name = activePlan.plan.name;
-        initPayload.product_category = 'RENEW_PLAN';
         planData = {
             subscriptionId: activePlan.id,
             planType: PaymentType.RENEW_PLAN,
@@ -267,29 +270,7 @@ const initPayment = async (
             planQuantity: 1,
             discountedPrice: totalPrice,
         };
-    } else {
-        initPayload.product_name = 'CREDIT';
-        initPayload.product_category = 'CREDIT';
     }
-
-    const owner = await prisma.owner.findUnique({
-        where: { userID: user.userID },
-    });
-
-    initPayload.cus_name = owner?.name || 'Guest';
-    initPayload.cus_email = owner?.email || '';
-    initPayload.cus_phone = owner?.number || '';
-
-    const result = await sslcz.init(initPayload);
-    if (result?.status !== 'SUCCESS') {
-        throw new ApiError(
-            httpStatus.INTERNAL_SERVER_ERROR,
-            `Payment initialization failed: ${result?.failedreason}`,
-        );
-    }
-
-    const sessionKey = result.sessionkey;
-    const gatewayPageURL: string = result.GatewayPageURL;
 
     try {
         await prisma.shopPayment.create({
@@ -301,7 +282,6 @@ const initPayment = async (
                 amount: payload.total_amount,
                 transactionId: tranId,
                 status: PaymentStatus.PENDING,
-                sessionKey,
                 paymentType: payload.paymentType,
                 planData: planData as Prisma.InputJsonValue,
                 couponId: coupon?.id || null,
@@ -314,155 +294,53 @@ const initPayment = async (
         );
     }
 
-    if (config.env === 'development') {
-        const ipnData = {
-            status: 'VALID',
-            tran_date: new Date(),
-            tran_id: tranId,
-            val_id: await nanoIdHelper.generateNanoid(12),
-            amount: payload.total_amount,
-            store_amount: payload.total_amount,
-            risk_level: 0,
-            risk_title: 'hi',
-        };
-        await postIPN(ipnData);
-    }
+    try {
+        await prisma.$transaction(async tx => {
+            await tx.shopPayment.updateMany({
+                where: { transactionId: tranId, tenantID: tenantId },
+                data: {
+                    status: PaymentStatus.VALID,
+                    isValidated: true,
+                    validatedAt: new Date(),
+                    paymentGatewayData: {
+                        demo: true,
+                        mode: 'demo',
+                        message: 'Payment completed in demo mode',
+                    },
+                },
+            });
+        });
 
-    return gatewayPageURL;
-};
+        await applyPaymentByTransaction(tranId, tenantId);
 
-const postIPN = async (payload: IIPN) => {
-    const payment = await prisma.shopPayment.findFirstOrThrow({
-        where: {
-            transactionId: payload.tran_id,
-        },
-    });
-
-    const validationStatus: any = {};
-    let validation = null;
-
-    if (payment.isValidated) {
-        validationStatus.isValidated = true;
-        validationStatus.status = payment.status;
-    } else {
-        validation = await sslcz.validate({ val_id: payload.val_id });
-        if (config.env === 'development') {
-            validation = {
-                status: 'VALID',
-            };
+        if (coupon?.id) {
+            await prisma.coupon.update({
+                where: { id: coupon.id },
+                data: { usedCount: { increment: 1 } },
+            });
         }
-
-        validationStatus.isValidated =
-            validation?.status === 'VALID' ||
-            validation?.status === 'VALIDATED';
-        validationStatus.status = validation?.status || PaymentStatus.FAILED;
-    }
-
-    let paymentError = false;
-    let errorMessage: ApiError | undefined;
-
-    if (payload.amount !== payment.amount) {
-        paymentError = true;
-        errorMessage = new ApiError(
-            httpStatus.UNPROCESSABLE_ENTITY,
-            `Payment amount mismatch: expected ${payment.amount}, got ${payload.amount}`,
-        );
-    }
-
-    if (validationStatus.status === 'INVALID_TRANSACTION') {
-        paymentError = true;
-        errorMessage = new ApiError(
-            httpStatus.UNPROCESSABLE_ENTITY,
-            `Invalid transaction: ${validationStatus.status}`,
-        );
-    }
-
-    if (paymentError) {
+    } catch (error) {
         await prisma.shopPayment.updateMany({
-            where: {
-                transactionId: payload.tran_id,
-                tenantID: payment.tenantID,
-            },
+            where: { transactionId: tranId, tenantID: tenantId },
             data: {
                 status: PaymentStatus.FAILED,
                 isValidated: true,
                 validatedAt: new Date(),
             },
         });
-
-        throw (
-            errorMessage ||
-            new ApiError(
-                httpStatus.UNPROCESSABLE_ENTITY,
-                'Payment validation failed',
-            )
-        );
+        throw error;
     }
 
-    let shouldApplyPayment = false;
-
-    if (!(payment.isValidated && payment.status === payload.status)) {
-        await prisma.$transaction(async tx => {
-            const updatedPaymentResult = await tx.shopPayment.updateMany({
-                where: {
-                    transactionId: payload.tran_id,
-                    tenantID: payment.tenantID,
-                },
-                data: {
-                    status: payload.status as PaymentStatus,
-                    isValidated: true,
-                    validatedAt: new Date(),
-                    paymentGatewayData: validation,
-                },
-            });
-
-            if (updatedPaymentResult.count === 0) {
-                throw new ApiError(
-                    httpStatus.NOT_FOUND,
-                    'Payment record not found for tenant',
-                );
-            }
-
-            const updatedPayment = await tx.shopPayment.findFirstOrThrow({
-                where: {
-                    transactionId: payload.tran_id,
-                    tenantID: payment.tenantID,
-                },
-            });
-
-            if (
-                validationStatus.status === 'VALID' ||
-                validationStatus.status === 'VALIDATED'
-            ) {
-                if (updatedPayment.couponId) {
-                    await tx.coupon.update({
-                        where: {
-                            id: updatedPayment.couponId,
-                        },
-                        data: {
-                            usedCount: {
-                                increment: 1,
-                            },
-                        },
-                    });
-                }
-
-                shouldApplyPayment = true;
-            }
-        });
-    }
-
-    if (shouldApplyPayment) {
-        await applyPayment(payload, payment.tenantID);
-    }
-
-    return 'Payment processed successfully';
+    return buildSuccessUrl(payload.success_url, tranId);
 };
 
-const applyPayment = async (payload: IIPN, tenantId: string) => {
+const applyPaymentByTransaction = async (
+    transactionId: string,
+    tenantId: string,
+) => {
     const payment = await prisma.shopPayment.findFirstOrThrow({
         where: {
-            transactionId: payload.tran_id,
+            transactionId,
             tenantID: tenantId,
         },
     });
@@ -707,4 +585,4 @@ const calculateRenewEndDate = (currentEndDate: Date, months: number): Date => {
     return newEndDate;
 };
 
-export const paymentService = { initPayment, postIPN };
+export const paymentService = { initPayment };

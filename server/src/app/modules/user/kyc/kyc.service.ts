@@ -6,7 +6,6 @@ import httpStatus from 'http-status';
 import { JwtPayload } from '../../../../interfaces/common';
 import { IKycApproval, IKycInput } from './kyc.interface';
 import { notificationService } from '../../notification/notification.service';
-import { sendEmailAlertToAdmins } from '../../../../helpers/sendEmail';
 
 const submitKYC = async (
     user: JwtPayload,
@@ -63,18 +62,6 @@ const submitKYC = async (
             },
         });
     });
-
-    try {
-        await sendEmailAlertToAdmins(
-            'New KYC Submission',
-            `A New User has submitted KYC documents for verification. Please review them in the admin panel.`,
-        );
-    } catch (err) {
-        console.error(
-            'Failed to send KYC submission alert email to admins:',
-            err,
-        );
-    }
 
     return null;
 };

@@ -194,10 +194,8 @@ export interface RawShopVariant {
   packOf?: number | null
   totalProducts: number
   lowStock: number
-  lowStockSMS?: boolean
   notifyAfterNotSold?: number | null
   notifyBeforeExp?: number | null
-  notSoldSMS?: boolean
   lastSoldDate?: string | null
   createdAt?: string
   updatedAt?: string

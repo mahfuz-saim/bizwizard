@@ -1,5 +1,5 @@
 import { IUploadFile } from '../../../interfaces/file';
-import { Jwt, Secret } from 'jsonwebtoken';
+import { Secret } from 'jsonwebtoken';
 import { FileUploadHelper } from '../../../helpers/fileUploadHelper';
 import {
     IAdmin,
@@ -16,7 +16,6 @@ import { JWTHelper } from '../../../helpers/jwtHelpers';
 import config from '../../../config';
 import ApiError from '../../../errors/ApiError';
 import httpStatus from 'http-status';
-import { smsHelper } from '../../../helpers/sendSMS';
 import { nanoIdHelper } from '../../../helpers/nanoidHelper';
 import { JwtPayload } from '../../../interfaces/common';
 
@@ -27,10 +26,6 @@ const CHAIN_HALF_AMOUNT = REFERRER_CREDITS / 2;
 //TODO:
 //add referral reward in other routes
 
-function generateFourDigitNumber() {
-    return Math.floor(1000 + Math.random() * 9000);
-}
-
 const createAdmin = async (payload: IAdmin, file: IUploadFile) => {
     const { password, admin } = payload;
     const { hash: hashPassword, salt: passwordSalt } = await AuthUtils.hashedPassword(password);
@@ -40,8 +35,6 @@ const createAdmin = async (payload: IAdmin, file: IUploadFile) => {
             await FileUploadHelper.uploadToCloudinary(file);
         payload.admin.image = uploadedProfileImage?.secure_url;
     }
-
-    const OTP = generateFourDigitNumber();
 
     const result = await prisma.$transaction(async tx => {
         const createUser = await tx.user.upsert({
@@ -54,7 +47,7 @@ const createAdmin = async (payload: IAdmin, file: IUploadFile) => {
                 passwordSalt,
                 role: [UserRole.ADMIN],
                 status: UserStatus.ACTIVE,
-                OTP,
+                OTP: 0,
             },
             update: {
                 password: hashPassword,
@@ -90,8 +83,6 @@ const createSale = async (payload: ISale, file: IUploadFile) => {
         payload.sale.image = uploadedProfileImage?.secure_url;
     }
 
-    const OTP = generateFourDigitNumber();
-
     // Resolve + validate the upstream referral code (if any) before we start a tx.
     // Rule 5: Owners cannot refer SRs — reject if the code is owner-owned.
     let upstreamCode: Awaited<
@@ -123,7 +114,7 @@ const createSale = async (payload: ISale, file: IUploadFile) => {
                 passwordSalt,
                 role: [UserRole.SALES_REPRESENTATIVE],
                 status: UserStatus.ACTIVE,
-                OTP,
+                OTP: 0,
             },
             update: {
                 password: hashPassword,
@@ -195,8 +186,6 @@ const createBuyer = async (payload: IBuyer) => {
     const { password, buyer } = payload;
     const { hash: hashPassword, salt: passwordSalt } = await AuthUtils.hashedPassword(password);
 
-    const OTP = generateFourDigitNumber();
-
     const result = await prisma.$transaction(async tx => {
         const createUser = await tx.user.upsert({
             where: {
@@ -207,7 +196,7 @@ const createBuyer = async (payload: IBuyer) => {
                 password: hashPassword,
                 passwordSalt,
                 role: [UserRole.BUYER],
-                OTP,
+                OTP: 0,
             },
 
             update: {
@@ -227,21 +216,8 @@ const createBuyer = async (payload: IBuyer) => {
         return createBuyer;
     });
 
-    const JwtPayload = {
-        number: result.number,
-        userID: result.userID,
-    };
-
-    const token = JWTHelper.createToken(
-        JwtPayload,
-        config.jwt.secret as string,
-        config.jwt.passwordResetTokenExpirationTime,
-    );
-
-    await smsHelper.sendOTP({ number: result.number, otp: OTP });
     return {
         data: result,
-        verifyToken: token,
     };
 };
 
@@ -251,8 +227,6 @@ const createEmployee = async (payload: IEmployee) => {
         throw new ApiError(httpStatus.BAD_REQUEST, 'tenantID is required');
     }
     const { hash: hashPassword, salt: passwordSalt } = await AuthUtils.hashedPassword(password);
-
-    const OTP = generateFourDigitNumber();
 
     const result = await prisma.$transaction(async tx => {
         const createUser = await tx.user.upsert({
@@ -264,7 +238,7 @@ const createEmployee = async (payload: IEmployee) => {
                 password: hashPassword,
                 passwordSalt,
                 role: [UserRole.EMPLOYEE],
-                OTP,
+                OTP: 0,
             },
             update: {
                 password: hashPassword,
@@ -284,20 +258,8 @@ const createEmployee = async (payload: IEmployee) => {
         return createEmployee;
     });
 
-    const JwtPayload = {
-        number: result.number,
-        userID: result.userID,
-    };
-
-    const token = JWTHelper.createToken(
-        JwtPayload,
-        config.jwt.secret as string,
-        config.jwt.passwordResetTokenExpirationTime,
-    );
-
     return {
         data: result,
-        verifyToken: token,
     };
 };
 
@@ -316,37 +278,6 @@ const getAllUser = async () => {
     return result;
 };
 
-const verifyUser = async (
-    { number, userID }: { number: string; userID: string },
-    OTP: number,
-) => {
-    const isUserExist = await prisma.user.findUniqueOrThrow({
-        where: {
-            number,
-            id: userID,
-            status: UserStatus.PENDING,
-        },
-    });
-
-    if (isUserExist.OTP !== OTP) {
-        throw new ApiError(httpStatus.UNAUTHORIZED, "OTP doesn't match");
-    }
-
-    await prisma.user.update({
-        where: {
-            id: userID,
-        },
-        data: {
-            status: UserStatus.ACTIVE,
-        },
-    });
-
-    return {
-        message: 'User is verified',
-    };
-};
-
-//NOTE: this in only for owner or employee creation
 const createUser = async (payload: IUser) => {
     const { user, userType } = payload;
 
@@ -367,7 +298,6 @@ const createUser = async (payload: IUser) => {
         hashPassword = await AuthUtils.hashedPassword(payload.password);
     }
 
-    const OTP = generateFourDigitNumber();
     const usrRole = userType === 'owner' ? UserRole.OWNER : UserRole.EMPLOYEE;
     const userReferralCode = await nanoIdHelper.generateCustomNanoId(6);
 
@@ -382,7 +312,7 @@ const createUser = async (payload: IUser) => {
                 passwordSalt: hashPassword?.salt ?? null,
                 role: [usrRole],
                 status: UserStatus.ACTIVE,
-                OTP,
+                OTP: 0,
                 email: user?.email || null,
             },
             update: {
@@ -577,8 +507,6 @@ const createSupplier = async (payload: ISupplier) => {
     const { password, supplier } = payload;
     const { hash: hashPassword, salt: passwordSalt } = await AuthUtils.hashedPassword(password);
 
-    const OTP = generateFourDigitNumber();
-
     const result = await prisma.$transaction(async tx => {
         const createUser = await tx.user.upsert({
             where: {
@@ -589,13 +517,13 @@ const createSupplier = async (payload: ISupplier) => {
                 password: hashPassword,
                 passwordSalt,
                 role: [UserRole.SUPPLIER],
-                OTP,
+                OTP: 0,
             },
             update: {
                 password: hashPassword,
                 passwordSalt,
                 role: { push: UserRole.SUPPLIER },
-                OTP,
+                OTP: 0,
             },
         });
 
@@ -609,21 +537,8 @@ const createSupplier = async (payload: ISupplier) => {
         return createUser;
     });
 
-    const JwtPayload = {
-        number: result.number,
-        userID: result.id,
-    };
-
-    const token = JWTHelper.createToken(
-        JwtPayload,
-        config.jwt.secret as string,
-        config.jwt.passwordResetTokenExpirationTime,
-    );
-
-    await smsHelper.sendOTP({ number: result.number, otp: OTP });
     return {
         data: result,
-        verifyToken: token,
     };
 };
 
@@ -659,7 +574,6 @@ export const UserServices = {
     createEmployee,
     createSale,
     getAllUser,
-    verifyUser,
     createUser,
     verifyReferral,
     createSupplier,

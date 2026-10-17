@@ -10,11 +10,9 @@ export interface IProduct {
     packOf?: number;
     shopID: string;
     lowStock?: number;
-    lowStockSMS?: boolean;
     lastSoldDate?: Date;
     notifyAfterNotSold?: number;
     notifyBeforeExp?: number;
-    notSoldSMS?: boolean;
     barcode?: string;
     measuringUnit: string;
     supplierId?: string;
@@ -41,10 +39,8 @@ export interface ICatalogVariant {
     variantCode?: string;
     packOf?: number;
     lowStock?: number;
-    lowStockSMS?: boolean;
     notifyAfterNotSold?: number;
     notifyBeforeExp?: number;
-    notSoldSMS?: boolean;
 }
 
 export interface ICreateCatalog {
@@ -77,10 +73,8 @@ export interface IUpdateProduct {
     variantCode?: string;
     packOf?: number;
     lowStock?: number;
-    lowStockSMS?: boolean;
     lastSoldDate?: Date;
     notifyAfterNotSold?: number;
-    notSoldSMS?: boolean;
 }
 
 export interface ILotDeletion {

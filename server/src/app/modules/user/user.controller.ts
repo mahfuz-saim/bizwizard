@@ -4,10 +4,7 @@ import catchAsync from '../../../shared/catchAsync';
 import sendResponse from '../../../shared/sendResponse';
 import { UserServices } from './user.service';
 import { IUploadFile } from '../../../interfaces/file';
-import ApiError from '../../../errors/ApiError';
-import { JWTHelper } from '../../../helpers/jwtHelpers';
 import config from '../../../config';
-import { Secret } from 'jsonwebtoken';
 import { JwtPayload } from '../../../interfaces/common';
 
 const createAdmin = catchAsync(
@@ -73,34 +70,6 @@ const getAllUser = catchAsync(async (req: Request, res: Response) => {
         data: result,
     });
 });
-const verifyUser = catchAsync(async (req: Request, res: Response) => {
-    const token = req.headers.authorization;
-    if (!token) {
-        throw new ApiError(httpStatus.UNAUTHORIZED, 'You are not authorized');
-    }
-    // verify token
-    let verifiedUser = null;
-
-    verifiedUser = JWTHelper.verifyToken(
-        token,
-        config.jwt.secret as Secret,
-    ) as {
-        number: string;
-        userID: string;
-    };
-
-    const { OTP } = req.body;
-
-    const result = await UserServices.verifyUser(verifiedUser, OTP);
-
-    sendResponse(res, {
-        statusCode: httpStatus.OK,
-        success: true,
-        message: '',
-        data: result,
-    });
-});
-
 const createUser = catchAsync(
     async (req: Request, res: Response, next: NextFunction) => {
         const result = await UserServices.createUser(req.body);
@@ -170,7 +139,6 @@ export const UserController = {
     createEmployee,
     createSale,
     getAllUser,
-    verifyUser,
     createUser,
     verifyReferral,
     createSupplier,

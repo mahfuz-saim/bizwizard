@@ -221,7 +221,6 @@ export function MobileNavSheet({ open, onOpenChange }: MobileNavSheetProps) {
     { label: "Suppliers", href: "/suppliers" },
     { label: "Expenses", href: "/expenses" },
     { label: "Debts", href: "/debts" },
-    { label: "Messages", href: "/messages" },
     { label: "Employees", href: "/employees" },
     { label: "Cash Flow", href: "/finance/cashflow" },
     { label: "Financing", href: "/finance/matching" },
