@@ -29,6 +29,7 @@ import { matchingRoutes } from '../modules/finance/matching/matching.routes';
 import { cashflowRoutes } from '../modules/finance/cashflow/cashflow.routes';
 import { analysisRoutes } from '../modules/finance/analysis/analysis.routes';
 import { agentsRoutes } from '../modules/finance/agents/agents.routes';
+import { simulatorRoutes } from '../modules/finance/simulator/simulator.routes';
 
 const router = express.Router();
 
@@ -154,6 +155,10 @@ const moduleRoutes = [
     {
         path: '/finance/agents',
         route: agentsRoutes,
+    },
+    {
+        path: '/finance/simulator',
+        route: simulatorRoutes,
     },
 ];
 
