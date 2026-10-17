@@ -9,6 +9,9 @@ import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useStore } from "@/lib/store"
 import { usePathname, useSearchParams } from "next/navigation"
+import { FinanceSimulatorProvider } from "@/lib/simulator-context"
+import { SimulatorDrawer } from "@/components/finance/simulator-drawer"
+import { SimulatorToastHost } from "@/components/finance/simulator-toasts"
 
 function DashboardShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = React.useState(false)
@@ -26,26 +29,31 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   if (source === "loading" || (source === "backend" && needsHistory && !historyLoaded)) return <div className="flex min-h-screen items-center justify-center" role="status"><Loader2 className="mr-2 h-6 w-6 animate-spin" />{needsHistory ? "Loading complete shop history…" : "Loading your account…"}</div>
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      {/* Sidebar: fixed (flex-shrink-0) and never scrolls with the page */}
-      <Sidebar
-        collapsed={collapsed}
-        onToggle={() => setCollapsed((c) => !c)}
-        onNavigate={() => setMobileOpen(false)}
-      />
-      <MobileNavSheet open={mobileOpen} onOpenChange={setMobileOpen} />
+    <FinanceSimulatorProvider>
+      <div className="flex h-screen overflow-hidden bg-background">
+        {/* Sidebar: fixed (flex-shrink-0) and never scrolls with the page */}
+        <Sidebar
+          collapsed={collapsed}
+          onToggle={() => setCollapsed((c) => !c)}
+          onNavigate={() => setMobileOpen(false)}
+        />
+        <MobileNavSheet open={mobileOpen} onOpenChange={setMobileOpen} />
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <Topbar onOpenMobileNav={() => setMobileOpen(true)} shopName={session?.tenants?.flatMap(t => t.shops).find(s => s.id === session.shopId)?.shopName || (source === "mock" ? "Demo Store" : "My Store")} />
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          {/* Fast-forward, live stream and playback speed live in the profile menu. */}
+          <Topbar onOpenMobileNav={() => setMobileOpen(true)} shopName={session?.tenants?.flatMap(t => t.shops).find(s => s.id === session.shopId)?.shopName || (source === "mock" ? "Demo Store" : "My Store")} />
 
-        {/* Main area scrolls independently; sidebar + topbar stay put */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
-          {source === "mock" && <div className="mb-4 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">Running in demo mode. Changes are temporary and are not saved to an account. Use the profile menu to exit demo and log in.</div>}
-          {error && <p role="alert" className="mb-4 rounded-lg border border-destructive p-3 text-sm text-destructive">{error}</p>}
-          {children}
-        </main>
+          {/* Main area scrolls independently; sidebar + topbar stay put */}
+          <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+            {source === "mock" && <div className="mb-4 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">Running in demo mode. Changes are temporary and are not saved to an account. Use the profile menu to exit demo and log in.</div>}
+            {error && <p role="alert" className="mb-4 rounded-lg border border-destructive p-3 text-sm text-destructive">{error}</p>}
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+      <SimulatorDrawer />
+      <SimulatorToastHost />
+    </FinanceSimulatorProvider>
   )
 }
 
