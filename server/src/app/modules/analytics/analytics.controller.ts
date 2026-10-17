@@ -5,6 +5,15 @@ import httpStatus from 'http-status';
 import pick from '../../../shared/pick';
 import { dateFilters, paginationFields } from '../../../const';
 import { analyticsService } from './analytics.service';
+import { JwtPayload } from '../../../interfaces/common';
+
+const getDashboard = catchAsync(async (req: Request, res: Response) => {
+    const data = await analyticsService.getDashboard(
+        req.tenantId as string, req.query.shopId as string,
+        (req.user as JwtPayload).role !== 'EMPLOYEE',
+    );
+    sendResponse(res, { success: true, statusCode: httpStatus.OK, message: 'Dashboard retrieved successfully', data });
+});
 
 const getAnalytics = catchAsync(
     async (req: Request, res: Response, next: NextFunction) => {
@@ -136,6 +145,7 @@ const getVariantFinancials = catchAsync(
 );
 
 export const analyticsController = {
+    getDashboard,
     getAnalytics,
     getNotSoldProducts,
     getExpiredProducts,

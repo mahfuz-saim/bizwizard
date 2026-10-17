@@ -125,6 +125,7 @@ interface RawExpenseItem {
   supplierId?: string | null
   quantity?: number | null
   unitPrice?: number | null
+  supplier?: { supplierName: string | null } | null
 }
 interface RawExpense {
   id: string
@@ -178,6 +179,44 @@ export function normalizeCheckout(c: RawCheckout): Transaction {
     ),
     createdAt: c.createdAt,
     soldBy: c.soldByEmployee?.name || c.soldByOwner?.name || "Not recorded"
+  }
+}
+
+function normalizePurchase(e: RawExpenseItem, supplierName = e.supplier?.supplierName || "Not recorded"): Transaction {
+  return {
+    id: e.id, type: "BUY", supplierId: e.supplierId || undefined, supplierName,
+    items: [{ productId: e.shopVariantId || "", productName: e.name || "Stock purchase", quantity: e.quantity || 0, unitPrice: e.unitPrice || 0, total: e.amount }],
+    subtotal: e.amount, discount: 0, total: e.amount, paid: 0, due: 0,
+    paymentMethod: "UNKNOWN", paymentTracked: false, createdAt: e.createdAt
+  }
+}
+
+export async function loadDashboardData(shopId: string) {
+  const shop = encodeURIComponent(shopId)
+  const [variants, response, notificationResponse] = await Promise.all([
+    fetchAllPages<RawShopVariant>(`/shop/${shop}`, { includeProduct: true }),
+    api.get<{
+      today: Analytics; yesterday: Analytics; outstandingDebt: number; todayDiscount: number
+      totalCustomers: number; totalSuppliers: number
+      recentCheckouts: RawCheckout[]; recentPurchases: RawExpenseItem[]
+    }>("/analytics/dashboard", { shopId }),
+    api.get<ShopNotification[]>(`/notifications/${shop}`)
+  ])
+  const summary = required(response, "/analytics/dashboard")
+  const products = variants.map(normalizeShopVariant)
+  const stats: DashboardStats = {
+    todaySell: summary.today.totalSell, todayProfit: summary.today.profit,
+    todayDebt: summary.outstandingDebt, todayDiscount: summary.todayDiscount,
+    yesterdayProfit: summary.yesterday.profit,
+    totalProducts: products.length, lowStockCount: products.filter(p => p.stock <= p.lowStockThreshold).length,
+    totalCustomers: summary.totalCustomers, totalSuppliers: summary.totalSuppliers
+  }
+  return {
+    products, customers: [] as Customer[], suppliers: [] as Supplier[],
+    expenses: [] as Expense[], employees: [] as Employee[], stats,
+    transactions: [...summary.recentCheckouts.map(normalizeCheckout), ...summary.recentPurchases.map(e => normalizePurchase(e))]
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 10),
+    notifications: required(notificationResponse, "/notifications")
   }
 }
 
@@ -255,31 +294,7 @@ export async function loadShopData(shopId: string, role: string) {
     }))
   const purchases: Transaction[] = expenseItems
     .filter((e) => e.expenseType === "PRODUCT")
-    .map((e) => ({
-      id: e.id,
-      type: "BUY",
-      supplierId: e.supplierId || undefined,
-      supplierName:
-        rawSuppliers.find((s) => s.id === e.supplierId)?.supplierName ||
-        "Not recorded",
-      items: [
-        {
-          productId: e.shopVariantId || "",
-          productName: e.name || "Stock purchase",
-          quantity: e.quantity || 0,
-          unitPrice: e.unitPrice || 0,
-          total: e.amount
-        }
-      ],
-      subtotal: e.amount,
-      discount: 0,
-      total: e.amount,
-      paid: 0,
-      due: 0,
-      paymentMethod: "UNKNOWN",
-      paymentTracked: false,
-      createdAt: e.createdAt
-    }))
+    .map((e) => normalizePurchase(e, rawSuppliers.find((s) => s.id === e.supplierId)?.supplierName || "Not recorded"))
   const purchaseTotals = new Map<string, number>()
   for (const p of purchases)
     if (p.supplierId)
