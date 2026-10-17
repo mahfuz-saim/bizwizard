@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import prisma from '../../../../shared/prisma';
+import type { z } from 'zod';
 import { callStructured, hashInput } from '../../../../lib/ai/client';
 import * as prompts from '../../../../lib/ai/prompts';
 import { roundCurrency, amortizationSchedule, effectiveApr, totalRepaymentOf } from '../shared/money';
@@ -112,7 +113,7 @@ export const matchingService = {
     });
     const eligible = evaluated.filter((e: any) => e.status === 'ELIGIBLE');
     // AI re-rank sees ONLY the eligible set (§1.2 rule 2); offline fallback keeps deterministic scores.
-    const rerank = await callStructured({
+    const rerank = await callStructured<z.infer<typeof prompts.rankFinancingProducts.outputSchema>>({
       agentType: 'BORROWER_AGENT',
       purpose: 'rank_financing_products',
       promptVersion: prompts.rankFinancingProducts.version,

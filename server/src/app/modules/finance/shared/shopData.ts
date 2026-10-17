@@ -133,8 +133,7 @@ export async function loadProfile(tenantId: string, shopId: string, days = 90, a
 }
 
 export async function loadOpenDebts(tenantId: string, shopId: string) {
-  const db = prisma as any;
-  const debts = await db.debt.findMany({
+  const debts = await prisma.debt.findMany({
     where: { shopID: shopId, tenantID: tenantId, status: { in: ['UNPAID', 'PARTIALLY_PAID', 'OVERDUE'] } },
     include: { checkout: { select: { totalPrice: true } }, buyer: { select: { name: true } } },
     orderBy: { createdAt: 'asc' },

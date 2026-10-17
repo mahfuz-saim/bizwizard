@@ -6,6 +6,7 @@ import catchAsync from '../../../shared/catchAsync';
 import sendResponse from '../../../shared/sendResponse';
 import { ILoginUserResponse, IRefreshTokenResponse } from './auth.interface';
 import { AuthService } from './auth.service';
+import { JwtPayload } from '../../../interfaces/common';
 
 function issueTokens(res: Response, accessToken: string, refreshToken?: string) {
     const cookieOptions = {
@@ -25,7 +26,7 @@ const loginUser = catchAsync(async (req: Request, res: Response) => {
     const decoded = JWTHelper.verifyToken(
         accessToken,
         config.jwt.secret as Secret,
-    ) as { userID: string; role: string };
+    ) as JwtPayload;
     const me = await AuthService.getMe(decoded);
 
     sendResponse<any>(res, {

@@ -33,7 +33,7 @@ function generateFourDigitNumber() {
 
 const createAdmin = async (payload: IAdmin, file: IUploadFile) => {
     const { password, admin } = payload;
-    const hashPassword = await AuthUtils.hashedPassword(password);
+    const { hash: hashPassword, salt: passwordSalt } = await AuthUtils.hashedPassword(password);
 
     if (file) {
         const uploadedProfileImage =
@@ -51,12 +51,14 @@ const createAdmin = async (payload: IAdmin, file: IUploadFile) => {
             create: {
                 number: admin.number,
                 password: hashPassword,
+                passwordSalt,
                 role: [UserRole.ADMIN],
                 status: UserStatus.ACTIVE,
                 OTP,
             },
             update: {
                 password: hashPassword,
+                passwordSalt,
                 role: {
                     push: UserRole.ADMIN,
                 },
@@ -78,7 +80,7 @@ const createAdmin = async (payload: IAdmin, file: IUploadFile) => {
 
 const createSale = async (payload: ISale, file: IUploadFile) => {
     const { password, sale, referralCode: incomingReferralCode } = payload;
-    const hashPassword = await AuthUtils.hashedPassword(password);
+    const { hash: hashPassword, salt: passwordSalt } = await AuthUtils.hashedPassword(password);
 
     const newSrReferralCode = await nanoIdHelper.generateCustomNanoId(6);
 
@@ -118,12 +120,14 @@ const createSale = async (payload: ISale, file: IUploadFile) => {
             create: {
                 number: sale.number,
                 password: hashPassword,
+                passwordSalt,
                 role: [UserRole.SALES_REPRESENTATIVE],
                 status: UserStatus.ACTIVE,
                 OTP,
             },
             update: {
                 password: hashPassword,
+                passwordSalt,
                 role: { push: UserRole.SALES_REPRESENTATIVE },
             },
         });
@@ -189,7 +193,7 @@ const createSale = async (payload: ISale, file: IUploadFile) => {
 
 const createBuyer = async (payload: IBuyer) => {
     const { password, buyer } = payload;
-    const hashPassword = await AuthUtils.hashedPassword(password);
+    const { hash: hashPassword, salt: passwordSalt } = await AuthUtils.hashedPassword(password);
 
     const OTP = generateFourDigitNumber();
 
@@ -201,12 +205,14 @@ const createBuyer = async (payload: IBuyer) => {
             create: {
                 number: buyer.number,
                 password: hashPassword,
+                passwordSalt,
                 role: [UserRole.BUYER],
                 OTP,
             },
 
             update: {
                 password: hashPassword,
+                passwordSalt,
                 role: { push: UserRole.BUYER },
             },
         });
@@ -244,7 +250,7 @@ const createEmployee = async (payload: IEmployee) => {
     if (!employee.tenantID) {
         throw new ApiError(httpStatus.BAD_REQUEST, 'tenantID is required');
     }
-    const hashPassword = await AuthUtils.hashedPassword(password);
+    const { hash: hashPassword, salt: passwordSalt } = await AuthUtils.hashedPassword(password);
 
     const OTP = generateFourDigitNumber();
 
@@ -256,11 +262,13 @@ const createEmployee = async (payload: IEmployee) => {
             create: {
                 number: employee.number,
                 password: hashPassword,
+                passwordSalt,
                 role: [UserRole.EMPLOYEE],
                 OTP,
             },
             update: {
                 password: hashPassword,
+                passwordSalt,
                 role: { push: UserRole.EMPLOYEE },
             },
         });
@@ -370,14 +378,16 @@ const createUser = async (payload: IUser) => {
             },
             create: {
                 number: user.number,
-                password: hashPassword,
+                password: hashPassword?.hash ?? null,
+                passwordSalt: hashPassword?.salt ?? null,
                 role: [usrRole],
                 status: UserStatus.ACTIVE,
                 OTP,
                 email: user?.email || null,
             },
             update: {
-                password: hashPassword,
+                password: hashPassword?.hash ?? null,
+                passwordSalt: hashPassword?.salt ?? null,
                 role: { push: usrRole },
                 email: user?.email || null,
             },
@@ -565,7 +575,7 @@ const verifyReferral = async (referralCode: string) => {
 
 const createSupplier = async (payload: ISupplier) => {
     const { password, supplier } = payload;
-    const hashPassword = await AuthUtils.hashedPassword(password);
+    const { hash: hashPassword, salt: passwordSalt } = await AuthUtils.hashedPassword(password);
 
     const OTP = generateFourDigitNumber();
 
@@ -577,11 +587,13 @@ const createSupplier = async (payload: ISupplier) => {
             create: {
                 number: supplier.number,
                 password: hashPassword,
+                passwordSalt,
                 role: [UserRole.SUPPLIER],
                 OTP,
             },
             update: {
                 password: hashPassword,
+                passwordSalt,
                 role: { push: UserRole.SUPPLIER },
                 OTP,
             },

@@ -60,7 +60,7 @@ const loginUser = async (payload: {
     }
 
     if (
-        isUserExist.password &&
+        !isUserExist.password ||
         !(await AuthUtils.comparePasswords(
             password,
             isUserExist.password,
@@ -147,7 +147,7 @@ const adminUserLogin = async (payload: {
     }
 
     if (
-        isUserExist.password &&
+        !isUserExist.password ||
         !(await AuthUtils.comparePasswords(
             password,
             isUserExist.password,
@@ -276,8 +276,12 @@ const changePassword = async (
 
     // checking old password
     if (
-        isUserExist.password &&
-        !(await AuthUtils.comparePasswords(oldPassword, isUserExist.password))
+        !isUserExist.password ||
+        !(await AuthUtils.comparePasswords(
+            oldPassword,
+            isUserExist.password,
+            isUserExist.passwordSalt,
+        ))
     ) {
         throw new ApiError(
             httpStatus.UNAUTHORIZED,
@@ -535,9 +539,7 @@ const appLogin = async (payload: IAppLogin) => {
     }
 
     const now = new Date();
-    const timeIntervel = storedOTP.exp.getTime() - now.getTime();
-
-    const isOTPExpired = timeIntervel > 5 * 60 * 1000;
+    const isOTPExpired = storedOTP.exp.getTime() <= now.getTime();
     if (isOTPExpired) {
         await prisma.loginOTP.delete({
             where: {

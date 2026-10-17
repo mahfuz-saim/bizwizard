@@ -6,7 +6,7 @@ import { analysisService } from './analysis.service';
 
 const tenant = (req: Request) => req.tenantId as string;
 const shop = (req: Request) => (req.query.shopId ?? req.body?.shopId) as string;
-const ok = (res: Response, message: string, data: unknown, code = httpStatus.OK) =>
+const ok = (res: Response, message: string, data: unknown, code: number = httpStatus.OK) =>
   sendResponse(res, { success: true, statusCode: code, message, data });
 
 export const analysisController = {
