@@ -15,11 +15,6 @@ import {
   Wifi,
   WifiOff,
   Loader2,
-  Zap,
-  RadioTower,
-  FastForward,
-  RotateCcw,
-  Check,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -39,7 +34,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useStore } from "@/lib/store"
 import { NotificationBell } from "@/components/notification-bell"
 import { getApiBaseUrl } from "@/lib/api"
-import { SPEED_PRESETS, useSimulator } from "@/lib/simulator-context"
 
 interface TopbarProps {
   onOpenMobileNav: () => void
@@ -51,11 +45,8 @@ export function Topbar({ onOpenMobileNav, shopName = "My Store" }: TopbarProps) 
   const pathname = usePathname()
   const { source, error, refresh, logout, session } = useStore()
   const [refreshing, setRefreshing] = React.useState(false)
-  const sim = useSimulator()
-  const simPlaying = sim.status === "playing"
-  const simLoading = sim.status === "loading"
-  const simCanReset = sim.result != null && sim.status !== "loading"
   const user = session?.user
+
   const profileName = source === "mock"
     ? "Demo User"
     : user?.name?.trim() || user?.email || user?.number || "My account"
@@ -190,7 +181,7 @@ export function Topbar({ onOpenMobileNav, shopName = "My Store" }: TopbarProps) 
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-72">
+          <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
               <div className="flex flex-col">
                 <span className="text-sm font-medium">{profileName}</span>
@@ -202,56 +193,6 @@ export function Topbar({ onOpenMobileNav, shopName = "My Store" }: TopbarProps) 
               <RefreshCw className="mr-2 h-4 w-4" />
               {source === "backend" ? "Refresh data" : "Demo data (local)"}
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel className="flex items-center gap-1.5 py-1 text-xs font-semibold text-brand-700 dark:text-brand-300">
-              <Zap className="h-3.5 w-3.5" /> Finance Simulator
-            </DropdownMenuLabel>
-            <DropdownMenuItem onSelect={(e) => { e.preventDefault(); sim.setDrawerOpen(!sim.drawerOpen) }}>
-              <RadioTower className="mr-2 h-4 w-4" />
-              Live business stream
-            </DropdownMenuItem>
-            {!simPlaying && !simLoading && (
-              <DropdownMenuItem onSelect={(e) => { e.preventDefault(); void sim.runFastForward() }}>
-                <Zap className="mr-2 h-4 w-4" />
-                Fast-forward 30 days
-              </DropdownMenuItem>
-            )}
-            {simLoading && (
-              <DropdownMenuItem disabled>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Writing 30 days…
-              </DropdownMenuItem>
-            )}
-            {simPlaying && (
-              <>
-                <DropdownMenuItem disabled className="text-xs text-muted-foreground">
-                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                  Day {sim.dayIndex}/30
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); sim.skipToEnd() }}>
-                  <FastForward className="mr-2 h-4 w-4" />
-                  Instant (skip to end)
-                </DropdownMenuItem>
-              </>
-            )}
-            {simCanReset && !simPlaying && (
-              <DropdownMenuItem onSelect={(e) => { e.preventDefault(); void sim.resetSimulation() }} disabled={sim.status === "resetting"}>
-                {sim.status === "resetting" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />}
-                Reset simulation
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuLabel className="pb-1 pt-1.5 text-[11px] font-medium text-muted-foreground">
-              Playback speed (per simulated day)
-            </DropdownMenuLabel>
-            {SPEED_PRESETS.map((p) => (
-              <DropdownMenuItem key={p.ms} onSelect={(e) => { e.preventDefault(); sim.setSpeedMs(p.ms) }}>
-                <span className="mr-2 flex h-4 w-4 items-center justify-center">{sim.speedMs === p.ms ? <Check className="h-4 w-4" /> : null}</span>
-                {p.label}
-                <span className="ml-auto text-xs text-muted-foreground">{p.ms}ms/day · {p.hint}</span>
-              </DropdownMenuItem>
-            ))}
-            {sim.error && <p role="alert" className="px-2 py-1 text-xs text-destructive">{sim.error}</p>}
-            <DropdownMenuSeparator />
             <DropdownMenuItem>Profile</DropdownMenuItem>
             <DropdownMenuItem>Settings</DropdownMenuItem>
             <DropdownMenuItem>Help & Support</DropdownMenuItem>
@@ -260,7 +201,6 @@ export function Topbar({ onOpenMobileNav, shopName = "My Store" }: TopbarProps) 
               {source === "mock" ? "Exit demo" : "Log out"}
             </DropdownMenuItem>
           </DropdownMenuContent>
-
         </DropdownMenu>
       </div>
     </header>

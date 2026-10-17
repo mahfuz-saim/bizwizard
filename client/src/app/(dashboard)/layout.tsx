@@ -40,7 +40,6 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         <MobileNavSheet open={mobileOpen} onOpenChange={setMobileOpen} />
 
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          {/* Fast-forward, live stream and playback speed live in the profile menu. */}
           <Topbar onOpenMobileNav={() => setMobileOpen(true)} shopName={session?.tenants?.flatMap(t => t.shops).find(s => s.id === session.shopId)?.shopName || (source === "mock" ? "Demo Store" : "My Store")} />
 
           {/* Main area scrolls independently; sidebar + topbar stay put */}

@@ -20,10 +20,18 @@ import {
   PiggyBank,
   TrendingUp,
   Bot,
+  Zap,
+  RadioTower,
+  FastForward,
+  RotateCcw,
+  Check,
+  Loader2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { SPEED_PRESETS, useSimulator } from "@/lib/simulator-context"
 
 interface NavItem {
   label: string
@@ -54,6 +62,11 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
   const pathname = usePathname()
+  const sim = useSimulator()
+  const [simOpen, setSimOpen] = React.useState(false)
+  const simPlaying = sim.status === "playing"
+  const simLoading = sim.status === "loading"
+  const simCanReset = sim.result != null && sim.status !== "loading"
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/"
@@ -114,6 +127,106 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
       </nav>
 
       <div className="shrink-0 border-t border-sidebar-border p-2 space-y-1">
+        <Popover open={simOpen} onOpenChange={setSimOpen}>
+          <PopoverTrigger asChild>
+            <button
+              className={cn(
+                "flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-sidebar-foreground/90 hover:bg-sidebar-accent",
+                collapsed && "justify-center px-2"
+              )}
+            >
+              <Zap className="h-5 w-5 shrink-0" />
+              {!collapsed && (
+                <span className="flex flex-1 items-center justify-between">
+                  Finance Simulator
+                  {simPlaying && <span className="text-xs font-normal text-sidebar-foreground/60">Day {sim.dayIndex}/30</span>}
+                </span>
+              )}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent side="top" align="start" sideOffset={10} className="w-80 text-foreground">
+            <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-brand-700 dark:text-brand-300">
+              <Zap className="h-4 w-4" /> Finance Simulator
+            </div>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Runs 30 days of real, tagged transactions against your shop and streams them live — nothing here is staged.
+            </p>
+
+            <div className="space-y-1">
+              <button
+                onClick={() => sim.setDrawerOpen(!sim.drawerOpen)}
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
+              >
+                <RadioTower className="h-4 w-4" />
+                Live business stream
+              </button>
+
+              {!simPlaying && !simLoading && (
+                <button
+                  onClick={() => void sim.runFastForward()}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
+                >
+                  <Zap className="h-4 w-4" />
+                  Fast-forward 30 days
+                </button>
+              )}
+
+              {simLoading && (
+                <div className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Writing 30 days…
+                </div>
+              )}
+
+              {simPlaying && (
+                <>
+                  <div className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Playing — day {sim.dayIndex}/30
+                  </div>
+                  <button
+                    onClick={() => sim.skipToEnd()}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
+                  >
+                    <FastForward className="h-4 w-4" />
+                    Instant (skip to end)
+                  </button>
+                </>
+              )}
+
+              {simCanReset && !simPlaying && (
+                <button
+                  onClick={() => void sim.resetSimulation()}
+                  disabled={sim.status === "resetting"}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
+                >
+                  {sim.status === "resetting" ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                  Reset simulation
+                </button>
+              )}
+            </div>
+
+            <div className="mt-3 border-t pt-2">
+              <p className="mb-1 px-2 text-[11px] font-medium text-muted-foreground">Playback speed (per simulated day)</p>
+              <div className="space-y-1">
+                {SPEED_PRESETS.map((p) => (
+                  <button
+                    key={p.ms}
+                    onClick={() => sim.setSpeedMs(p.ms)}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
+                  >
+                    <span className="flex h-4 w-4 items-center justify-center">{sim.speedMs === p.ms ? <Check className="h-4 w-4" /> : null}</span>
+                    {p.label}
+                    <span className="ml-auto text-xs text-muted-foreground">{p.ms}ms/day · {p.hint}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {sim.error && <p role="alert" className="mt-2 text-xs text-destructive">{sim.error}</p>}
+          </PopoverContent>
+        </Popover>
+
         <button
           className={cn(
             "flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-sidebar-foreground/90 hover:bg-sidebar-accent",
