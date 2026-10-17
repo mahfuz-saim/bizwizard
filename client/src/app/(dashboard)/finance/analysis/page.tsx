@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { CheckCircle2, Loader2, ShieldCheck, Sparkles, XCircle } from "lucide-react"
 import { analysisApi, fmtBDT, fmtPct, fmtDecimal } from "@/lib/finance-api"
+import { useSimulator } from "@/lib/simulator-context"
 
 type Insight = { id: string; insightType: string; severity: string; title: string; summary: string; hypothesis: string; verificationStatus: string; verifiedMetrics?: Record<string, unknown> }
 type Econ = { productKey: string; productName: string; revenue: number; contribution: number; contributionMargin: number; quadrant: string; deadStock: boolean }
@@ -33,6 +34,7 @@ export default function AnalysisPage() {
 }
 
 function AnalysisInsights() {
+  const sim = useSimulator()
   const [metrics, setMetrics] = React.useState<Record<string, Record<string, number>> | null>(null)
   const [insights, setInsights] = React.useState<Insight[]>([])
   const [refuted, setRefuted] = React.useState(0)
@@ -62,6 +64,16 @@ function AnalysisInsights() {
     } catch (e) { setError(e instanceof Error ? e.message : "Could not load analysis. Log in and pick a shop, then try again.") }
   }, [])
   React.useEffect(() => { void load() }, [load])
+  React.useEffect(() => { if (sim.completedAt > 0) void load() }, [sim.completedAt, load])
+
+  // Layer 2: the simulator always produces one guaranteed VERIFIED insight
+  // (built from the real verifyHypothesis() counterfactual, not a canned
+  // string) — preview it mid-run, then let the authoritative refetch above
+  // take over once the run is done and it's actually persisted.
+  const simInsightPreview = sim.status === "playing" && sim.dayIndex >= 24 && sim.result ? sim.result.insight : null
+  const visibleInsights: Insight[] = simInsightPreview && !insights.some((i) => i.id === simInsightPreview.id)
+    ? [simInsightPreview as unknown as Insight, ...insights]
+    : insights
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true)
@@ -106,19 +118,29 @@ function AnalysisInsights() {
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2 text-base"><ShieldCheck className="h-4 w-4" /> Verified insights</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            {insights.length === 0 && <p className="text-sm text-muted-foreground">No verified insights yet — hit Re-analyse. Anything the verifier cannot prove stays out of this feed.</p>}
-            {insights.map((i) => (
-              <div key={i.id} className="rounded-lg border p-3">
-                <div className="flex items-center justify-between gap-2"><p className="text-sm font-medium">{i.title}</p><Badge variant={i.verificationStatus === "VERIFIED" ? "default" : "secondary"}>{i.verificationStatus === "VERIFIED" ? <><CheckCircle2 className="mr-1 h-3 w-3" /> Verified</> : <><XCircle className="mr-1 h-3 w-3" /> {i.verificationStatus}</>}</Badge></div>
-                <p className="mt-1 text-sm text-muted-foreground">{i.summary}</p>
-                <p className="text-xs text-muted-foreground">Hypothesis: {i.hypothesis}</p>
-                {i.verifiedMetrics && <p className="text-xs text-muted-foreground">Evidence: {Object.entries(i.verifiedMetrics).map(([k, v]) => `${k}=${typeof v === "number" ? fmtDecimal(v) : String(v)}`).join(" · ")}</p>}
-                <div className="mt-2 flex gap-2">
-                  <Button size="sm" variant="outline" disabled={busy} onClick={() => void run(() => analysisApi.createCapitalDecision({ insightID: i.id, decisionType: i.insightType === "WORKING_CAPITAL" ? "LIQUIDATE_STOCK" : "COLLECT_FAST", title: `Act on: ${i.title}`, rationale: i.hypothesis, capitalReleased: 0, projectedProfitImpact: 0 }))}>Propose capital action</Button>
-                  <Button size="sm" variant="ghost" disabled={busy} onClick={() => void run(() => analysisApi.dismissInsight(i.id))}>Dismiss</Button>
+            {visibleInsights.length === 0 && <p className="text-sm text-muted-foreground">No verified insights yet — hit Re-analyse. Anything the verifier cannot prove stays out of this feed.</p>}
+            {visibleInsights.map((i) => {
+              const isSimPreview = i.id === simInsightPreview?.id
+              const residualPct = i.verifiedMetrics && typeof i.verifiedMetrics.residualPct === "number" ? i.verifiedMetrics.residualPct : null
+              return (
+                <div key={i.id} className={`rounded-lg border p-3 ${isSimPreview ? "animate-in slide-in-from-top-2 fade-in border-brand-400 bg-brand-50/50 duration-500 dark:bg-brand-950/20" : ""}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium">{i.title}</p>
+                    <div className="flex items-center gap-1.5">
+                      {residualPct != null && <Badge variant="outline" title="Counterfactual: remove the candidate cause and re-measure the gap">Δ residual {fmtPct(residualPct)}</Badge>}
+                      <Badge variant={i.verificationStatus === "VERIFIED" ? "default" : "secondary"}>{i.verificationStatus === "VERIFIED" ? <><CheckCircle2 className="mr-1 h-3 w-3" /> Verified</> : <><XCircle className="mr-1 h-3 w-3" /> {i.verificationStatus}</>}</Badge>
+                    </div>
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">{i.summary}</p>
+                  <p className="text-xs text-muted-foreground">Hypothesis: {i.hypothesis}</p>
+                  {i.verifiedMetrics && <p className="text-xs text-muted-foreground">Evidence: {Object.entries(i.verifiedMetrics).map(([k, v]) => `${k}=${typeof v === "number" ? fmtDecimal(v) : String(v)}`).join(" · ")}</p>}
+                  <div className="mt-2 flex gap-2">
+                    <Button size="sm" variant="outline" disabled={busy || isSimPreview} onClick={() => void run(() => analysisApi.createCapitalDecision({ insightID: i.id, decisionType: i.insightType === "WORKING_CAPITAL" ? "LIQUIDATE_STOCK" : "COLLECT_FAST", title: `Act on: ${i.title}`, rationale: i.hypothesis, capitalReleased: 0, projectedProfitImpact: 0 }))}>Propose capital action</Button>
+                    <Button size="sm" variant="ghost" disabled={busy || isSimPreview} onClick={() => void run(() => analysisApi.dismissInsight(i.id))}>Dismiss</Button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </CardContent>
         </Card>
 
