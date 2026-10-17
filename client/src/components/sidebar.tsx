@@ -19,6 +19,10 @@ import {
   ChevronRight,
   Store,
   HelpCircle,
+  Landmark,
+  PiggyBank,
+  TrendingUp,
+  Bot,
 } from "lucide-react"
 import { useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
@@ -42,6 +46,10 @@ const primaryNav: NavItem[] = [
   { label: "Messages", href: "/messages", icon: MessageSquare },
   { label: "Employees", href: "/employees", icon: UserCog },
   { label: "Reports", href: "/reports", icon: FileBarChart },
+  { label: "Cash Flow", href: "/finance/cashflow", icon: PiggyBank },
+  { label: "Financing", href: "/finance/matching", icon: Landmark },
+  { label: "Analysis", href: "/finance/analysis", icon: TrendingUp },
+  { label: "AI Agents", href: "/finance/agent", icon: Bot },
 ]
 
 interface SidebarProps {

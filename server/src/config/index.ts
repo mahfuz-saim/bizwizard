@@ -44,6 +44,14 @@ export default {
         token: process.env.GMAIL_APPLICATION_TOKEN,
         credentials: process.env.GMAIL_APPLICATION_CREDENTIALS,
     },
+    ai: {
+        openaiApiKey: process.env.OPENAI_API_KEY,
+        modelFast: process.env.OPENAI_MODEL_FAST || 'gpt-4o-mini',
+        modelReasoning: process.env.OPENAI_MODEL_REASONING || 'gpt-4.1',
+        modelEmbedding: process.env.OPENAI_MODEL_EMBEDDING || 'text-embedding-3-small',
+        planBudgetUsd: Number(process.env.AI_PLAN_BUDGET_USD || 2),
+        featureFlags: process.env.AI_FEATURE_FLAGS || 'matching,cashflow,analysis,agents',
+    },
     demo: {
         email: process.env.DEMO_EMAIL,
         password: process.env.DEMO_PASSWORD,
