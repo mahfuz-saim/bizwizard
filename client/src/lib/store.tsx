@@ -58,6 +58,7 @@ interface DataContextValue {
   employees: Employee[]
   messages: ShopMessage[]
   notifications: ShopNotification[]
+  updateNotifications: React.Dispatch<React.SetStateAction<ShopNotification[]>>
   stats: DashboardStats
 
   addProduct: (
@@ -486,6 +487,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     employees,
     messages,
     notifications,
+    updateNotifications: setNotifications,
     stats: {
       ...stats,
       totalProducts: products.length,

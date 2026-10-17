@@ -10,11 +10,9 @@ import {
   Users,
   Truck,
   Receipt,
-  FileBarChart,
   Wallet,
   MessageSquare,
   UserCog,
-  LogOut,
   ChevronLeft,
   ChevronRight,
   Store,
@@ -24,7 +22,6 @@ import {
   TrendingUp,
   Bot,
 } from "lucide-react"
-import { useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -45,10 +42,9 @@ const primaryNav: NavItem[] = [
   { label: "Debts", href: "/debts", icon: Receipt },
   { label: "Messages", href: "/messages", icon: MessageSquare },
   { label: "Employees", href: "/employees", icon: UserCog },
-  { label: "Reports", href: "/reports", icon: FileBarChart },
   { label: "Cash Flow", href: "/finance/cashflow", icon: PiggyBank },
   { label: "Financing", href: "/finance/matching", icon: Landmark },
-  { label: "Analysis", href: "/finance/analysis", icon: TrendingUp },
+  { label: "Analysis & Reports", href: "/finance/analysis", icon: TrendingUp },
   { label: "AI Agents", href: "/finance/agent", icon: Bot },
 ]
 
@@ -60,7 +56,6 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
   const pathname = usePathname()
-  const { logout, source } = useStore()
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/"
@@ -129,15 +124,6 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
         >
           <HelpCircle className="h-5 w-5 shrink-0" />
           {!collapsed && <span>Help & Support</span>}
-        </button>
-        <button onClick={logout}
-          className={cn(
-            "flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-sidebar-foreground/90 hover:bg-sidebar-accent",
-            collapsed && "justify-center px-2"
-          )}
-        >
-          <LogOut className="h-5 w-5 shrink-0" />
-          {!collapsed && <span>{source === "mock" ? "Exit demo" : "Log out"}</span>}
         </button>
         <Button
           variant="ghost"

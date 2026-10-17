@@ -44,7 +44,7 @@ const getNotifications = catchAsync(async (req: Request, res: Response) => {
 
     sendResponse(res, {
         success: true,
-        statusCode: httpStatus.CREATED,
+        statusCode: httpStatus.OK,
         message: 'Notification Retrieved Successfully',
         data: result,
     });
@@ -58,6 +58,7 @@ const markNotificationAsRead = catchAsync(
             notificationId,
             req.user as JwtPayload,
             tenantId,
+            req.body.shopId,
         );
 
         sendResponse(res, {

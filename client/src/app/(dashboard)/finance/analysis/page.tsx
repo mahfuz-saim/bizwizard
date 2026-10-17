@@ -1,6 +1,9 @@
 "use client"
 
 import * as React from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ReportsPanel } from "@/components/reports-panel"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,6 +15,24 @@ type Insight = { id: string; insightType: string; severity: string; title: strin
 type Econ = { productKey: string; productName: string; revenue: number; contribution: number; contributionMargin: number; quadrant: string; deadStock: boolean }
 
 export default function AnalysisPage() {
+  const params = useSearchParams()
+  const router = useRouter()
+  const tab = params.get("tab") === "reports" ? "reports" : "analysis"
+  return <div className="space-y-6">
+    <div><h2 className="text-2xl font-bold tracking-tight">Analysis &amp; Reports</h2><p className="text-sm text-muted-foreground">Financial insights and business reports in one place.</p></div>
+    <Tabs value={tab} onValueChange={value => {
+      const next = new URLSearchParams(params.toString())
+      next.set("tab", value)
+      router.replace(`/finance/analysis?${next}`, { scroll: false })
+    }}>
+      <TabsList aria-label="Analysis and reports"><TabsTrigger value="analysis">Financial Analysis</TabsTrigger><TabsTrigger value="reports">Reports</TabsTrigger></TabsList>
+      <TabsContent value="analysis" className="mt-6"><AnalysisInsights /></TabsContent>
+      <TabsContent value="reports" className="mt-6"><ReportsPanel /></TabsContent>
+    </Tabs>
+  </div>
+}
+
+function AnalysisInsights() {
   const [metrics, setMetrics] = React.useState<Record<string, Record<string, number>> | null>(null)
   const [insights, setInsights] = React.useState<Insight[]>([])
   const [refuted, setRefuted] = React.useState(0)
