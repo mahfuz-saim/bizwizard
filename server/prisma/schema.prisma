@@ -1534,3 +1534,853 @@ enum IdType {
   BIRTH_CERTIFICATE
   OTHER
 }
+
+// ============================================================================
+// SME FINANCE COPILOT (see server/docs/FINANCE_COPILOT.md / PLAN.md)
+// Naming contract (PLAN §2.1): new FK columns are tenantID / shopID /
+// <entity>ID. Money is Float through roundCurrency (PLAN §2.2).
+// ============================================================================
+
+enum FinanceProviderType {
+  BANK
+  NBFI
+  MCA
+  DFO
+  DIGITAL_FINANCIER
+  COOPERATIVE
+  GOLD_LENDER
+}
+
+enum FinanceProductType {
+  TERM_LOAN
+  WORKING_CAPITAL
+  INVOICE_FINANCING
+  INVOICE_DISCOUNTING
+  EQUIPMENT_LEASE
+  MICRO_FINANCE
+  TRADE_CREDIT
+  GOLD_LOAN
+  REVOLVING_CREDIT
+  MUDRA_MICRO
+}
+
+enum EligibilityStatus {
+  ELIGIBLE
+  NEAR_MISS
+  INELIGIBLE
+}
+
+enum OfferIssuedBy {
+  AI_AGENT
+  HUMAN
+}
+
+enum FinancingOfferStatus {
+  DRAFT
+  ISSUED
+  COUNTERED
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  WITHDRAWN
+}
+
+enum NegotiationParty {
+  LENDER_AGENT
+  BORROWER_AGENT
+  OWNER
+}
+
+enum FinancingApplicationStatus {
+  DRAFT
+  SUBMITTED
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  DISBURSED
+  REPAID
+  DEFAULTED
+}
+
+enum LoanInstallmentStatus {
+  DUE
+  PAID
+  PARTIAL
+  OVERDUE
+}
+
+enum CashAccountType {
+  CASH
+  BANK
+  EWALLET
+  CARD
+  CREDIT_LINE
+}
+
+enum CashDirection {
+  IN
+  OUT
+}
+
+enum CashCategory {
+  SALES_COLLECTION
+  INVOICE_PAYMENT
+  PRODUCT_PURCHASE
+  OPERATING_EXPENSE
+  SALARY
+  RENT
+  UTILITY
+  TAX
+  LOAN_REPAYMENT
+  LOAN_DISBURSEMENT
+  FINANCING_FEE
+  OWNER_DRAWING
+  TRANSFER
+  OTHER
+}
+
+enum CashTransactionSource {
+  MANUAL
+  SALE
+  PURCHASE
+  EXPENSE
+  DEBT_PAYMENT
+  LOAN
+  TRANSFER
+  AI_SUGGESTED
+  BACKFILL
+}
+
+enum CashTransactionStatus {
+  PENDING
+  CLEARED
+}
+
+enum CommitmentRecurrence {
+  NONE
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum CommitmentSource {
+  MANUAL
+  IMPORTED_FROM_NOTE
+  AI_EXTRACTED
+  DERIVED_FROM_RECURRING
+}
+
+enum ProjectionMethod {
+  STATISTICAL
+  STATISTICAL_AI_ADJUSTED
+}
+
+enum CashAlertType {
+  SHORTFALL_PREDICTED
+  BUFFER_BELOW_TARGET
+  DEBT_OVERDUE
+  DEBT_DUE_SOON
+  COMMITMENT_DUE_SOON
+  LARGE_IDLE_CASH
+  REVENUE_DECLINE
+  EXPENSE_SPIKE
+  EXPENSED_SPIKE
+  NO_DATA
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum CashAlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+  DISMISSED
+}
+
+enum TreasuryActionType {
+  SWEEP_IDLE_CASH
+  COLLECT_DEBT
+  DEFER_OUTFLOW
+  RENEGOTIATE_SUPPLIER
+  RELEASE_RESERVE
+  HOLD_CASH
+  ESCALATE
+}
+
+enum TreasuryActionStatus {
+  PROPOSED
+  APPROVED
+  EXECUTED
+  REJECTED
+  SKIPPED
+  RECONCILED
+}
+
+enum InsightType {
+  ANOMALY
+  MARGIN_LEAK
+  CONCENTRATION_RISK
+  DEBT_RISK
+  EFFICIENCY
+  STRENGTH
+  WORKING_CAPITAL
+}
+
+enum InsightSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  VERIFIED
+  REFUTED
+}
+
+enum InsightStatus {
+  NEW
+  READ
+  ACTIONED
+  DISMISSED
+}
+
+enum CapitalDecisionType {
+  LIQUIDATE_STOCK
+  PUSH_PRODUCT
+  STOP_SERVING_CUSTOMER
+  RENEGOTIATE_SUPPLIER
+  PRICE_CHANGE
+  COLLECT_FAST
+  HOLD
+}
+
+enum CapitalDecisionStatus {
+  PROPOSED
+  APPROVED
+  REJECTED
+  EXECUTING
+  MEASURED
+}
+
+enum ScenarioCreatedBy {
+  AI
+  OWNER
+}
+
+enum ForecastTarget {
+  REVENUE
+  NET_CASH_FLOW
+  PROFIT
+}
+
+enum AiAgentType {
+  LENDER_AGENT
+  BORROWER_AGENT
+  TREASURER_AGENT
+  ANALYST_AGENT
+}
+
+enum AiGuardResult {
+  PASSED
+  REJECTED_BY_GUARD
+  REJECTED_BY_OWNER
+  NO_GUARD_REQUIRED
+}
+
+enum AiDecisionStatus {
+  PROPOSED
+  APPROVED
+  REJECTED
+  EXECUTED
+  RECONCILED
+  SUPERSEDED
+}
+
+enum AiRunStatus {
+  SUCCESS
+  SCHEMA_FAIL
+  GUARD_FAIL
+  TIMEOUT
+  RATE_LIMIT
+}
+
+enum FinancingMarketStatus {
+  OPEN
+  MATCHED
+  CLOSED
+}
+
+enum FinancingPurpose {
+  WORKING_CAPITAL
+  INVENTORY
+  EXPANSION
+  EQUIPMENT
+  DEBT_CONSOLIDATION
+  EMERGENCY
+}
+
+model FinanceProvider {
+  id           String              @id @default(cuid())
+  name         String
+  providerType FinanceProviderType
+  logoUrl      String?
+  country      String              @default("BD")
+  riskAppetite Float
+  baseRate     Float
+  isActive     Boolean             @default(true)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  products     FinanceProduct[]
+
+  @@map("finance_providers")
+}
+
+model FinanceProduct {
+  id                    String             @id @default(cuid())
+  providerID            String
+  provider              FinanceProvider    @relation(fields: [providerID], references: [id])
+  name                  String
+  productType           FinanceProductType
+  description           String
+  minAmount             Float
+  maxAmount             Float
+  minTenorMonths        Int
+  maxTenorMonths        Int
+  interestRateMin       Float
+  interestRateMax       Float
+  processingFeePct      Float
+  collateralRequired    Boolean
+  collateralTypes       String[]
+  minBusinessAgeMonths  Int
+  minMonthlyRevenue     Float
+  maxDebtToRevenue      Float
+  requiresGSTIN         Boolean            @default(false)
+  requiresBankStatements Boolean           @default(false)
+  requiredDocs          String[]
+  eligibilityRules      Json?
+  sectorFit             String[]
+  renewalAllowed        Boolean            @default(false)
+  isActive              Boolean            @default(true)
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  @@index([providerID])
+  @@index([productType, isActive])
+  @@map("finance_products")
+}
+
+model BusinessFinancialProfile {
+  id                  String   @id @default(cuid())
+  tenantID            String
+  shopID              String
+  periodStart         DateTime
+  periodEnd           DateTime
+  revenue             Float
+  cogs                Float
+  grossProfit         Float
+  grossMargin         Float
+  opex                Float
+  ebitda              Float
+  netProfit           Float
+  burnRate            Float
+  avgDailyRevenue     Float
+  avgDailySpend       Float
+  currentCash         Float
+  receivables         Float
+  payables            Float
+  inventoryValue      Float
+  dso                 Float
+  dio                 Float
+  dpo                 Float
+  cashConversionCycle Float
+  debtOutstanding     Float
+  debtToRevenue       Float
+  interestCoverage    Float?
+  avgTransactionValue Float
+  salesVolatility     Float
+  businessAgeMonths   Int
+  dataCompleteness    Float
+  computedAt          DateTime @default(now())
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([shopID, periodEnd])
+  @@index([tenantID, shopID])
+  @@map("business_financial_profiles")
+}
+
+model FinancingMarketState {
+  id                   String                @id @default(cuid())
+  tenantID             String
+  shopID               String
+  requestedAmount      Float
+  purpose              FinancingPurpose
+  preferredTenorMonths Int?
+  maxRate              Float?
+  maxCollateral        Float?
+  status               FinancingMarketStatus @default(OPEN)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+
+  @@index([tenantID, shopID])
+  @@map("financing_market_states")
+}
+
+model FinancingMatch {
+  id                  String            @id @default(cuid())
+  tenantID            String
+  shopID              String
+  profileID           String
+  financeProductID    String
+  eligibilityStatus   EligibilityStatus
+  failedRules         String[]
+  deterministicScore  Float
+  aiScore             Float?
+  finalScore          Float
+  aiRationale         String
+  aiTradeoffs         String[]
+  aiConfidence        Float
+  aiModel             String
+  promptVersion       String
+  estimatedCost       Float
+  maxAffordableAmount Float
+  createdAt           DateTime          @default(now())
+
+  @@index([tenantID, shopID])
+  @@index([financeProductID])
+  @@map("financing_matches")
+}
+
+model FinancingOffer {
+  id                 String               @id @default(cuid())
+  tenantID           String
+  shopID             String
+  financeProductID   String
+  providerID         String
+  offeredAmount      Float
+  offeredRate        Float
+  tenorMonths        Int
+  advanceRate        Float
+  effectiveApr       Float
+  totalRepayment     Float
+  collateralRequired Boolean
+  collateralTypes    String[]
+  conditions         String[]
+  rationale          String
+  issuedBy           OfferIssuedBy        @default(AI_AGENT)
+  status             FinancingOfferStatus @default(DRAFT)
+  confidence         Float
+  aiModel            String
+  promptVersion      String
+  expiresAt          DateTime
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  @@index([tenantID, shopID])
+  @@index([financeProductID])
+  @@map("financing_offers")
+}
+
+model FinancingNegotiation {
+  id                  String           @id @default(cuid())
+  tenantID            String
+  shopID              String
+  offerID             String
+  round               Int
+  fromParty           NegotiationParty
+  toParty             NegotiationParty
+  proposedAmount      Float
+  proposedRate        Float
+  proposedTenorMonths Int
+  message             String
+  reasoning           String
+  accepted            Boolean          @default(false)
+  createdAt           DateTime         @default(now())
+
+  @@index([offerID])
+  @@index([tenantID, shopID])
+  @@map("financing_negotiations")
+}
+
+model FinancingApplication {
+  id                   String                     @id @default(cuid())
+  tenantID             String
+  shopID               String
+  financeProductID     String
+  offerID              String
+  requestedAmount      Float
+  requestedTenorMonths Int
+  status               FinancingApplicationStatus @default(DRAFT)
+  submittedDocs        String[]
+  ownerApproved        Boolean                    @default(false)
+  rejectionReason      String?
+  disbursedAt          DateTime?
+  firstRepaymentAt     DateTime?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+
+  @@index([tenantID, shopID])
+  @@index([offerID])
+  @@map("financing_applications")
+}
+
+model LoanSchedule {
+  id            String                @id @default(cuid())
+  tenantID      String
+  shopID        String
+  applicationID String
+  installmentNo Int
+  dueDate       DateTime
+  principalDue  Float
+  interestDue   Float
+  totalDue      Float
+  paidAmount    Float                 @default(0)
+  status        LoanInstallmentStatus @default(DUE)
+  paidAt        DateTime?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  @@index([applicationID])
+  @@index([tenantID, shopID])
+  @@map("loan_schedules")
+}
+
+model CashAccount {
+  id             String          @id @default(cuid())
+  tenantID       String
+  shopID         String
+  name           String
+  accountType    CashAccountType
+  currency       String          @default("BDT")
+  openingBalance Float
+  currentBalance Float
+  isPrimary      Boolean         @default(false)
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([tenantID, shopID])
+  @@map("cash_accounts")
+}
+
+model CashTransaction {
+  id                 String                @id @default(cuid())
+  tenantID           String
+  shopID             String
+  accountID          String
+  direction          CashDirection
+  amount             Float
+  category           CashCategory
+  occurredAt         DateTime
+  description        String?
+  source             CashTransactionSource @default(MANUAL)
+  sourceRefID        String?
+  status             CashTransactionStatus @default(CLEARED)
+  aiCategorized      Boolean               @default(false)
+  categoryConfidence Float?
+  isBackfilled       Boolean               @default(false)
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  @@index([tenantID, shopID, occurredAt])
+  @@index([accountID])
+  @@index([sourceRefID])
+  @@map("cash_transactions")
+}
+
+model CashCommitment {
+  id         String               @id @default(cuid())
+  tenantID   String
+  shopID     String
+  name       String
+  category   CashCategory
+  amount     Float
+  dueDate    DateTime
+  recurrence CommitmentRecurrence @default(NONE)
+  confidence Float                @default(1)
+  isPaid     Boolean              @default(false)
+  paidAt     DateTime?
+  source     CommitmentSource     @default(MANUAL)
+  note       String?
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+
+  @@index([tenantID, shopID, dueDate])
+  @@map("cash_commitments")
+}
+
+model CashFlowProjection {
+  id                  String           @id @default(cuid())
+  tenantID            String
+  shopID              String
+  asOf                DateTime
+  horizonDays         Int              @default(90)
+  dailyBuckets        Json
+  expectedInflows     Float
+  expectedOutflows    Float
+  closingBalance      Float
+  minProjectedBalance Float
+  troughDate          DateTime?
+  shortfallDate       DateTime?
+  shortfallAmount     Float            @default(0)
+  daysOfBuffer        Float
+  method              ProjectionMethod @default(STATISTICAL)
+  aiNarrative         String?
+  aiConfidence        Float?
+  model               String?
+  promptVersion       String?
+  createdAt           DateTime         @default(now())
+
+  @@index([tenantID, shopID, asOf])
+  @@map("cash_flow_projections")
+}
+
+model CashAlert {
+  id                 String          @id @default(cuid())
+  tenantID           String
+  shopID             String
+  alertType          CashAlertType
+  severity           AlertSeverity
+  title              String
+  message            String
+  aiNarrative        String?
+  recommendedActions Json?
+  triggerRule        String
+  metricSnapshot     Json
+  projectedShortfall Float?
+  status             CashAlertStatus @default(OPEN)
+  snoozedUntil       DateTime?
+  acknowledgedAt     DateTime?
+  resolvedAt         DateTime?
+  notificationID     String?
+  createdAt          DateTime        @default(now())
+
+  @@index([tenantID, shopID, status])
+  @@map("cash_alerts")
+}
+
+model TreasuryAction {
+  id                    String               @id @default(cuid())
+  tenantID              String
+  shopID                String
+  agentPolicyID         String
+  actionType            TreasuryActionType
+  title                 String
+  rationale             String
+  amount                Float
+  fromAccountID         String?
+  toAccountID           String?
+  targetRefID           String?
+  expectedDaysToEffect  Int                  @default(7)
+  projectedImpact       Float
+  realizedImpact        Float?
+  status                TreasuryActionStatus @default(PROPOSED)
+  requiresOwnerApproval Boolean              @default(true)
+  executedAt            DateTime?
+  reconciledAt          DateTime?
+  createdAt             DateTime             @default(now())
+
+  @@index([tenantID, shopID, status])
+  @@index([agentPolicyID])
+  @@map("treasury_actions")
+}
+
+model FinancialMetricSnapshot {
+  id            String   @id @default(cuid())
+  tenantID      String
+  shopID        String
+  metricKey     String
+  scope         String?
+  period        String
+  value         Float
+  unit          String
+  previousValue Float?
+  delta         Float?
+  benchmark     Float?
+  computedAt    DateTime @default(now())
+
+  @@index([tenantID, shopID, metricKey])
+  @@map("financial_metric_snapshots")
+}
+
+model Insight {
+  id                 String             @id @default(cuid())
+  tenantID           String
+  shopID             String
+  insightType        InsightType
+  severity           InsightSeverity
+  title              String
+  summary            String
+  metricSnapshot     Json
+  hypothesis         String
+  candidates         Json
+  verificationStatus VerificationStatus @default(UNVERIFIED)
+  verifiedMetrics    Json?
+  aiConfidence       Float
+  model              String
+  promptVersion      String
+  status             InsightStatus      @default(NEW)
+  linkedActionID     String?
+  createdAt          DateTime           @default(now())
+
+  @@index([tenantID, shopID, verificationStatus])
+  @@map("insights")
+}
+
+model CapitalDecision {
+  id                    String                @id @default(cuid())
+  tenantID              String
+  shopID                String
+  insightID             String?
+  decisionType          CapitalDecisionType
+  title                 String
+  rationale             String
+  capitalReleased       Float
+  projectedProfitImpact Float
+  realizedProfitImpact  Float?
+  status                CapitalDecisionStatus @default(PROPOSED)
+  approvedAt            DateTime?
+  measuredAt            DateTime?
+  createdAt             DateTime              @default(now())
+
+  @@index([tenantID, shopID, status])
+  @@map("capital_decisions")
+}
+
+model Scenario {
+  id               String            @id @default(cuid())
+  tenantID         String
+  shopID           String
+  name             String
+  assumptions      Json
+  projected        Json
+  aiRecommendation String?
+  expectedValue    Float?
+  confidence       Float?
+  createdBy        ScenarioCreatedBy @default(OWNER)
+  createdAt        DateTime          @default(now())
+
+  @@index([tenantID, shopID])
+  @@map("scenarios")
+}
+
+model Forecast {
+  id           String         @id @default(cuid())
+  tenantID     String
+  shopID       String
+  target       ForecastTarget
+  horizonDays  Int
+  series       Json
+  method       String
+  backtestMAPE Float?
+  aiNarrative  String?
+  createdAt    DateTime       @default(now())
+
+  @@index([tenantID, shopID, target])
+  @@map("forecasts")
+}
+
+model AiAgentPolicy {
+  id             String      @id @default(cuid())
+  tenantID       String?
+  shopID         String?
+  agentType      AiAgentType
+  name           String
+  objective      String
+  riskAppetite   Float
+  maxExposure    Float?
+  minMargin      Float?
+  requiredReturn Float?
+  bufferTargetDays Int?
+  budget         Float?
+  config         Json?
+  version        Int         @default(1)
+  isActive       Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([agentType, isActive])
+  @@index([tenantID, shopID])
+  @@map("ai_agent_policies")
+}
+
+model AiDecision {
+  id             String           @id @default(cuid())
+  tenantID       String
+  shopID         String
+  agentType      AiAgentType
+  decisionType   String
+  action         String
+  rationale      String
+  confidence     Float
+  model          String
+  promptVersion  String
+  inputHash      String
+  inputSnapshot  Json
+  output         Json
+  projectedImpact Float
+  realizedImpact Float?
+  guardResult    AiGuardResult    @default(NO_GUARD_REQUIRED)
+  guardReason    String?
+  humanOverride  Boolean          @default(false)
+  status         AiDecisionStatus @default(PROPOSED)
+  decidedAt      DateTime         @default(now())
+  reconciledAt   DateTime?
+
+  @@index([tenantID, shopID, agentType])
+  @@map("ai_decisions")
+}
+
+model AgentPerformance {
+  id                    String      @id @default(cuid())
+  tenantID              String
+  shopID                String
+  agentType             AiAgentType
+  periodStart           DateTime
+  periodEnd             DateTime
+  decisionsCount        Int         @default(0)
+  executedCount         Int         @default(0)
+  guardRejects          Int         @default(0)
+  projectedImpactSum    Float       @default(0)
+  realizedImpactSum     Float       @default(0)
+  avoidedShortfallAmount Float      @default(0)
+  forecastMAPE          Float?
+  offerAcceptanceRate   Float?
+  costSavedVsBaseline   Float?
+  benchmarkImpact       Float       @default(0)
+  alpha                 Float       @default(0)
+  benchmarkPolicyVersion String     @default("pinned-v1")
+  score                 Float       @default(0)
+  computedAt            DateTime    @default(now())
+
+  @@index([tenantID, shopID, agentType])
+  @@map("agent_performance")
+}
+
+model AiRun {
+  id           String      @id @default(cuid())
+  tenantID     String?
+  shopID       String?
+  agentType    String
+  purpose      String
+  model        String
+  promptVersion String
+  inputTokens  Int         @default(0)
+  outputTokens Int         @default(0)
+  costUsd      Float       @default(0)
+  latencyMs    Int         @default(0)
+  status       AiRunStatus @default(SUCCESS)
+  retryCount   Int         @default(0)
+  error        String?
+  createdAt    DateTime    @default(now())
+
+  @@index([tenantID, createdAt])
+  @@map("ai_runs")
+}

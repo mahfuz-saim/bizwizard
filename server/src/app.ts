@@ -7,6 +7,9 @@ import cookieParser from 'cookie-parser';
 import cron from 'node-cron';
 import { errorlogger } from './shared/logger';
 import { cronService } from './app/modules/cron/cron.service';
+import { installAiRunSink, runDailyFinanceJobs } from './app/modules/finance/cron/financeCron.service';
+
+installAiRunSink();
 
 const app: Application = express();
 
@@ -42,6 +45,15 @@ app.get('/test', async (req: Request, res: Response) => {
 cron.schedule('* * * * *', async (): Promise<void> => {
     try {
         await cronService.deleteForgetRequest();
+    } catch (error) {
+        errorlogger.error(error);
+    }
+});
+
+// Finance Copilot: daily 06:00 treasury run (projection -> alerts -> actions)
+cron.schedule('0 6 * * *', async (): Promise<void> => {
+    try {
+        await runDailyFinanceJobs();
     } catch (error) {
         errorlogger.error(error);
     }

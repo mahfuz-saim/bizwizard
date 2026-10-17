@@ -26,6 +26,10 @@ import { subscriptionRoutes } from '../modules/subscriptions/subscriptions.route
 import { notificationRoutes } from '../modules/notification/notification.routes';
 import { couponRoutes } from '../modules/coupon/coupon.routes';
 import { referralRouters } from '../modules/referral/referral.routes';
+import { matchingRoutes } from '../modules/finance/matching/matching.routes';
+import { cashflowRoutes } from '../modules/finance/cashflow/cashflow.routes';
+import { analysisRoutes } from '../modules/finance/analysis/analysis.routes';
+import { agentsRoutes } from '../modules/finance/agents/agents.routes';
 
 const router = express.Router();
 
@@ -139,6 +143,22 @@ const moduleRoutes = [
     {
         path: '/referral',
         route: referralRouters,
+    },
+    {
+        path: '/finance/matching',
+        route: matchingRoutes,
+    },
+    {
+        path: '/finance/cashflow',
+        route: cashflowRoutes,
+    },
+    {
+        path: '/finance/analysis',
+        route: analysisRoutes,
+    },
+    {
+        path: '/finance/agents',
+        route: agentsRoutes,
     },
 ];
 

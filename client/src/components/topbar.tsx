@@ -227,6 +227,10 @@ export function MobileNavSheet({ open, onOpenChange }: MobileNavSheetProps) {
     { label: "Messages", href: "/messages" },
     { label: "Employees", href: "/employees" },
     { label: "Reports", href: "/reports" },
+    { label: "Cash Flow", href: "/finance/cashflow" },
+    { label: "Financing", href: "/finance/matching" },
+    { label: "Analysis", href: "/finance/analysis" },
+    { label: "AI Agents", href: "/finance/agent" },
   ]
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
