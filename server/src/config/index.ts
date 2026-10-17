@@ -17,14 +17,8 @@ export default {
         expires_in: process.env.EXPIRES_IN,
         refresh_secret: process.env.REFRESH_SECRET,
         refresh_expires_in: process.env.REFRESH_EXPIRES_IN,
-        passwordResetTokenExpirationTime:
-            process.env.PASS_RESET_EXPIRATION_TIME,
     },
-    reset_link: process.env.RESET_LINK,
-    email: process.env.EMAIL,
-    gmail_app_pass: process.env.GMAIL_APP_PASS,
     alert_recipients: process.env.ALERT_RECIPIENT_EMAILS,
-    bcrypt_salt_rounds: process.env.SALT_ROUND,
     cloudinary: {
         cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
         api_key: process.env.CLOUDINARY_API_KEY,
