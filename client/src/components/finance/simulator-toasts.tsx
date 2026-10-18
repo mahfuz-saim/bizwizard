@@ -7,7 +7,7 @@ import { useSimulator } from "@/lib/simulator-context"
 import type { SimToast } from "@/lib/simulator-api"
 
 const STYLES: Record<SimToast["kind"], string> = {
-  critical: "border-destructive/50 bg-destructive/10 text-destructive-foreground",
+  critical: "border-destructive/50 text-destructive",
   guard: "border-amber-500/50 bg-amber-500/10",
   reconciled: "border-emerald-500/50 bg-emerald-500/10",
 }
@@ -39,7 +39,7 @@ function ToastCard({ toast, onClose }: { toast: SimToast; onClose: () => void })
   return (
     <div
       role="status"
-      className={`animate-in slide-in-from-bottom-4 fade-in pointer-events-auto rounded-xl border p-3 shadow-lg backdrop-blur ${STYLES[toast.kind]} bg-background/95 duration-300`}
+      className={`animate-in slide-in-from-bottom-2 fade-in pointer-events-auto rounded-xl border bg-popover p-4 shadow-md ${STYLES[toast.kind]} duration-150`}
     >
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-semibold">{toast.title}</p>
