@@ -34,7 +34,7 @@ export default function DebtsPage() {
         <Button disabled title="Payment recording is not yet connected"><Plus className="mr-2 h-4 w-4" /> Record Payment</Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="metric-grid grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Card><CardContent className="p-4">
           <p className="text-xs font-medium text-muted-foreground">You will receive</p>
           <p className="mt-1 text-2xl font-bold text-success">{formatCurrency(totalReceivable)}</p>

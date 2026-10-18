@@ -24,7 +24,7 @@ export default function EmployeesPage() {
         <Button disabled title="Invitation workflow is not connected"><Plus className="mr-2 h-4 w-4" /> Invite Employee</Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 md:grid-cols-4">
+      <div className="metric-grid grid grid-cols-1 gap-4 sm:grid-cols-3 md:grid-cols-4">
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Total Staff</p><p className="mt-1 text-2xl font-bold">{employees.length}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Staff Records</p><p className="mt-1 text-2xl font-bold text-success">{employees.length}</p></CardContent></Card>
       </div>
@@ -32,15 +32,15 @@ export default function EmployeesPage() {
       <Card>
         <CardHeader><CardTitle className="text-base">Team Members</CardTitle></CardHeader>
         <CardContent className="p-0">
-        <div className="grid gap-3 p-6 md:grid-cols-2">
+        <div className="grid gap-3 p-3 sm:p-6 md:grid-cols-2">
           {employees.length === 0 ? (
             <p className="col-span-full py-10 text-center text-sm text-muted-foreground">No staff records yet.</p>
           ) : pageItems.map((e) => (
-            <div key={e.id} className="flex items-center gap-3 rounded-lg border p-4">
+            <div key={e.id} className="contact-card flex items-center gap-3 rounded-lg border p-4">
               <Avatar className="h-12 w-12" style={{ backgroundColor: generateAvatarColor(e.name) }}>
                 <AvatarFallback className="bg-transparent text-white">{getInitials(e.name)}</AvatarFallback>
               </Avatar>
-              <div className="flex-1">
+              <div className="min-w-0 flex-1">
                 <p className="font-semibold">{e.name}</p>
                 <p className="flex items-center gap-1 text-xs text-muted-foreground"><Phone className="h-3 w-3" /> {e.phone}</p>
                 <p className="flex items-center gap-1 text-xs text-muted-foreground"><Calendar className="h-3 w-3" /> Joined {formatDate(e.joinedAt)}</p>

@@ -164,7 +164,7 @@ export default function InventoryPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="metric-grid grid grid-cols-2 gap-4 md:grid-cols-4">
         <Card>
           <CardContent className="p-4">
             <p className="text-xs font-medium text-muted-foreground">Total Products</p>
@@ -210,7 +210,7 @@ export default function InventoryPage() {
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             <Tabs value={stockFilter} onValueChange={setStockFilter} className="w-auto">
-              <TabsList>
+              <TabsList className="grid grid-cols-2 sm:flex">
                 <TabsTrigger value="all">All</TabsTrigger>
                 <TabsTrigger value="in">In Stock</TabsTrigger>
                 <TabsTrigger value="low">
@@ -220,9 +220,9 @@ export default function InventoryPage() {
               </TabsList>
             </Tabs>
 
-            <div className="ml-auto flex flex-wrap items-center gap-2">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-44">
+                <SelectTrigger className="w-full sm:w-44">
                   <SelectValue placeholder="Category" />
                 </SelectTrigger>
                 <SelectContent>
@@ -233,7 +233,7 @@ export default function InventoryPage() {
                 </SelectContent>
               </Select>
               <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-40">
+                <SelectTrigger className="w-full sm:w-40">
                   <Filter className="mr-2 h-4 w-4" />
                   <SelectValue placeholder="Sort" />
                 </SelectTrigger>
@@ -250,7 +250,7 @@ export default function InventoryPage() {
 
           {/* Product Table */}
           <div className="rounded-lg border">
-            <Table>
+            <Table className="mobile-records inventory-records">
               <TableHeader className="bg-muted/50">
                 <TableRow>
                   <TableHead>Product</TableHead>
@@ -276,7 +276,7 @@ export default function InventoryPage() {
                     const outOfStock = p.stock === 0
                     return (
                       <TableRow key={p.id}>
-                        <TableCell>
+                        <TableCell data-label="Product">
                           <div className="flex items-center gap-3">
                             <Avatar className="h-9 w-9" style={{ backgroundColor: generateAvatarColor(p.name) }}>
                               {p.image ? <AvatarImage src={p.image} alt={p.name} /> : null}
@@ -288,7 +288,7 @@ export default function InventoryPage() {
                               <div className="flex items-center gap-2">
                                 <Link
                                   href={`/inventory/${p.id}`}
-                                  className="truncate text-sm font-medium hover:underline"
+                                  className="wrap-break-word text-sm font-medium hover:underline sm:truncate"
                                 >
                                   {p.name}
                                 </Link>
@@ -306,10 +306,10 @@ export default function InventoryPage() {
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell data-label="Category">
                           <Badge variant="outline">{p.category}</Badge>
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell data-label="Stock" className="text-right">
                           <div className="flex items-center justify-end gap-2">
                             <span className={`font-semibold ${outOfStock ? "text-destructive" : lowStock ? "text-warning" : ""}`}>
                               {p.stock}
@@ -325,13 +325,13 @@ export default function InventoryPage() {
                             ) : null}
                           </div>
                         </TableCell>
-                        <TableCell className="text-right hidden md:table-cell text-muted-foreground">
+                        <TableCell data-label="Buy price" className="text-right hidden md:table-cell text-muted-foreground">
                           {formatCurrency(p.buyPrice)}
                         </TableCell>
-                        <TableCell className="text-right font-semibold">
+                        <TableCell data-label="Sell price" className="text-right font-semibold">
                           {formatCurrency(p.sellPrice)}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell data-label="Actions" className="text-right">
                           <div className="flex items-center justify-end gap-1">
                             <Button variant="ghost" size="icon" onClick={() => openBuy(p)} title="Buy more">
                               <Truck className="h-4 w-4 text-warning" />

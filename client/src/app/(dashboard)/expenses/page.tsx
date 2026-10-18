@@ -40,7 +40,7 @@ export default function ExpensesPage() {
         <Button disabled title="Expense creation is not connected"><Plus className="mr-2 h-4 w-4" /> Add Expense</Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="metric-grid grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card><CardContent className="p-4"><p className="text-xs font-medium text-muted-foreground">Total Expenses</p><p className="mt-1 text-2xl font-bold text-destructive">{formatCurrency(totalAmount)}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs font-medium text-muted-foreground">This Month</p><p className="mt-1 text-2xl font-bold">{formatCurrency(monthTotal)}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs font-medium text-muted-foreground">Categories</p><p className="mt-1 text-2xl font-bold">{query.data?.categories ?? new Set(expenses.map(e => e.category)).size}</p></CardContent></Card>
@@ -51,7 +51,7 @@ export default function ExpensesPage() {
         <CardContent>
           <div className="rounded-lg border">
             {query.remote && <PageRefreshState loading={query.loading} error={query.error} retry={query.retry} />}
-            <Table aria-busy={query.remote && query.loading}>
+            <Table className="mobile-records" aria-busy={query.remote && query.loading}>
               <TableHeader className="bg-muted/50">
                 <TableRow>
                   <TableHead>Date</TableHead>
@@ -65,10 +65,10 @@ export default function ExpensesPage() {
                   <TableRow><TableCell colSpan={4} className="py-10 text-center text-muted-foreground">No expenses recorded yet.</TableCell></TableRow>
                 ) : pageItems.map((e) => (
                   <TableRow key={e.id}>
-                    <TableCell className="text-sm">{formatDate(e.date)}</TableCell>
-                    <TableCell><Badge variant="secondary">{e.category}</Badge></TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{e.note || "—"}</TableCell>
-                    <TableCell className="text-right font-semibold text-destructive">{formatCurrency(e.amount)}</TableCell>
+                    <TableCell data-label="Date" className="text-sm">{formatDate(e.date)}</TableCell>
+                    <TableCell data-label="Category"><Badge variant="secondary">{e.category}</Badge></TableCell>
+                    <TableCell data-label="Note" className="text-sm text-muted-foreground">{e.note || "—"}</TableCell>
+                    <TableCell data-label="Amount" className="text-right font-semibold text-destructive">{formatCurrency(e.amount)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

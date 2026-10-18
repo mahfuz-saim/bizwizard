@@ -44,7 +44,7 @@ export default function CustomersPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="metric-grid grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card><CardContent className="p-4">
           <p className="text-xs font-medium text-muted-foreground">Total Customers</p>
           <p className="mt-1 text-2xl font-bold">{customers.length}</p>
@@ -71,14 +71,14 @@ export default function CustomersPage() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-        <div className="grid grid-cols-1 gap-3 p-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 p-3 sm:p-6 md:grid-cols-2 lg:grid-cols-3">
           {filtered.length === 0 ? (
             <p className="col-span-full py-10 text-center text-sm text-muted-foreground">
               <Users className="mx-auto mb-2 h-8 w-8 opacity-50" />
               No customers found
             </p>
           ) : pageItems.map((c) => (
-            <div key={c.id} className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:border-brand-400 hover:shadow-sm">
+            <div key={c.id} className="contact-card flex items-center gap-3 rounded-lg border p-3 transition-colors hover:border-brand-400 hover:shadow-sm">
               <Avatar className="h-11 w-11" style={{ backgroundColor: generateAvatarColor(c.name) }}>
                 <AvatarFallback className="bg-transparent text-white">{getInitials(c.name)}</AvatarFallback>
               </Avatar>

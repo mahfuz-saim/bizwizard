@@ -75,23 +75,23 @@ export function Topbar({ onOpenMobileNav, shopName = "My Store" }: TopbarProps) 
   })()
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:px-6">
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-1 border-b bg-background px-2 sm:gap-3 sm:px-4 md:px-6">
       <Button
         variant="ghost"
         size="icon"
-        className="md:hidden"
+        className="h-9 w-9 shrink-0 md:hidden"
         onClick={onOpenMobileNav}
       >
         <Menu className="h-5 w-5" />
         <span className="sr-only">Open menu</span>
       </Button>
 
-      <div className="flex flex-1 items-center gap-3">
-        <div className="md:hidden flex items-center gap-2">
+      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+        <div className="flex min-w-0 items-center gap-1.5 md:hidden">
           <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <Store className="h-4 w-4" />
           </div>
-          <span className="font-semibold">BizWizard</span>
+          <span className="truncate text-sm font-semibold sm:text-base">BizWizard</span>
         </div>
 
         <div className="hidden md:flex flex-col">
@@ -99,13 +99,13 @@ export function Topbar({ onOpenMobileNav, shopName = "My Store" }: TopbarProps) 
           <h1 className="text-lg font-semibold leading-tight">{pageTitle}</h1>
         </div>
 
-        <div className="relative ml-auto w-full max-w-sm md:ml-6 md:mx-auto">
+        <div className="relative ml-auto hidden w-full max-w-sm sm:block md:ml-6 md:mx-auto">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Search products, customers..." className="pl-9 pr-4" />
         </div>
       </div>
 
-      <div className="flex items-center gap-1 md:gap-2">
+      <div className="flex shrink-0 items-center gap-0 sm:gap-1 md:gap-2">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

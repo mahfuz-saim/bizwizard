@@ -42,7 +42,7 @@ export default function SuppliersPage() {
         <Button><Plus className="mr-2 h-4 w-4" /> Add Supplier</Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="metric-grid grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card><CardContent className="p-4"><p className="text-xs font-medium text-muted-foreground">Total Suppliers</p><p className="mt-1 text-2xl font-bold">{suppliers.length}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs font-medium text-muted-foreground">Total Payable</p><p className="mt-1 text-2xl font-bold text-destructive">{source === "mock" ? formatCurrency(totalDue) : "Not tracked"}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs font-medium text-muted-foreground">{source === "mock" ? "Total Paid" : "Purchase Volume"}</p><p className="mt-1 text-2xl font-bold text-success">{source === "mock" ? formatCurrency(totalPaid) : formatCurrency(suppliers.reduce((n, s) => n + (s.totalPurchased || 0), 0))}</p></CardContent></Card>
@@ -56,11 +56,11 @@ export default function SuppliersPage() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-        <div className="grid grid-cols-1 gap-3 p-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 p-3 sm:p-6 md:grid-cols-2 lg:grid-cols-3">
           {filtered.length === 0 ? (
             <p className="col-span-full py-10 text-center text-sm text-muted-foreground">No suppliers found</p>
           ) : pageItems.map((s) => (
-            <div key={s.id} className="flex items-center gap-3 rounded-lg border p-3 hover:border-brand-400 hover:shadow-sm">
+            <div key={s.id} className="contact-card flex items-center gap-3 rounded-lg border p-3 hover:border-brand-400 hover:shadow-sm">
               <Avatar className="h-11 w-11" style={{ backgroundColor: generateAvatarColor(s.name) }}>
                 <AvatarFallback className="bg-transparent text-white">{getInitials(s.name)}</AvatarFallback>
               </Avatar>
