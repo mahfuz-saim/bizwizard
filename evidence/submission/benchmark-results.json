@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-18T14:30:44.487Z",
+  "generatedAt": "2026-10-18T15:47:03.382Z",
   "source": {
-    "commit": "8629cdeaa57bfcda88175511b9d0a7b119311cc5",
-    "dirty": true,
-    "trackedDiffSha256": "cd82c736559df2048aff7b9ef26c7755fedf157521573aa509dab6ec8fdf8c73",
-    "sourceTreeSha256": "fc3f8c2a5886aef67079a63d0be23c6f23deb31fb7668387d165e0c0dfb823d9",
-    "sourceFileCount": 589,
+    "commit": "8f394d2d074b2eafa93c4f7d283550aeb96f21dd",
+    "dirty": false,
+    "trackedDiffSha256": "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126",
+    "sourceTreeSha256": "b9e886ce8b472a8532bfd782dada27028afb69550725452baba799e3cbe355fd",
+    "sourceFileCount": 590,
     "sourceHashScope": "Tracked and nonignored TypeScript, Prisma, SQL, YAML, package manifests, README and gitignore files, sorted by path; evidence JSON and secrets are excluded.",
-    "warning": "Working tree contains changes; commit this implementation before recording final submission evidence."
+    "warning": null
   },
   "report": {
     "mode": "fixture-policy-not-AI",
@@ -311,7 +311,7 @@
         "valid": true,
         "usedFallback": true,
         "model": "deterministic-fallback",
-        "latencyMs": 0,
+        "latencyMs": 1,
         "usage": {
           "inputTokens": 0,
           "outputTokens": 0,

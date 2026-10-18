@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-18T13:45:48.092Z",
+  "generatedAt": "2026-10-18T15:47:34.798Z",
   "source": {
-    "commit": "8629cdeaa57bfcda88175511b9d0a7b119311cc5",
-    "dirty": true,
-    "trackedDiffSha256": "3fff85b23f41c7b1ed8be4d1de5a7c0bbd25c00d35445c7f01aff2b956df8c55",
-    "sourceTreeSha256": "317c3c405456aa022b236c38a45b39a395ac4fedbf083f4d2f7b6c7f1629dcae",
-    "sourceFileCount": 584,
+    "commit": "8f394d2d074b2eafa93c4f7d283550aeb96f21dd",
+    "dirty": false,
+    "trackedDiffSha256": "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126",
+    "sourceTreeSha256": "b9e886ce8b472a8532bfd782dada27028afb69550725452baba799e3cbe355fd",
+    "sourceFileCount": 590,
     "sourceHashScope": "Tracked and nonignored TypeScript, Prisma, SQL, YAML, package manifests, README and gitignore files, sorted by path; evidence JSON and secrets are excluded.",
-    "warning": "Working tree contains changes; commit this implementation before recording final submission evidence."
+    "warning": null
   },
   "report": {
     "mode": "live-provider",
@@ -23,7 +23,7 @@
         "valid": true,
         "usedFallback": false,
         "model": "gpt-4o-mini",
-        "latencyMs": 2779,
+        "latencyMs": 2336,
         "usage": {
           "inputTokens": 417,
           "outputTokens": 47,
@@ -167,7 +167,7 @@
         "valid": true,
         "usedFallback": false,
         "model": "gpt-4o-mini",
-        "latencyMs": 1730,
+        "latencyMs": 959,
         "usage": {
           "inputTokens": 417,
           "outputTokens": 47,
@@ -311,7 +311,7 @@
         "valid": true,
         "usedFallback": false,
         "model": "gpt-4o-mini",
-        "latencyMs": 1432,
+        "latencyMs": 1064,
         "usage": {
           "inputTokens": 417,
           "outputTokens": 47,
