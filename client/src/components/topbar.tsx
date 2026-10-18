@@ -66,8 +66,7 @@ export function Topbar({ onOpenMobileNav, shopName = "My Store" }: TopbarProps) 
 
   const handleRefresh = async () => {
     setRefreshing(true)
-    await refresh()
-    setTimeout(() => setRefreshing(false), 400)
+    try { await refresh(false) } finally { setRefreshing(false) }
   }
 
   const apiBase = getApiBaseUrl()
@@ -113,6 +112,9 @@ export function Topbar({ onOpenMobileNav, shopName = "My Store" }: TopbarProps) 
               variant="ghost"
               size="sm"
               onClick={handleRefresh}
+              disabled={refreshing}
+              aria-busy={refreshing}
+              aria-label="Refresh shop data"
               className="hidden sm:inline-flex gap-2"
             >
               {source === "loading" || refreshing ? (

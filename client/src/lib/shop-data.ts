@@ -113,7 +113,7 @@ interface RawEmployee {
   number: string
   createdAt: string
 }
-interface RawExpenseItem {
+export interface RawExpenseItem {
   id: string
   amount: number
   name?: string | null
@@ -182,7 +182,7 @@ export function normalizeCheckout(c: RawCheckout): Transaction {
   }
 }
 
-function normalizePurchase(e: RawExpenseItem, supplierName = e.supplier?.supplierName || "Not recorded"): Transaction {
+export function normalizePurchase(e: RawExpenseItem, supplierName = e.supplier?.supplierName || "Not recorded"): Transaction {
   return {
     id: e.id, type: "BUY", supplierId: e.supplierId || undefined, supplierName,
     items: [{ productId: e.shopVariantId || "", productName: e.name || "Stock purchase", quantity: e.quantity || 0, unitPrice: e.unitPrice || 0, total: e.amount }],
@@ -193,14 +193,15 @@ function normalizePurchase(e: RawExpenseItem, supplierName = e.supplier?.supplie
 
 export async function loadDashboardData(shopId: string) {
   const shop = encodeURIComponent(shopId)
-  const [variants, response, notificationResponse] = await Promise.all([
+  const [variants, response, notificationResponse, directoryResponse] = await Promise.all([
     fetchAllPages<RawShopVariant>(`/shop/${shop}`, { includeProduct: true }),
     api.get<{
       today: Analytics; yesterday: Analytics; outstandingDebt: number; todayDiscount: number
       totalCustomers: number; totalSuppliers: number
       recentCheckouts: RawCheckout[]; recentPurchases: RawExpenseItem[]
     }>("/analytics/dashboard", { shopId }),
-    api.get<ShopNotification[]>(`/notifications/${shop}`)
+    api.get<ShopNotification[]>(`/notifications/${shop}`),
+    api.get<{ customers: Customer[]; suppliers: Supplier[]; employees: Employee[] }>("/analytics/navigation/directories", { shopId })
   ])
   const summary = required(response, "/analytics/dashboard")
   const products = variants.map(normalizeShopVariant)
@@ -212,8 +213,8 @@ export async function loadDashboardData(shopId: string) {
     totalCustomers: summary.totalCustomers, totalSuppliers: summary.totalSuppliers
   }
   return {
-    products, customers: [] as Customer[], suppliers: [] as Supplier[],
-    expenses: [] as Expense[], employees: [] as Employee[], stats,
+    products, ...required(directoryResponse, "/analytics/navigation/directories"),
+    expenses: [] as Expense[], stats,
     transactions: [...summary.recentCheckouts.map(normalizeCheckout), ...summary.recentPurchases.map(e => normalizePurchase(e))]
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 10),
     notifications: required(notificationResponse, "/notifications")

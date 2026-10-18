@@ -6,12 +6,16 @@ import { Download, Package } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { formatCurrency } from "@/lib/utils"
 import { useStore } from "@/lib/store"
+import { useShopQuery } from "@/lib/use-shop-query"
+import type { ReportSummary } from "@/lib/navigation-data"
+import { PageLoadState, PageRefreshState } from "@/components/page-load-state"
 
 export function ReportsPanel() {
   const { transactions, products, stats } = useStore()
+  const query = useShopQuery<ReportSummary>('reports')
   const sales = transactions.filter(t => t.type === "SALE")
-  const totalRevenue = sales.reduce((s,t)=>s+t.total,0)
-  const totalCost = sales.reduce((s,t)=> s + (t.cost ?? t.items.reduce((a,it)=>{const p = products.find(x=>x.id===it.productId); return a + (p?.buyPrice||0)*it.quantity;},0)),0)
+  const totalRevenue = query.data?.totalRevenue ?? sales.reduce((s,t)=>s+t.total,0)
+  const totalCost = query.data?.totalCost ?? sales.reduce((s,t)=> s + (t.cost ?? t.items.reduce((a,it)=>{const p = products.find(x=>x.id===it.productId); return a + (p?.buyPrice||0)*it.quantity;},0)),0)
   const profit = totalRevenue - totalCost
   const now = new Date()
   const weekStart = new Date(now); weekStart.setUTCHours(0,0,0,0); weekStart.setUTCDate(weekStart.getUTCDate() - 6)
@@ -20,12 +24,14 @@ export function ReportsPanel() {
   const months = Array.from({length:12}, (_, i) => {
     const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11 + i, 1))
     const key = date.toISOString().slice(0,7)
-    return { key, label: date.toLocaleDateString(undefined, {month:"short",year:"2-digit",timeZone:"UTC"}), total: sales.filter(s => s.createdAt.slice(0,7) === key).reduce((n,s) => n+s.total,0) }
+    return { key, label: date.toLocaleDateString(undefined, {month:"short",year:"2-digit",timeZone:"UTC"}), total: query.data ? query.data.months.find(m => m.key === key)?.total ?? 0 : sales.filter(s => s.createdAt.slice(0,7) === key).reduce((n,s) => n+s.total,0) }
   })
   const maxMonth = Math.max(1, ...months.map(m => m.total))
+  if (query.remote && !query.data) return <PageLoadState error={query.error} retry={query.retry} />
 
   return (
     <div className="space-y-6">
+      {query.remote && <PageRefreshState loading={query.loading} error={query.error} retry={query.retry} />}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Reports & Analytics</h2>
@@ -43,8 +49,8 @@ export function ReportsPanel() {
         <TabsContent value="sales" className="mt-4 space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Today</p><p className="mt-1 text-2xl font-bold">{formatCurrency(stats.todaySell)}</p></CardContent></Card>
-            <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Last 7 Days</p><p className="mt-1 text-2xl font-bold">{formatCurrency(revenueSince(weekStart))}</p></CardContent></Card>
-            <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">This Month</p><p className="mt-1 text-2xl font-bold">{formatCurrency(revenueSince(monthStart))}</p></CardContent></Card>
+            <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Last 7 Days</p><p className="mt-1 text-2xl font-bold">{formatCurrency(query.data?.weekRevenue ?? revenueSince(weekStart))}</p></CardContent></Card>
+            <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">This Month</p><p className="mt-1 text-2xl font-bold">{formatCurrency(query.data?.monthRevenue ?? revenueSince(monthStart))}</p></CardContent></Card>
           </div>
           <Card>
             <CardHeader><CardTitle className="text-base">Sales Over Time (last 12 months, UTC)</CardTitle></CardHeader>

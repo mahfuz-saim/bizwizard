@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Store } from "lucide-react"
+import { Loader2, Store } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -70,7 +70,7 @@ export function AuthScreen() {
             <Input id="password" name="password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} minLength={mode === "login" ? undefined : 6} required disabled={busy} />
           </div>
           {(error || connectionError) && <p role="alert" className="text-sm text-destructive">{error || connectionError}</p>}
-          <Button type="submit" className="w-full" disabled={busy}>{busy ? "Please wait…" : mode === "login" ? "Log in" : "Create account"}</Button>
+          <Button type="submit" className="w-full" disabled={busy} aria-busy={busy}>{busy && <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />}{busy ? "Please wait…" : mode === "login" ? "Log in" : "Create account"}</Button>
         </form>
         <div className="mt-4 flex flex-col gap-2">
           {mode === "login" ? (

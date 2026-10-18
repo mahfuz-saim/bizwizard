@@ -34,11 +34,16 @@ import { formatCurrency, formatDate } from "@/lib/utils"
 import { useStore } from "@/lib/store"
 import { usePagination } from "@/lib/use-pagination"
 import { PaginationBar } from "@/components/ui/pagination-bar"
+import { useShopQuery } from "@/lib/use-shop-query"
+import { pageRange, pageTransactions, type TransactionPage } from "@/lib/navigation-data"
+import { PageLoadState, PageRefreshState } from "@/components/page-load-state"
 
 export default function SalesPage() {
   const { transactions } = useStore()
   const [tab, setTab] = React.useState("all")
   const [search, setSearch] = React.useState("")
+  const [remotePage, setRemotePage] = React.useState(1)
+  const query = useShopQuery<TransactionPage>('transactions', { page: remotePage, search, type: tab })
 
   const filtered = React.useMemo(() => {
     let list = [...transactions].sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
@@ -56,15 +61,19 @@ export default function SalesPage() {
     return list
   }, [transactions, tab, search])
 
-  const { page, setPage, pageCount, pageItems, rangeStart, rangeEnd, total } = usePagination(
+  const local = usePagination(
     filtered,
     10,
     `${tab}|${search}`
   )
+  const { page, pageCount, rangeStart, rangeEnd, total } = query.remote && query.data ? pageRange(query.data.page, query.data.total) : local
+  const pageItems = query.remote && query.data ? pageTransactions(query.data) : local.pageItems
+  const setPage = query.remote ? setRemotePage : local.setPage
 
-  const totalSales = transactions.filter((t) => t.type === "SALE").reduce((s, t) => s + t.total, 0)
-  const totalPurchases = transactions.filter((t) => t.type === "BUY").reduce((s, t) => s + t.total, 0)
-  const totalDue = transactions.reduce((s, t) => s + (t.due || 0), 0)
+  const totalSales = query.data?.totals.sales ?? transactions.filter((t) => t.type === "SALE").reduce((s, t) => s + t.total, 0)
+  const totalPurchases = query.data?.totals.purchases ?? transactions.filter((t) => t.type === "BUY").reduce((s, t) => s + t.total, 0)
+  const totalDue = query.data?.totals.due ?? transactions.reduce((s, t) => s + (t.due || 0), 0)
+  if (query.remote && !query.data) return <PageLoadState error={query.error} retry={query.retry} />
 
   return (
     <div className="space-y-6">
@@ -103,13 +112,13 @@ export default function SalesPage() {
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <CardTitle className="text-base">Transactions</CardTitle>
             <div className="flex gap-2">
-              <Input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-48" />
+              <Input placeholder="Search..." value={search} onChange={(e) => { setSearch(e.target.value); setRemotePage(1) }} className="w-48" />
               <Button variant="outline" size="icon"><Filter className="h-4 w-4" /></Button>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <Tabs value={tab} onValueChange={setTab} className="mb-4">
+          <Tabs value={tab} onValueChange={value => { setTab(value); setRemotePage(1) }} className="mb-4">
             <TabsList>
               <TabsTrigger value="all">All</TabsTrigger>
               <TabsTrigger value="sale">Sales</TabsTrigger>
@@ -117,7 +126,8 @@ export default function SalesPage() {
             </TabsList>
           </Tabs>
           <div className="rounded-lg border">
-            <Table>
+            {query.remote && <PageRefreshState loading={query.loading} error={query.error} retry={query.retry} />}
+            <Table aria-busy={query.remote && query.loading}>
               <TableHeader className="bg-muted/50">
                 <TableRow>
                   <TableHead>Date</TableHead>
@@ -130,7 +140,7 @@ export default function SalesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.length === 0 ? (
+                {pageItems.length === 0 ? (
                   <TableRow><TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                     <Receipt className="mx-auto mb-2 h-8 w-8 text-muted-foreground/50" />
                     No transactions yet

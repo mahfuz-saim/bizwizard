@@ -8,11 +8,14 @@ import { Badge } from "@/components/ui/badge"
 import { AlertTriangle, Bot, Check, Loader2, Play, RefreshCw, TrendingDown, Wallet, X } from "lucide-react"
 import { cashflowApi, fmtBDT, type CashAlert } from "@/lib/finance-api"
 import { lerp, useSimulator } from "@/lib/simulator-context"
+import { PageLoadState, PageRefreshState } from "@/components/page-load-state"
+import { useStore } from "@/lib/store"
 
 type Bucket = { date: string; inflow: number; outflow: number; closingBalance: number }
 type Projection = { dailyBuckets: Bucket[]; daysOfBuffer: number; minProjectedBalance: number; troughDate: string | null; shortfallDate: string | null; closingBalance: number; currentCash: number; narrative?: string | null }
 
 export default function CashflowPage() {
+  const { dataVersion } = useStore()
   const sim = useSimulator()
   const [accounts, setAccounts] = React.useState<{ accounts: { id: string; name: string; accountType: string; currentBalance: number }[]; totalCash: number } | null>(null)
   const [projection, setProjection] = React.useState<Projection | null>(null)
@@ -21,12 +24,16 @@ export default function CashflowPage() {
   const [commitments, setCommitments] = React.useState<{ id: string; name: string; amount: number; dueDate: string }[]>([])
   const [error, setError] = React.useState("")
   const [busy, setBusy] = React.useState(false)
+  const [loading, setLoading] = React.useState(true)
+  const [loaded, setLoaded] = React.useState(false)
   const [noteText, setNoteText] = React.useState("")
   const [commitName, setCommitName] = React.useState("")
   const [commitAmount, setCommitAmount] = React.useState("")
   const [commitDate, setCommitDate] = React.useState("")
 
   const load = React.useCallback(async () => {
+    setLoading(true)
+    setError("")
     try {
       const [a, p, al, ta, c] = await Promise.all([
         cashflowApi.accounts(), cashflowApi.projection(), cashflowApi.alerts(),
@@ -38,16 +45,20 @@ export default function CashflowPage() {
       setActions(ta as typeof actions)
       setCommitments(c as typeof commitments)
       setError("")
+      setLoaded(true)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load cash-flow data. Log in and pick a shop, then try again.")
-    }
+    } finally { setLoading(false) }
   }, [])
 
-  React.useEffect(() => { void load() }, [load])
   // Refetch the real, persisted numbers once a simulator run (or reset) lands —
   // the drip-feed below only animates between two authentic states, it never
   // invents its own data.
-  React.useEffect(() => { if (sim.completedAt > 0) void load() }, [sim.completedAt, load])
+  React.useEffect(() => {
+    let active = true
+    void Promise.resolve().then(() => { if (active) return load() })
+    return () => { active = false }
+  }, [sim.completedAt, load, dataVersion])
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true)
@@ -83,6 +94,8 @@ export default function CashflowPage() {
   const showTroughMarker = troughIndex >= 0 && (sim.progress > 0.35 || sim.status !== "playing") && (displayProjection?.minProjectedBalance ?? 1) < (displayProjection?.currentCash ?? 1) * 0.3
   const bufferLow = (displayProjection?.daysOfBuffer ?? 99) < 14
 
+  if (!loaded) return <PageLoadState error={error} retry={() => void load()} />
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -96,7 +109,7 @@ export default function CashflowPage() {
         </div>
       </div>
 
-      {error && <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
+      <PageRefreshState loading={loading} error={error} retry={() => void load()} />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
         <Card><CardContent className="p-4"><p className="flex items-center gap-1 text-xs text-muted-foreground"><Wallet className="h-3.5 w-3.5" /> Cash now</p><p className="mt-1 text-2xl font-bold">{fmtBDT(displayProjection?.currentCash ?? accounts?.totalCash)}</p>{(accounts?.accounts ?? []).map((a) => <p key={a.id} className="text-xs text-muted-foreground">{a.name}: {fmtBDT(a.currentBalance)}</p>)}</CardContent></Card>

@@ -22,12 +22,16 @@ import { formatCurrency, formatDate, generateAvatarColor, getInitials } from "@/
 import { AddProductDialog } from "@/components/inventory/add-product-dialog"
 import { BuyStockDialog } from "@/components/inventory/buy-stock-dialog"
 import { SellDialog } from "@/components/inventory/sell-dialog"
+import { useShopQuery } from "@/lib/use-shop-query"
+import { pageTransactions, type TransactionPage } from "@/lib/navigation-data"
+import { PageLoadState, PageRefreshState } from "@/components/page-load-state"
 
 export default function ProductDetailPage() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
   const { products, transactions } = useStore()
   const product = products.find((p) => p.id === params.id)
+  const query = useShopQuery<TransactionPage>('transactions', { variantId: params.id })
 
   const [editOpen, setEditOpen] = React.useState(false)
   const [buyOpen, setBuyOpen] = React.useState(false)
@@ -46,10 +50,10 @@ export default function ProductDetailPage() {
     )
   }
 
-  const relatedTx = transactions
+  const relatedTx = (query.remote ? query.data ? pageTransactions(query.data) : [] : transactions)
     .filter((t) => t.items.some((i) => i.productId === product.id))
     .slice(0, 8)
-  const totalSold = relatedTx
+  const totalSold = query.data?.unitsSold ?? relatedTx
     .filter((t) => t.type === "SALE")
     .reduce((s, t) => s + t.items.filter(i=>i.productId===product.id).reduce((a,i)=>a+i.quantity,0), 0)
   const profitPerUnit = product.sellPrice - product.buyPrice
@@ -106,7 +110,7 @@ export default function ProductDetailPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Card><CardContent className="p-4"><div className="flex items-center gap-2 text-muted-foreground"><Hash className="h-4 w-4"/><p className="text-xs font-medium">SKU / Code</p></div><p className="mt-1 font-mono text-sm">{product.variantCode || "—"}</p></CardContent></Card>
             <Card><CardContent className="p-4"><div className="flex items-center gap-2 text-muted-foreground"><Barcode className="h-4 w-4"/><p className="text-xs font-medium">Barcode</p></div><p className="mt-1 font-mono text-sm">{product.barcode || "—"}</p></CardContent></Card>
-            <Card><CardContent className="p-4"><div className="flex items-center gap-2 text-muted-foreground"><TrendingUp className="h-4 w-4"/><p className="text-xs font-medium">Total Sold</p></div><p className="mt-1 font-semibold">{totalSold} units</p></CardContent></Card>
+            <Card><CardContent className="p-4"><div className="flex items-center gap-2 text-muted-foreground"><TrendingUp className="h-4 w-4"/><p className="text-xs font-medium">Total Sold</p></div><p className="mt-1 font-semibold">{query.remote && !query.data ? '—' : `${totalSold} units`}</p></CardContent></Card>
             <Card><CardContent className="p-4"><div className="flex items-center gap-2 text-muted-foreground"><Tag className="h-4 w-4"/><p className="text-xs font-medium">Low Threshold</p></div><p className="mt-1 font-semibold">{product.lowStockThreshold} units</p></CardContent></Card>
             <Card><CardContent className="p-4"><div className="flex items-center gap-2 text-muted-foreground"><Calendar className="h-4 w-4"/><p className="text-xs font-medium">Last Sold</p></div><p className="mt-1 font-semibold text-sm">{product.lastSoldDate ? formatDate(product.lastSoldDate) : "Never"}</p></CardContent></Card>
             <Card><CardContent className="p-4"><div className="flex items-center gap-2 text-muted-foreground"><Calendar className="h-4 w-4"/><p className="text-xs font-medium">Added</p></div><p className="mt-1 font-semibold text-sm">{formatDate(product.createdAt)}</p></CardContent></Card>
@@ -115,7 +119,8 @@ export default function ProductDetailPage() {
           <Card>
             <CardHeader><CardTitle className="text-base">Recent Activity</CardTitle></CardHeader>
             <CardContent>
-              {relatedTx.length === 0 ? (
+              {query.remote && query.data && <PageRefreshState loading={query.loading} error={query.error} retry={query.retry} />}
+              {query.remote && !query.data ? <PageLoadState error={query.error} retry={query.retry} /> : relatedTx.length === 0 ? (
                 <p className="py-6 text-center text-sm text-muted-foreground">No transactions for this product yet.</p>
               ) : (
                 <div className="space-y-2">

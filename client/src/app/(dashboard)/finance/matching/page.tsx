@@ -7,8 +7,11 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Bot, FileCheck, HandCoins, Loader2 } from "lucide-react"
 import { fmtBDT, fmtPct, matchingApi, type FinanceMatch, type FinanceOffer } from "@/lib/finance-api"
+import { PageLoadState, PageRefreshState } from "@/components/page-load-state"
+import { useStore } from "@/lib/store"
 
 export default function MatchingPage() {
+  const { dataVersion } = useStore()
   const [amount, setAmount] = React.useState("300000")
   const [tenor, setTenor] = React.useState("6")
   const [purpose, setPurpose] = React.useState("INVENTORY")
@@ -19,16 +22,26 @@ export default function MatchingPage() {
   const [notice, setNotice] = React.useState("")
   const [transcript, setTranscript] = React.useState<{ id?: string; fromParty: string; message: string; reasoning: string; round: number }[]>([])
   const [busy, setBusy] = React.useState(false)
+  const [loading, setLoading] = React.useState(true)
+  const [loaded, setLoaded] = React.useState(false)
+  const [loadError, setLoadError] = React.useState("")
 
   const load = React.useCallback(async () => {
+    setLoading(true)
+    setLoadError("")
     try {
       const [r, apps] = await Promise.all([matchingApi.results(), matchingApi.applications()])
       setMatches(r.matches)
       setOffers(r.offers)
       setApplications(apps as typeof applications)
-    } catch (e) { setNotice(e instanceof Error ? e.message : "Could not load financing data.") }
+      setLoaded(true)
+    } catch (e) { setLoadError(e instanceof Error ? e.message : "Could not load financing data.") } finally { setLoading(false) }
   }, [])
-  React.useEffect(() => { void load() }, [load])
+  React.useEffect(() => {
+    let active = true
+    void Promise.resolve().then(() => { if (active) return load() })
+    return () => { active = false }
+  }, [load, dataVersion])
 
   const run = async () => {
     setBusy(true); setNotice("")
@@ -56,6 +69,8 @@ export default function MatchingPage() {
     } catch (e) { setNotice(e instanceof Error ? e.message : "Negotiation failed") } finally { setBusy(false) }
   }
 
+  if (!loaded) return <PageLoadState error={loadError} retry={() => void load()} />
+
   return (
     <div className="space-y-6">
       <div>
@@ -79,6 +94,7 @@ export default function MatchingPage() {
         </CardContent>
       </Card>
 
+      <PageRefreshState loading={loading} error={loadError} retry={() => void load()} />
       {notice && <p role="alert" className="rounded-lg border border-warning/40 bg-warning/5 p-3 text-sm">{notice}</p>}
 
       {matches.length > 0 && (

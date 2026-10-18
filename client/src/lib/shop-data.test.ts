@@ -330,6 +330,10 @@ test("dashboard uses full summary totals without downloading or pretending to co
   const original = globalThis.fetch
   globalThis.fetch = async (input, init) => {
     const url = new URL(String(input))
+    if (url.pathname.endsWith('/analytics/navigation/directories')) {
+      calls.push({ url, init })
+      return envelope({ customers: [{ id: 'customer-user', totalPurchased: 175, totalDue: 100 }], suppliers: [], employees: [] })
+    }
     if (url.pathname.endsWith("/analytics/dashboard")) {
       calls.push({ url, init })
       return envelope({
@@ -345,8 +349,8 @@ test("dashboard uses full summary totals without downloading or pretending to co
   assert.equal(data.stats.totalCustomers, 180)
   assert.equal(data.stats.todayDiscount, 25)
   assert.equal(data.transactions.length, 1)
-  assert.deepEqual(data.customers, [])
-  assert.equal(calls.length, 3)
+  assert.equal(data.customers[0].totalDue, 100)
+  assert.equal(calls.length, 4)
   assert(!calls.some(c => c.url.pathname.endsWith("/checkout") || c.url.pathname.includes("/expense/")))
 })
 
