@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-18T14:30:43.337Z",
+  "source": {
+    "commit": "8629cdeaa57bfcda88175511b9d0a7b119311cc5",
+    "dirty": true,
+    "trackedDiffSha256": "cd82c736559df2048aff7b9ef26c7755fedf157521573aa509dab6ec8fdf8c73",
+    "sourceTreeSha256": "fc3f8c2a5886aef67079a63d0be23c6f23deb31fb7668387d165e0c0dfb823d9",
+    "sourceFileCount": 589,
+    "sourceHashScope": "Tracked and nonignored TypeScript, Prisma, SQL, YAML, package manifests, README and gitignore files, sorted by path; evidence JSON and secrets are excluded.",
+    "warning": "Working tree contains changes; commit this implementation before recording final submission evidence."
+  },
+  "report": {
+    "success": true,
+    "evaluationID": "cmvdx96340003vh58kdzsqsi8",
+    "outcomeHash": "1d22c145718de8ee1cb0dd16155098483a6815edca33cfe546e59661fc9efb22",
+    "scorecards": [
+      {
+        "agentType": "LENDER_AGENT",
+        "metric": "net-credit-cash-return-after-funding",
+        "horizonDays": 360,
+        "basis": "MATCHED_SANDBOX",
+        "status": "COMPLETE",
+        "participant": 102.45,
+        "baseline": 303.85,
+        "alpha": -201.4,
+        "winRatePct": 0,
+        "avoidedShortfallAmount": null,
+        "reason": null
+      },
+      {
+        "agentType": "BORROWER_AGENT",
+        "metric": "full-term-borrowing-cost",
+        "horizonDays": 360,
+        "basis": "MATCHED_SANDBOX",
+        "status": "COMPLETE",
+        "participant": 705.82,
+        "baseline": 705.82,
+        "alpha": 0,
+        "winRatePct": 0,
+        "avoidedShortfallAmount": null,
+        "reason": null
+      },
+      {
+        "agentType": "TREASURER_AGENT",
+        "metric": "30-day-closing-cash-not-profit",
+        "horizonDays": 30,
+        "basis": "MATCHED_SANDBOX",
+        "status": "COMPLETE",
+        "participant": 1487926.28,
+        "baseline": 1487926.28,
+        "alpha": 0,
+        "winRatePct": 0,
+        "avoidedShortfallAmount": 0,
+        "reason": null
+      },
+      {
+        "agentType": "ANALYST_AGENT",
+        "metric": "30-day-modeled-capital-gross-margin",
+        "horizonDays": 30,
+        "basis": "MATCHED_SANDBOX",
+        "status": "COMPLETE",
+        "participant": 50042.46,
+        "baseline": 50042.46,
+        "alpha": 0,
+        "winRatePct": 0,
+        "avoidedShortfallAmount": null,
+        "reason": null
+      }
+    ],
+    "mode": "saved-sandbox-replay-no-database-or-api"
+  }
+}

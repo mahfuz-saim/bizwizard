@@ -1,0 +1,190 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-18T14:30:47.489Z",
+  "source": {
+    "commit": "8629cdeaa57bfcda88175511b9d0a7b119311cc5",
+    "dirty": true,
+    "trackedDiffSha256": "cd82c736559df2048aff7b9ef26c7755fedf157521573aa509dab6ec8fdf8c73",
+    "sourceTreeSha256": "fc3f8c2a5886aef67079a63d0be23c6f23deb31fb7668387d165e0c0dfb823d9",
+    "sourceFileCount": 589,
+    "sourceHashScope": "Tracked and nonignored TypeScript, Prisma, SQL, YAML, package manifests, README and gitignore files, sorted by path; evidence JSON and secrets are excluded.",
+    "warning": "Working tree contains changes; commit this implementation before recording final submission evidence."
+  },
+  "report": {
+    "success": true,
+    "mode": "local-postgresql-deterministic-services-and-loopback-http",
+    "isolation": {
+      "host": "127.0.0.1",
+      "database": "simulator_test",
+      "schema": "evidence_cb0b5dedc0184a728787d5b2bf5c1652"
+    },
+    "externalAiCalled": false,
+    "operations": [
+      {
+        "name": "apply-migrations",
+        "command": "node node_modules/prisma/build/index.js migrate deploy",
+        "success": true,
+        "exitCode": 0,
+        "durationMs": 3624,
+        "summaries": [],
+        "events": [],
+        "capturedOutputSha256": "8223992040d3ce317e15dda7d093858853006c4394c8a4defb4bde50364b61d5"
+      },
+      {
+        "name": "finance-completion",
+        "command": "node node_modules/tsx/dist/cli.mjs --test --test-reporter=tap tests/finance-completion.integration.test.ts",
+        "success": true,
+        "exitCode": 0,
+        "durationMs": 2721,
+        "summaries": [
+          "ok 1 - cash event synchronization, expense alert and supplier evidence",
+          "# tests 7",
+          "# suites 0",
+          "# pass 7",
+          "# fail 0",
+          "# cancelled 0",
+          "# skipped 0",
+          "# todo 0",
+          "# duration_ms 2423.1607"
+        ],
+        "events": [
+          {
+            "operation": "cash-after-paid-sale-edit-delete",
+            "expected": 0,
+            "observed": 0,
+            "success": true
+          },
+          {
+            "operation": "cash-after-partial-full-and-two-backfills",
+            "expected": 100,
+            "observed": 100,
+            "success": true
+          },
+          {
+            "operation": "cash-after-concurrent-sales",
+            "expected": 150,
+            "observed": 150,
+            "success": true
+          },
+          {
+            "operation": "expense-spike-alert-count",
+            "expected": 1,
+            "observed": 1,
+            "success": true
+          },
+          {
+            "operation": "recorded-supplier-payables",
+            "expected": 200,
+            "observed": 200,
+            "success": true
+          },
+          {
+            "operation": "payables-after-linking-existing-purchase",
+            "expected": 0,
+            "observed": 0,
+            "success": true
+          }
+        ],
+        "capturedOutputSha256": "e54cc4d2a4ffd3e742c78b6612e2c2a6d2ebe5c633b605fe928815da06d08e79"
+      },
+      {
+        "name": "finance-hardening",
+        "command": "node node_modules/tsx/dist/cli.mjs --test --test-reporter=tap tests/finance-hardening.integration.test.ts",
+        "success": true,
+        "exitCode": 0,
+        "durationMs": 2374,
+        "summaries": [
+          "ok 1 - finance hardening: tenant/shop permissions, immutable mandates, persistent budgets and recorded outcomes",
+          "# tests 1",
+          "# suites 0",
+          "# pass 1",
+          "# fail 0",
+          "# cancelled 0",
+          "# skipped 0",
+          "# todo 0",
+          "# duration_ms 2121.4325"
+        ],
+        "events": [],
+        "capturedOutputSha256": "f6b54420d9a1d44bc0aaf5d1f65e4ca85114d4d1d01c5e8466cf9b7bdc1911c3"
+      },
+      {
+        "name": "inventory-finance",
+        "command": "node node_modules/tsx/dist/cli.mjs --test --test-reporter=tap tests/inventory-finance.integration.test.ts",
+        "success": true,
+        "exitCode": 0,
+        "durationMs": 1553,
+        "summaries": [
+          "ok 1 - inventory and alert fixes against an isolated PostgreSQL database",
+          "# tests 1",
+          "# suites 0",
+          "# pass 1",
+          "# fail 0",
+          "# cancelled 0",
+          "# skipped 0",
+          "# todo 0",
+          "# duration_ms 1327.2083"
+        ],
+        "events": [],
+        "capturedOutputSha256": "9fc026602a15b35ae52b7a432f6c9d3c06235b1060b2889c5bc05b1f38457c1d"
+      },
+      {
+        "name": "simulator-workspace",
+        "command": "node node_modules/tsx/dist/cli.mjs --test --test-reporter=tap tests/simulator-workspace.integration.test.ts",
+        "success": true,
+        "exitCode": 0,
+        "durationMs": 20658,
+        "summaries": [
+          "ok 1 - isolated demo: migration, copied history, next-month runs, locking, rollback and reset",
+          "# tests 1",
+          "# suites 0",
+          "# pass 1",
+          "# fail 0",
+          "# cancelled 0",
+          "# skipped 0",
+          "# todo 0",
+          "# duration_ms 20474.3214"
+        ],
+        "events": [],
+        "capturedOutputSha256": "d64a8d9846bbd8d87c5f3d7da05ad46b14972faab449c65c3d6f14265e94a595"
+      },
+      {
+        "name": "matched-evaluation",
+        "command": "node node_modules/tsx/dist/cli.mjs --test --test-reporter=tap tests/matched-evaluation.integration.test.ts",
+        "success": true,
+        "exitCode": 0,
+        "durationMs": 1681,
+        "summaries": [
+          "ok 1 - shop-specific matched replay: frozen data, paired outcomes, scopes, idempotency and export",
+          "# tests 1",
+          "# suites 0",
+          "# pass 1",
+          "# fail 0",
+          "# cancelled 0",
+          "# skipped 0",
+          "# todo 0",
+          "# duration_ms 1492.2105"
+        ],
+        "events": [
+          {
+            "operation": "matched-sandbox-agent-count",
+            "expected": 4,
+            "observed": 4,
+            "success": true
+          }
+        ],
+        "capturedOutputSha256": "7cdee5ff00c91ab8d0e89caf7f9ad26b07427383a9c1b7690a221adc10dcc76a"
+      }
+    ],
+    "coverage": [
+      "automatic cash source writes/edits/deletes and rollback",
+      "supplier obligations and same-shop recorded purchase evidence",
+      "expense-spike alert",
+      "tenant/shop permissions and approval gates",
+      "matching/negotiation/application schedule",
+      "30-day observed capital measurement",
+      "isolated demo copy, next-month simulation, locking and reset",
+      "shop-specific frozen inputs, paired replay, scoped export and duplicate paid-call protection"
+    ],
+    "limitations": "Backend service and loopback HTTP integration evidence, not browser/video evidence or live AI evaluation. Failed/skipped runs do not prove completion. Test schema is retained for inspection; never point this at production."
+  }
+}

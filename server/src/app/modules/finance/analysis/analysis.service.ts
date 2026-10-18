@@ -20,7 +20,7 @@ async function loadProductSales(tenantId: string, shopId: string, days = 90): Pr
   const asOf = await shopClock(tenantId, shopId);
   const start = new Date(asOf.getTime() - days * DAY);
   const items = await raw.checkoutItem.findMany({
-    where: { tenantID: tenantId, checkout: { shopID: shopId, tenantID: tenantId, isDraft: false }, createdAt: { gte: start } },
+    where: { tenantID: tenantId, checkout: { shopID: shopId, tenantID: tenantId, isDraft: false }, createdAt: { gte: start, lte: asOf } },
     select: { productName: true, variantId: true, quantity: true, discountedPrice: true, lotId: true, createdAt: true },
   }).catch(() => []);
   const lotIds = [...new Set(items.map((i: any) => i.lotId).filter(Boolean))];

@@ -107,6 +107,11 @@ export async function loadProfileAggregates(
   const receivables = sumMoney(
     debts.map((d: any) => Math.max(0, (d.checkout?.totalPrice ?? 0) - (d.paidAmount ?? 0))),
   );
+  const obligations = await db.cashCommitment.findMany({
+    where: { tenantID: tenantId, shopID: shopId, supplierPayable: true, createdAt: { lte: asOf },
+      OR: [{ isPaid: false }, { paidAt: { gt: asOf } }] },
+    select: { amount: true },
+  });
   return {
     windowDays: days,
     salesByDay: [...salesByDayMap.entries()].map(([date, amount]) => ({ date, amount: roundCurrency(amount) })),
@@ -119,7 +124,7 @@ export async function loadProfileAggregates(
     transactionCount: sales.length,
     currentCash,
     receivables,
-    payables: 0,
+    payables: sumMoney(obligations.map((o: any) => o.amount)),
     inventoryValue: sumMoney(lots.map((l: any) => l.stock * l.buyPrice)),
     debtOutstanding,
     existingMonthlyDebtService: roundCurrency(existingMonthlyDebtService),

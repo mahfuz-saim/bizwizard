@@ -1,0 +1,454 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-18T13:45:48.092Z",
+  "source": {
+    "commit": "8629cdeaa57bfcda88175511b9d0a7b119311cc5",
+    "dirty": true,
+    "trackedDiffSha256": "3fff85b23f41c7b1ed8be4d1de5a7c0bbd25c00d35445c7f01aff2b956df8c55",
+    "sourceTreeSha256": "317c3c405456aa022b236c38a45b39a395ac4fedbf083f4d2f7b6c7f1629dcae",
+    "sourceFileCount": 584,
+    "sourceHashScope": "Tracked and nonignored TypeScript, Prisma, SQL, YAML, package manifests, README and gitignore files, sorted by path; evidence JSON and secrets are excluded.",
+    "warning": "Working tree contains changes; commit this implementation before recording final submission evidence."
+  },
+  "report": {
+    "mode": "live-provider",
+    "success": true,
+    "budgetUsdEstimateLimit": 0.1,
+    "costNote": "Application pricing estimates are not a provider billing guarantee. API cost is USD and is not subtracted from BDT outcomes without an explicit exchange rate.",
+    "cases": [
+      {
+        "inputSha256": "ec0c7b6320654822238cde5befa666cabee2539c0d7e01a5decd9d0efc4b26ab",
+        "mode": "live-provider",
+        "success": true,
+        "valid": true,
+        "usedFallback": false,
+        "model": "gpt-4o-mini",
+        "latencyMs": 2779,
+        "usage": {
+          "inputTokens": 417,
+          "outputTokens": 47,
+          "costUsdEstimate": 0.000091,
+          "status": "SUCCESS"
+        },
+        "comparison": {
+          "caseID": "risk-0.05",
+          "policyVersion": "pinned-v1",
+          "input": {
+            "caseID": "risk-0.05",
+            "loan": {
+              "amount": 100000,
+              "baseRate": 10,
+              "interestRateMin": 10,
+              "interestRateMax": 20,
+              "fundingCostPct": 5,
+              "tenorMonths": 12,
+              "pd": 0.05,
+              "lgd": 0.55,
+              "expectedTenorFraction": 1
+            },
+            "offers": [
+              {
+                "id": "low-apr",
+                "offeredAmount": 100000,
+                "effectiveApr": 6.49,
+                "totalRepayment": 112976.34,
+                "monthlyInstallment": 4707.35,
+                "tenorMonths": 24
+              },
+              {
+                "id": "low-cost",
+                "offeredAmount": 100000,
+                "effectiveApr": 8.88,
+                "totalRepayment": 108877.03,
+                "monthlyInstallment": 9073.09,
+                "tenorMonths": 12
+              },
+              {
+                "id": "short-term",
+                "offeredAmount": 100000,
+                "effectiveApr": 11.83,
+                "totalRepayment": 105913.67,
+                "monthlyInstallment": 17652.28,
+                "tenorMonths": 6
+              }
+            ],
+            "maxInstallment": 10000,
+            "debts": [
+              {
+                "id": "recent",
+                "amount": 3000,
+                "daysOverdue": 40
+              },
+              {
+                "id": "overdue",
+                "amount": 1000,
+                "daysOverdue": 90
+              }
+            ],
+            "skus": [
+              {
+                "key": "high-revenue",
+                "revenue": 10000,
+                "margin": 0.1
+              },
+              {
+                "key": "high-margin",
+                "revenue": 6000,
+                "margin": 0.3
+              },
+              {
+                "key": "balanced",
+                "revenue": 7000,
+                "margin": 0.2
+              }
+            ],
+            "capital": 3000
+          },
+          "choice": {
+            "lend": true,
+            "offerID": "low-cost",
+            "collect": [
+              "recent",
+              "overdue"
+            ],
+            "allocation": [
+              0.5,
+              0.3,
+              0.2
+            ]
+          },
+          "basis": "synthetic-model-comparison-not-realized-profit",
+          "assumptions": [
+            "Lender values are model-expected returns, not observed repayments; both policies share PD, LGD, funding cost and eligible universe.",
+            "Borrower compares contracted total cost for equal principal; tenors differ, and both choices respect the same installment ceiling. No loan is disbursed.",
+            "Treasury replay assumes requested collections succeed: the participant requests on day 1; the baseline requests once a debt exceeds 60 days overdue during the same 30-day horizon. Gross collections are not profit; timing benefits and collection costs are not scored.",
+            "Analyst assumes the stated margin is the incremental return per allocated taka, with no demand or capacity constraint. This is a deliberately simplified model, not causal evidence."
+          ],
+          "measurements": [
+            {
+              "agent": "LENDER_AGENT",
+              "metric": "expected-net-return",
+              "currency": "BDT",
+              "baseline": 7250,
+              "participant": 3250,
+              "differenceInFavourOfParticipant": -4000
+            },
+            {
+              "agent": "BORROWER_AGENT",
+              "metric": "contracted-borrowing-cost",
+              "currency": "BDT",
+              "baseline": 12976.34,
+              "participant": 8877.03,
+              "differenceInFavourOfParticipant": 4099.31
+            },
+            {
+              "agent": "TREASURER_AGENT",
+              "metric": "30-day-modeled-gross-collections",
+              "currency": "BDT",
+              "baseline": 4000,
+              "participant": 4000,
+              "differenceInFavourOfParticipant": 0
+            },
+            {
+              "agent": "ANALYST_AGENT",
+              "metric": "modeled-capital-return",
+              "currency": "BDT",
+              "baseline": 600,
+              "participant": 540,
+              "differenceInFavourOfParticipant": -60
+            }
+          ]
+        }
+      },
+      {
+        "inputSha256": "770883bcb26c9664182cf58c608f47bec5729ecb428c41147c0b490d7cb0ad77",
+        "mode": "live-provider",
+        "success": true,
+        "valid": true,
+        "usedFallback": false,
+        "model": "gpt-4o-mini",
+        "latencyMs": 1730,
+        "usage": {
+          "inputTokens": 417,
+          "outputTokens": 47,
+          "costUsdEstimate": 0.000091,
+          "status": "SUCCESS"
+        },
+        "comparison": {
+          "caseID": "risk-0.2",
+          "policyVersion": "pinned-v1",
+          "input": {
+            "caseID": "risk-0.2",
+            "loan": {
+              "amount": 100000,
+              "baseRate": 10,
+              "interestRateMin": 10,
+              "interestRateMax": 20,
+              "fundingCostPct": 5,
+              "tenorMonths": 12,
+              "pd": 0.2,
+              "lgd": 0.55,
+              "expectedTenorFraction": 1
+            },
+            "offers": [
+              {
+                "id": "low-apr",
+                "offeredAmount": 100000,
+                "effectiveApr": 6.49,
+                "totalRepayment": 112976.34,
+                "monthlyInstallment": 4707.35,
+                "tenorMonths": 24
+              },
+              {
+                "id": "low-cost",
+                "offeredAmount": 100000,
+                "effectiveApr": 8.88,
+                "totalRepayment": 108877.03,
+                "monthlyInstallment": 9073.09,
+                "tenorMonths": 12
+              },
+              {
+                "id": "short-term",
+                "offeredAmount": 100000,
+                "effectiveApr": 11.83,
+                "totalRepayment": 105913.67,
+                "monthlyInstallment": 17652.28,
+                "tenorMonths": 6
+              }
+            ],
+            "maxInstallment": 10000,
+            "debts": [
+              {
+                "id": "recent",
+                "amount": 3000,
+                "daysOverdue": 40
+              },
+              {
+                "id": "overdue",
+                "amount": 1000,
+                "daysOverdue": 90
+              }
+            ],
+            "skus": [
+              {
+                "key": "high-revenue",
+                "revenue": 10000,
+                "margin": 0.1
+              },
+              {
+                "key": "high-margin",
+                "revenue": 6000,
+                "margin": 0.3
+              },
+              {
+                "key": "balanced",
+                "revenue": 7000,
+                "margin": 0.2
+              }
+            ],
+            "capital": 3000
+          },
+          "choice": {
+            "lend": true,
+            "offerID": "low-cost",
+            "collect": [
+              "recent",
+              "overdue"
+            ],
+            "allocation": [
+              0.5,
+              0.3,
+              0.2
+            ]
+          },
+          "basis": "synthetic-model-comparison-not-realized-profit",
+          "assumptions": [
+            "Lender values are model-expected returns, not observed repayments; both policies share PD, LGD, funding cost and eligible universe.",
+            "Borrower compares contracted total cost for equal principal; tenors differ, and both choices respect the same installment ceiling. No loan is disbursed.",
+            "Treasury replay assumes requested collections succeed: the participant requests on day 1; the baseline requests once a debt exceeds 60 days overdue during the same 30-day horizon. Gross collections are not profit; timing benefits and collection costs are not scored.",
+            "Analyst assumes the stated margin is the incremental return per allocated taka, with no demand or capacity constraint. This is a deliberately simplified model, not causal evidence."
+          ],
+          "measurements": [
+            {
+              "agent": "LENDER_AGENT",
+              "metric": "expected-net-return",
+              "currency": "BDT",
+              "baseline": -1000,
+              "participant": -2000,
+              "differenceInFavourOfParticipant": -1000
+            },
+            {
+              "agent": "BORROWER_AGENT",
+              "metric": "contracted-borrowing-cost",
+              "currency": "BDT",
+              "baseline": 12976.34,
+              "participant": 8877.03,
+              "differenceInFavourOfParticipant": 4099.31
+            },
+            {
+              "agent": "TREASURER_AGENT",
+              "metric": "30-day-modeled-gross-collections",
+              "currency": "BDT",
+              "baseline": 4000,
+              "participant": 4000,
+              "differenceInFavourOfParticipant": 0
+            },
+            {
+              "agent": "ANALYST_AGENT",
+              "metric": "modeled-capital-return",
+              "currency": "BDT",
+              "baseline": 600,
+              "participant": 540,
+              "differenceInFavourOfParticipant": -60
+            }
+          ]
+        }
+      },
+      {
+        "inputSha256": "45184c833830ded53644ba12010192ae5f794776d856d0323848c2a6df2fecac",
+        "mode": "live-provider",
+        "success": true,
+        "valid": true,
+        "usedFallback": false,
+        "model": "gpt-4o-mini",
+        "latencyMs": 1432,
+        "usage": {
+          "inputTokens": 417,
+          "outputTokens": 47,
+          "costUsdEstimate": 0.000091,
+          "status": "SUCCESS"
+        },
+        "comparison": {
+          "caseID": "risk-0.5",
+          "policyVersion": "pinned-v1",
+          "input": {
+            "caseID": "risk-0.5",
+            "loan": {
+              "amount": 100000,
+              "baseRate": 10,
+              "interestRateMin": 10,
+              "interestRateMax": 20,
+              "fundingCostPct": 5,
+              "tenorMonths": 12,
+              "pd": 0.5,
+              "lgd": 0.55,
+              "expectedTenorFraction": 1
+            },
+            "offers": [
+              {
+                "id": "low-apr",
+                "offeredAmount": 100000,
+                "effectiveApr": 6.49,
+                "totalRepayment": 112976.34,
+                "monthlyInstallment": 4707.35,
+                "tenorMonths": 24
+              },
+              {
+                "id": "low-cost",
+                "offeredAmount": 100000,
+                "effectiveApr": 8.88,
+                "totalRepayment": 108877.03,
+                "monthlyInstallment": 9073.09,
+                "tenorMonths": 12
+              },
+              {
+                "id": "short-term",
+                "offeredAmount": 100000,
+                "effectiveApr": 11.83,
+                "totalRepayment": 105913.67,
+                "monthlyInstallment": 17652.28,
+                "tenorMonths": 6
+              }
+            ],
+            "maxInstallment": 10000,
+            "debts": [
+              {
+                "id": "recent",
+                "amount": 3000,
+                "daysOverdue": 40
+              },
+              {
+                "id": "overdue",
+                "amount": 1000,
+                "daysOverdue": 90
+              }
+            ],
+            "skus": [
+              {
+                "key": "high-revenue",
+                "revenue": 10000,
+                "margin": 0.1
+              },
+              {
+                "key": "high-margin",
+                "revenue": 6000,
+                "margin": 0.3
+              },
+              {
+                "key": "balanced",
+                "revenue": 7000,
+                "margin": 0.2
+              }
+            ],
+            "capital": 3000
+          },
+          "choice": {
+            "lend": true,
+            "offerID": "low-cost",
+            "collect": [
+              "recent",
+              "overdue"
+            ],
+            "allocation": [
+              0.5,
+              0.3,
+              0.2
+            ]
+          },
+          "basis": "synthetic-model-comparison-not-realized-profit",
+          "assumptions": [
+            "Lender values are model-expected returns, not observed repayments; both policies share PD, LGD, funding cost and eligible universe.",
+            "Borrower compares contracted total cost for equal principal; tenors differ, and both choices respect the same installment ceiling. No loan is disbursed.",
+            "Treasury replay assumes requested collections succeed: the participant requests on day 1; the baseline requests once a debt exceeds 60 days overdue during the same 30-day horizon. Gross collections are not profit; timing benefits and collection costs are not scored.",
+            "Analyst assumes the stated margin is the incremental return per allocated taka, with no demand or capacity constraint. This is a deliberately simplified model, not causal evidence."
+          ],
+          "measurements": [
+            {
+              "agent": "LENDER_AGENT",
+              "metric": "expected-net-return",
+              "currency": "BDT",
+              "baseline": -17500,
+              "participant": -12500,
+              "differenceInFavourOfParticipant": 5000
+            },
+            {
+              "agent": "BORROWER_AGENT",
+              "metric": "contracted-borrowing-cost",
+              "currency": "BDT",
+              "baseline": 12976.34,
+              "participant": 8877.03,
+              "differenceInFavourOfParticipant": 4099.31
+            },
+            {
+              "agent": "TREASURER_AGENT",
+              "metric": "30-day-modeled-gross-collections",
+              "currency": "BDT",
+              "baseline": 4000,
+              "participant": 4000,
+              "differenceInFavourOfParticipant": 0
+            },
+            {
+              "agent": "ANALYST_AGENT",
+              "metric": "modeled-capital-return",
+              "currency": "BDT",
+              "baseline": 600,
+              "participant": 540,
+              "differenceInFavourOfParticipant": -60
+            }
+          ]
+        }
+      }
+    ],
+    "limitations": "Standalone policy selection over synthetic independent role models, not a replay of the application multi-agent negotiation pipeline, not a full economic backtest, not application scorecard alpha and not proof of real-world improvement. Fixture mode makes no AI-quality claim. All three risk cases are preserved, including failures."
+  }
+}

@@ -18,6 +18,7 @@ router.post('/transactions', ...ownerGuard, validateRequest(cashflowValidation.c
 router.post('/transactions/:id/recategorize', ...ownerGuard, validateRequest(cashflowValidation.idAction), cashflowController.recategorize);
 router.get('/commitments', ...guard, validateRequest(cashflowValidation.shopQuery), cashflowController.listCommitments);
 router.post('/commitments', ...ownerGuard, validateRequest(cashflowValidation.createCommitment), cashflowController.createCommitment);
+router.post('/commitments/:id/settle', ...ownerGuard, validateRequest(cashflowValidation.settleCommitment), cashflowController.settleCommitment);
 router.post('/extract-commitment', ...ownerGuard, validateRequest(cashflowValidation.extractCommitment), cashflowController.extractCommitment);
 router.get('/projection', ...guard, validateRequest(cashflowValidation.projection), cashflowController.getProjection);
 router.post('/run', ...ownerGuard, validateRequest(cashflowValidation.backfill), cashflowController.runTreasury);
