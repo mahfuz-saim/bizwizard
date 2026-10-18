@@ -2145,6 +2145,8 @@ model CashCommitment {
   recurrence CommitmentRecurrence @default(NONE)
   confidence Float                @default(1)
   isPaid     Boolean              @default(false)
+  supplierPayable Boolean         @default(false)
+  paymentExpenseID String?         @unique
   paidAt     DateTime?
   source     CommitmentSource     @default(MANUAL)
   note       String?
@@ -2393,6 +2395,31 @@ model AiDecision {
 
   @@index([tenantID, shopID, agentType])
   @@map("ai_decisions")
+}
+
+model FinanceEvaluation {
+  id           String   @id @default(cuid())
+  tenantID     String
+  shopID       String
+  inputHash    String
+  version      String
+  seed         Int
+  status       String   @default("PREPARED")
+  snapshot     Json
+  choices      Json?
+  outcome      Json?
+  model        String?
+  usedFallback Boolean?
+  costUsd      Float    @default(0)
+  failure      String?
+  choicesFrozenAt DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([tenantID, shopID, inputHash])
+  @@index([tenantID, shopID, createdAt])
+  @@map("finance_evaluations")
 }
 
 model AgentPerformance {

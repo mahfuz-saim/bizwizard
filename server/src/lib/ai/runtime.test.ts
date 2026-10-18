@@ -1,12 +1,20 @@
 import assert from 'node:assert/strict';
 import { test, beforeEach, afterEach } from 'node:test';
 import { z } from 'zod';
-import { callStructured, redactPII, hashInput, setAiRunSink, recentRuns, setAiBudgetGate, aiEnabled } from './client';
+import { callStructured, redactPII, hashInput, setAiRunSink, recentRuns, setAiBudgetGate, aiEnabled, estimateCostUsd } from './client';
 
 beforeEach(() => setAiBudgetGate(async () => ({ settle: async () => {} })));
 afterEach(() => { setAiBudgetGate(null); delete process.env.OPENAI_API_KEY; delete process.env.AI_FEATURE_FLAGS; });
 
 const schema = z.object({ ok: z.boolean(), label: z.string() });
+
+test('USD estimates convert per-thousand-token prices to actual token counts', () => {
+  assert.equal(estimateCostUsd('gpt-4o-mini',1000000,1000000),0.75);
+  assert.equal(estimateCostUsd('gpt-4o-mini',1000,1000),0.00075);
+  assert.equal(estimateCostUsd('gpt-4o-mini',100,50),0.000045);
+  assert.equal(estimateCostUsd('gpt-4.1',1000000,1000000),10);
+  assert.equal(estimateCostUsd('gpt-4o-mini',0,0),0);
+});
 
 test('offline (no API key) resolves through the deterministic fallback and logs the run', async () => {
   delete process.env.OPENAI_API_KEY;

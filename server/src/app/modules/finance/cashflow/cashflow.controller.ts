@@ -8,6 +8,10 @@ const tenant = (req: Request) => req.tenantId as string;
 const shop = (req: Request) => (req.query.shopId ?? req.body?.shopId) as string;
 
 export const cashflowController = {
+  settleCommitment: catchAsync(async (req: Request, res: Response) => {
+    const result = await cashflowService.settleCommitment(tenant(req), shop(req), req.params.id, req.body.expenseItemID);
+    sendResponse(res, { success: true, statusCode: httpStatus.OK, message: 'Existing purchase linked; no additional payment created', data: result });
+  }),
   collectionEvidence: catchAsync(async (req: Request, res: Response) => {
     sendResponse(res, { success: true, statusCode: httpStatus.OK, message: 'Available recorded collections', data: await cashflowService.collectionEvidence(tenant(req), shop(req), req.params.id) });
   }),

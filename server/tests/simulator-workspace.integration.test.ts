@@ -110,10 +110,12 @@ test('isolated demo: migration, copied history, next-month runs, locking, rollba
   const second=await simulatorService.fastForward(tenant.id,demo.id);
   assert.equal(second.startedAt,result.endedAt);
   assert.equal(new Date(second.dailyEvents[0].date).getTime(),new Date(result.dailyEvents[29].date).getTime()+86400000);
+  await prisma.financeEvaluation.create({data:{...demoScope,inputHash:'reset-fixture',version:'shop-paired-replay-v1',seed:1,snapshot:{}}});
   await simulatorService.reset(tenant.id,demo.id);
   const reset=await prisma.shop.findUniqueOrThrow({where:{id:demo.id}});
   assert.equal(reset.simulationAsOf!.toISOString(),baseline);
   assert.equal(reset.simulationResult,null);
+  assert.equal(await prisma.financeEvaluation.count({where:demoScope}),0);
   assert.equal(await prisma.checkout.count({where:demoScope}),730);
   assert.equal(await prisma.notification.count({where:{shopId:demo.id}}),0);
   const buckets=await prisma.expense.findMany({where:demoScope});

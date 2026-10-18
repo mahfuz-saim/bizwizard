@@ -8,11 +8,18 @@ import { BENCHMARK_POLICY_VERSION } from './benchmarks';
 import { buildProfile } from '../shared/metricEngine';
 import { loadProfileAggregates } from '../shared/shopData';
 import ApiError from '../../../../errors/ApiError';
+import { comparisonInput, fixtureChoice, measureComparison } from './comparison';
+import { matchedEvaluationService } from './matchedEvaluation.service';
 
 const db = () => prisma as any;
 const AGENTS = ['LENDER_AGENT', 'BORROWER_AGENT', 'TREASURER_AGENT', 'ANALYST_AGENT'] as const;
 
 export const agentsService = {
+  async sandboxComparison(tenantId: string, shopId: string) {
+    await assertShop(tenantId, shopId);
+    return { mode: 'fixture-policy-not-AI', note: 'Synthetic role models, not this shop\'s measured outcomes or live AI. Use the standalone --live benchmark to evaluate provider-generated choices.',
+      cases: [0.05, 0.2, 0.5].map(risk => { const input = comparisonInput(risk); return measureComparison(input,fixtureChoice(input)); }) };
+  },
   async listPolicies(tenantId: string, shopId: string) {
     await assertShop(tenantId, shopId);
     await ensureDefaultPolicies(db(), tenantId, shopId);
@@ -118,17 +125,18 @@ export const agentsService = {
   },
 
   async auditExport(tenantId: string, shopId: string) {
-    const [policies, decisions, runs] = await Promise.all([
+    const [policies, decisions, runs, evaluations] = await Promise.all([
       this.listPolicies(tenantId, shopId),
       this.listDecisions(tenantId, shopId),
       db().aiRun.findMany({ where: { tenantID: tenantId, shopID: shopId }, orderBy: { createdAt: 'desc' }, take: 200 }),
+      matchedEvaluationService.list(tenantId,shopId),
     ]);
     const { performance } = await this.performance(tenantId, shopId);
     return {
       exportedAt: new Date().toISOString(),
       howThisWorks:
         'Deterministic engines compute financial arithmetic. Model-assisted decisions and deterministic fallbacks are labeled separately. Recorded collection evidence and sandbox outcomes are distinguished. Unknown returns, causal attribution, matched benchmark alpha and scores remain null rather than inferred from projections.',
-      policies, decisions, performance, runs,
+      policies, decisions, performance, runs, evaluations,
     };
   },
 };

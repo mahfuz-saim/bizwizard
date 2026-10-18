@@ -25,7 +25,8 @@ export default function CashflowPage() {
   const [projection, setProjection] = React.useState<Projection | null>(null)
   const [alerts, setAlerts] = React.useState<CashAlert[]>([])
   const [actions, setActions] = React.useState<{ id: string; actionType: string; title: string; rationale: string; projectedImpact: number; realizedImpact: number | null; status: string }[]>([])
-  const [commitments, setCommitments] = React.useState<{ id: string; name: string; amount: number; dueDate: string }[]>([])
+  const [commitments, setCommitments] = React.useState<{ id: string; name: string; amount: number; dueDate: string; supplierPayable?: boolean; paymentCandidates?: { id: string; name: string | null; createdAt: string }[] }[]>([])
+  const [supplierPayable, setSupplierPayable] = React.useState(false)
   const [error, setError] = React.useState("")
   const [busy, setBusy] = React.useState(false)
   const [loading, setLoading] = React.useState(true)
@@ -77,7 +78,10 @@ export default function CashflowPage() {
   // with the day-by-day drip feed, instead of jump-cutting at the end.
   const [baseline, setBaseline] = React.useState<Projection | null>(null)
   React.useEffect(() => {
-    if (sim.status === "playing" && sim.dayIndex === 0) setBaseline(projection)
+    if (sim.status !== "playing" || sim.dayIndex !== 0) return
+    let active = true
+    queueMicrotask(() => { if (active) setBaseline(projection) })
+    return () => { active = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sim.status, sim.dayIndex === 0])
 
@@ -197,17 +201,18 @@ export default function CashflowPage() {
           <Card>
             <CardHeader><CardTitle className="text-base">Upcoming commitments</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              {commitments.slice(0, 6).map((c) => <p key={c.id} className="flex flex-col justify-between gap-1 text-sm sm:flex-row"><span>{c.name}</span><span>{fmtBDT(c.amount)} · {String(c.dueDate).slice(0, 10)}</span></p>)}
+              {commitments.slice(0, 6).map((c) => <div key={c.id} className="space-y-1 text-sm"><p className="flex flex-col justify-between gap-1 sm:flex-row"><span>{c.name}{c.supplierPayable ? " · Recorded supplier obligation" : ""}</span><span>{fmtBDT(c.amount)} · {String(c.dueDate).slice(0, 10)}</span></p>{c.supplierPayable && <select aria-label={`Link purchase payment for ${c.name}`} className="h-9 w-full rounded-md border bg-background px-2" disabled={busy || !canApprove} value="" onChange={(e) => { const id = e.target.value; if (id) void run(() => cashflowApi.settleCommitment(c.id, id)) }}><option value="">{c.paymentCandidates?.length ? "Link a recorded purchase to settle" : "No matching purchase payment recorded yet"}</option>{c.paymentCandidates?.map(p => <option key={p.id} value={p.id}>{p.name ?? "Purchase"} · {String(p.createdAt).slice(0, 10)}</option>)}</select>}</div>)}
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <Input placeholder="Name" value={commitName} onChange={(e) => setCommitName(e.target.value)} />
                 <Input placeholder="Amount" inputMode="numeric" value={commitAmount} onChange={(e) => setCommitAmount(e.target.value)} />
                 <Input type="date" aria-label="Commitment due date" className="min-w-0" value={commitDate} onChange={(e) => setCommitDate(e.target.value)} />
               </div>
               <div className="flex flex-col gap-2 sm:flex-row">
-                <Button size="sm" disabled={busy || !canApprove || !commitName || !commitAmount || !commitDate} onClick={() => void run(async () => { await cashflowApi.createCommitment({ name: commitName, amount: Number(commitAmount), dueDate: commitDate }); setCommitName(""); setCommitAmount(""); setCommitDate("") })}>Add commitment</Button>
+                <Button size="sm" disabled={busy || !canApprove || !commitName || Number(commitAmount) <= 0 || !commitDate} onClick={() => void run(async () => { await cashflowApi.createCommitment({ name: commitName, amount: Number(commitAmount), dueDate: commitDate, supplierPayable }); setCommitName(""); setCommitAmount(""); setCommitDate("") })}>Add commitment</Button>
                 <Input placeholder='Or paste a note: "Rent 45000 due in 5 days, monthly"' value={noteText} onChange={(e) => setNoteText(e.target.value)} />
                 <Button size="sm" variant="outline" disabled={busy || !canApprove || !noteText} onClick={() => void run(async () => { await cashflowApi.extractCommitment(noteText); setNoteText("") })}>Extract</Button>
               </div>
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={supplierPayable} disabled={!canApprove} onChange={e => setSupplierPayable(e.target.checked)} />This is an existing unpaid supplier obligation, not a planned purchase.</label>
             </CardContent>
           </Card>
         </div>

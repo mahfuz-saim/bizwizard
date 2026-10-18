@@ -75,6 +75,7 @@ export const cashflowApi = {
   executeAlert: (id: string, body: Record<string, unknown>) =>
     data(api.post(`/finance/cashflow/alerts/${id}/execute?shopId=${getShopId() ?? ""}`, body)),
   commitments: () => data(api.get("/finance/cashflow/commitments", shopParams())),
+  settleCommitment: (id: string, expenseItemID: string) => data(api.post(`/finance/cashflow/commitments/${id}/settle?shopId=${encodeURIComponent(getShopId() ?? "")}`, { expenseItemID })),
   createCommitment: (body: Record<string, unknown>) =>
     data(api.post("/finance/cashflow/commitments", { shopId: getShopId(), ...body })),
   extractCommitment: (text: string) =>
@@ -114,6 +115,10 @@ export const analysisApi = {
 
 /* -------------------------------- Agents --------------------------------- */
 export const agentsApi = {
+  evaluations: () => data(api.get("/finance/agents/evaluations", shopParams())),
+  runEvaluation: () => data(api.post(`/finance/agents/evaluations?shopId=${encodeURIComponent(getShopId() ?? "")}`, {})),
+  evaluation: (id: string) => data(api.get(`/finance/agents/evaluations/${encodeURIComponent(id)}`, shopParams())),
+  sandboxComparison: () => data(api.get("/finance/agents/sandbox-comparison", shopParams())),
   policies: () => data(api.get("/finance/agents/policies", shopParams())),
   updatePolicy: (id: string, body: Record<string, unknown>) =>
     data(api.patch(`/finance/agents/policies/${id}?shopId=${getShopId() ?? ""}`, body)),

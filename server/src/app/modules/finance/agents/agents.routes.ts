@@ -16,5 +16,9 @@ router.get('/decisions', ...guard, validateRequest(agentsValidation.decisions), 
 router.get('/runs', ...guard, validateRequest(agentsValidation.shopQuery), agentsController.listRuns);
 router.get('/performance', ...guard, validateRequest(agentsValidation.shopQuery), agentsController.performance);
 router.get('/audit-export', ...guard, validateRequest(agentsValidation.shopQuery), agentsController.auditExport);
+router.get('/sandbox-comparison', ...guard, validateRequest(agentsValidation.shopQuery), agentsController.sandboxComparison);
+router.get('/evaluations', ...guard, validateRequest(agentsValidation.shopQuery), agentsController.listEvaluations);
+router.get('/evaluations/:id', ...guard, validateRequest(agentsValidation.evaluationRead), agentsController.getEvaluation);
+router.post('/evaluations', auth(UserRole.ADMIN,UserRole.OWNER),verifyTenantAccess,validateRequest(agentsValidation.evaluationRun),agentsController.runEvaluation);
 
 export const agentsRoutes = router;

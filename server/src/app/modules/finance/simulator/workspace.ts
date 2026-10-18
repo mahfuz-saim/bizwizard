@@ -62,7 +62,7 @@ export async function copyBaseline(tx: any, source: any, demoID: string) {
   for (const total of totals) await tx.expense.update({ where: { id: total.expenseID }, data: { totalAmount: total._sum.amount ?? 0 } });
   await copy('cashAccount', { shopID: source.id }, () => ({ shopID: demoID }));
   await copy('cashTransaction', { shopID: source.id, isSimulated: false }, r => ({ shopID: demoID, accountID: remap(r.accountID), sourceRefID: remap(r.sourceRefID) }));
-  await copy('cashCommitment', { shopID: source.id }, () => ({ shopID: demoID }));
+  await copy('cashCommitment', { shopID: source.id }, r => ({ shopID: demoID, paymentExpenseID: remap(r.paymentExpenseID) }));
   await copy('aiAgentPolicy', { shopID: source.id, isActive: true }, () => ({ shopID: demoID }));
   const baselineAt = new Date(latest || Date.now());
   baselineAt.setUTCHours(23, 59, 59, 999);
@@ -99,7 +99,7 @@ export async function restoreWorkspace(tx: any, tenantID: string, shopID: string
   await tx.loanSchedule.deleteMany({ where: scope });
   await tx.treasuryActionEvidence.deleteMany({ where: scope });
   await tx.aiAgentPolicy.deleteMany({ where: scope });
-  for (const model of ['financingNegotiation', 'financingApplication', 'financingOffer', 'financingMatch', 'financingMarketState', 'businessFinancialProfile', 'financialMetricSnapshot', 'cashFlowProjection', 'agentPerformance', 'capitalDecision', 'scenario', 'forecast', 'cashAlert', 'treasuryAction', 'insight', 'aiDecision', 'cashTransaction', 'cashAccount', 'cashCommitment']) {
+  for (const model of ['financingNegotiation', 'financingApplication', 'financingOffer', 'financingMatch', 'financingMarketState', 'businessFinancialProfile', 'financialMetricSnapshot', 'cashFlowProjection', 'financeEvaluation', 'agentPerformance', 'capitalDecision', 'scenario', 'forecast', 'cashAlert', 'treasuryAction', 'insight', 'aiDecision', 'cashTransaction', 'cashAccount', 'cashCommitment']) {
     await tx[model].deleteMany({ where: scope });
   }
   await tx.debtPayments.deleteMany({ where: { debt: scope } });

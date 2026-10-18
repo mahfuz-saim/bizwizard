@@ -89,7 +89,7 @@ const PRICE_PER_1K: Record<string, { in: number; out: number }> = {
 };
 export function estimateCostUsd(model: string, inputTokens: number, outputTokens: number): number {
   const p = PRICE_PER_1K[model] ?? { in: 0.001, out: 0.004 };
-  return Math.round((inputTokens * p.in + outputTokens * p.out) * 1e6) / 1e6;
+  return Math.round(((inputTokens * p.in + outputTokens * p.out) / 1000) * 1e6) / 1e6;
 }
 const roughTokens = (s: string) => Math.ceil(s.length / 4);
 

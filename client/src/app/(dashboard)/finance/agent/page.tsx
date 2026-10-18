@@ -15,6 +15,8 @@ import { useStore } from "@/lib/store"
 
 type Policy = { id: string; agentType: string; name: string; objective: string; riskAppetite: number; maxExposure: number | null; bufferTargetDays: number | null; version: number }
 type Perf = { agentType: string; decisionsCount: number; executedCount: number; guardRejects: number; realizedImpactSum: number | null; benchmarkImpact: number | null; alpha: number | null; score: number | null; benchmarkPolicyVersion: string; outcomeBasis?: string }
+type Comparison = { note: string; cases: { caseID: string; assumptions: string[]; measurements: { agent: string; metric: string; baseline: number; participant: number; differenceInFavourOfParticipant: number }[] }[] }
+type Evaluation = { id: string; createdAt: string; status: string; model: string | null; usedFallback: boolean | null; costUsd: number; version: string; failure: string | null; scorecards: { agentType: string; metric: string; status: string; horizonDays: number; participant: number | null; baseline: number | null; alpha: number | null; winRatePct: number | null; reason: string | null }[] }
 
 export default function AgentLedgerPage() {
   const { dataVersion, session } = useStore()
@@ -22,6 +24,10 @@ export default function AgentLedgerPage() {
   const sim = useSimulator()
   const [policies, setPolicies] = React.useState<Policy[]>([])
   const [performance, setPerformance] = React.useState<Perf[]>([])
+  const [comparison, setComparison] = React.useState<Comparison | null>(null)
+  const [comparing, setComparing] = React.useState(false)
+  const [evaluations, setEvaluations] = React.useState<Evaluation[]>([])
+  const [evaluating, setEvaluating] = React.useState(false)
   const [decisions, setDecisions] = React.useState<{ id: string; agentType: string; action: string; rationale: string; confidence: number; projectedImpact: number; realizedImpact: number | null; guardResult: string; status: string; model: string }[]>([])
   const [runs, setRuns] = React.useState<{ runs: { id: string; purpose: string; model: string; costUsd: number; latencyMs: number; status: string }[]; spentUsdThisMonth: number; budgetUsd: number } | null>(null)
   const [drafts, setDrafts] = React.useState<Record<string, { risk: string; exposure: string; buffer: string }>>({})
@@ -35,20 +41,18 @@ export default function AgentLedgerPage() {
     setLoading(true)
     setError("")
     try {
-      const [p, perf, d, r] = await Promise.all([
-        agentsApi.policies(), agentsApi.performance(), agentsApi.decisions(), agentsApi.runs(),
+      const [p, perf, d, r, evaluations] = await Promise.all([
+        agentsApi.policies(), agentsApi.performance(), agentsApi.decisions(), agentsApi.runs(), agentsApi.evaluations(),
       ])
       setPolicies(p as Policy[])
       setPerformance(((perf as { performance: Perf[] }).performance ?? []) as Perf[])
       setDecisions(d as typeof decisions)
       setRuns(r as typeof runs)
+      setEvaluations(evaluations as Evaluation[])
       setError("")
       setLoaded(true)
     } catch (e) { setError(e instanceof Error ? e.message : "Could not load the agent ledger.") } finally { setLoading(false) }
   }, [])
-  // The simulator's TREASURER_AGENT reconciliation lands realizedImpact and
-  // moves alpha for real — refetch once the run (or a reset) completes so
-  // the scorecard below animates from the actual before/after, not a guess.
   React.useEffect(() => {
     let active = true
     void Promise.resolve().then(() => { if (active) return load() })
@@ -83,6 +87,14 @@ export default function AgentLedgerPage() {
     } catch (e) { setError(e instanceof Error ? e.message : "Export failed") } finally { setExporting(false) }
   }
 
+  const downloadEvaluation = async (id: string) => {
+    try {
+      const payload = await agentsApi.evaluation(id)
+      const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }))
+      const a = document.createElement("a"); a.href = url; a.download = `matched-evaluation-${id}.json`; a.click(); URL.revokeObjectURL(url)
+    } catch (e) { setError(e instanceof Error ? e.message : "Evaluation export failed") }
+  }
+
   if (!loaded) return <PageLoadState error={error} retry={() => void load()} />
 
   return (
@@ -98,10 +110,40 @@ export default function AgentLedgerPage() {
       <PageRefreshState loading={loading} error={error} retry={() => void load()} />
 
       <Card>
+        <CardHeader><CardTitle className="text-base">Your shop: matched sandbox scorecards</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">Freeze this shop&apos;s history, quotes and mandate versions, then compare both policies using identical outcome draws. Eight paired paths; not real-world profit or causal alpha. Requires 60% sales-history completeness and 14 days of cash history.</p>
+          <Button disabled={!canEdit || evaluating} onClick={async () => { setEvaluating(true); try { await agentsApi.runEvaluation(); await load() } catch (e) { setError(e instanceof Error ? e.message : "Matched evaluation failed") } finally { setEvaluating(false) } }}>{evaluating ? "Evaluating…" : "Run matched sandbox evaluation"}</Button>
+          <p className="text-xs text-muted-foreground">May use configured AI credit. Missing keys or budget denial use a labelled deterministic policy. Unchanged daily snapshots reuse the saved evaluation without another paid call. No sales, payments, stock or cash records are changed.</p>
+          {evaluations.length === 0 && <p className="text-sm text-muted-foreground">No matched evaluation yet. Run financing matching first for lender/borrower comparisons; analyst comparisons need product economics and available capital above the cash buffer.</p>}
+          {evaluations.map((evaluation, i) => <details key={evaluation.id} open={i === 0} className="rounded-md border p-3">
+            <summary className="cursor-pointer text-sm font-medium">{new Date(evaluation.createdAt).toLocaleString()} · {evaluation.status} · {evaluation.usedFallback ? "Deterministic fallback" : evaluation.model ?? "Pending"}</summary>
+            <div className="mt-3 space-y-3">
+              <p className="break-all text-xs text-muted-foreground">{evaluation.id} · {evaluation.version} · Estimated AI cost: ${evaluation.costUsd.toFixed(6)}</p>
+              {evaluation.failure && <p className="text-sm text-destructive">{evaluation.failure}</p>}
+              <div className="overflow-x-auto"><table className="w-full min-w-160 text-sm"><thead><tr className="text-left text-muted-foreground"><th>Agent / metric</th><th>Participant</th><th>Baseline</th><th>Sandbox difference</th><th>Strict win rate</th></tr></thead><tbody>{evaluation.scorecards.map(s => <tr key={s.agentType} className="border-t"><td className="py-2">{s.agentType.replaceAll("_", " ")}<p className="text-xs text-muted-foreground">{s.metric} · {s.horizonDays} days</p></td><td>{s.participant === null ? "Pending" : fmtBDT(s.participant)}</td><td>{s.baseline === null ? "Pending" : fmtBDT(s.baseline)}</td><td>{s.alpha === null ? "Pending" : fmtBDT(s.alpha)}</td><td>{s.winRatePct === null ? "Pending" : `${s.winRatePct}%`}</td></tr>)}</tbody></table></div>
+              <p className="text-xs text-muted-foreground">Amounts are BDT. Positive differences favour the participant; negative and zero results are retained. Metrics have different meanings and must not be summed. Loan horizons are shown separately from 30-day cash and capital experiments.</p>
+              {evaluation.scorecards.filter(s => s.reason).map(s => <p key={s.agentType} className="text-xs text-muted-foreground">{s.agentType}: {s.reason}</p>)}
+              <Button size="sm" variant="outline" onClick={() => void downloadEvaluation(evaluation.id)}>Download frozen inputs &amp; outcome ledgers</Button>
+            </div>
+          </details>)}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">Reproducible sandbox comparison</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">Compare four fixture policies against pinned rules on identical synthetic inputs. This does not call AI, change your shop, or replace the measured-outcome scorecards below.</p>
+          <Button variant="outline" disabled={comparing} onClick={async () => { setComparing(true); try { setComparison(await agentsApi.sandboxComparison() as Comparison) } catch (e) { setError(e instanceof Error ? e.message : "Comparison failed") } finally { setComparing(false) } }}>{comparing ? "Computing…" : "Show synthetic comparison"}</Button>
+          {comparison && <><p className="text-xs text-muted-foreground">{comparison.note}</p>{comparison.cases.map(c => <details key={c.caseID} className="rounded-md border p-3"><summary className="cursor-pointer text-sm font-medium">{c.caseID}</summary><div className="mt-3 space-y-3">{c.measurements.map(m => <div key={m.agent} className="text-sm"><p className="font-medium">{m.agent.replaceAll("_", " ")}</p><p className="text-xs text-muted-foreground">{m.metric}</p><p>Rules: {fmtBDT(m.baseline)} · Fixture: {fmtBDT(m.participant)} · Difference in favour of fixture: {fmtBDT(m.differenceInFavourOfParticipant)}</p></div>)}<ul className="list-disc space-y-1 pl-4 text-xs text-muted-foreground">{c.assumptions.map(a => <li key={a}>{a}</li>)}</ul></div></details>)}</>}
+        </CardContent>
+      </Card>
+
+      <Card>
           <CardHeader><CardTitle className="text-base">Outcome evidence &amp; benchmark readiness</CardTitle></CardHeader>
         <CardContent className="overflow-x-auto">
           <p className="mb-2 text-xs text-muted-foreground">Pending means there is no measured outcome or fair matched benchmark yet. Collections are not profit; sandbox results are not real-world results.</p>
-          <table className="w-full min-w-[640px] text-sm">
+          <table className="w-full min-w-160 text-sm">
             <thead><tr className="text-left text-muted-foreground"><th className="py-1">Agent</th><th>Decisions</th><th>Executed</th><th>Guard rejects</th><th>Realized</th><th>Benchmark</th><th>Alpha</th><th>Score</th></tr></thead>
             <tbody>
               {performance.map((p) => <PerfRow key={p.agentType} p={p} />)}

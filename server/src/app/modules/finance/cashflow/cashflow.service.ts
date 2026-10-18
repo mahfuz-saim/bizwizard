@@ -10,6 +10,7 @@ import { guardTreasuryActions } from '../shared/guard';
 import { loadProfileAggregates, loadOpenDebts, loadCashTransactions, assertShop } from '../shared/shopData';
 import { ensureDefaultPolicies } from '../shared/catalog';
 import ApiError from '../../../../errors/ApiError';
+import { expenseSpikeRatio } from '../shared/expenseSpike';
 
 const db = () => prisma as any;
 const DAY = 86400000;
@@ -114,24 +115,25 @@ export const cashflowService = {
 
   async backfill(tenantId: string, shopId: string) {
     await assertShop(tenantId, shopId);
-    const accounts = await ensureAccounts(tenantId, shopId);
-    const primary = accounts.find((a: any) => a.isPrimary) ?? accounts[0];
-    await db().cashTransaction.deleteMany({ where: { tenantID: tenantId, shopID: shopId, source: 'BACKFILL' } });
+    const synchronize = async (tx: any) => {
+      await tx.$queryRaw`SELECT id FROM shops WHERE id = ${shopId} AND "tenantID" = ${tenantId} FOR UPDATE`;
+      const [sales, payments, expenses] = await Promise.all([
+        tx.checkout.findMany({ where: { tenantID: tenantId, shopID: shopId, isSimulated: false }, select: { id: true } }),
+        tx.debtPayments.findMany({ where: { debt: { tenantID: tenantId, shopID: shopId }, isSimulated: false }, select: { id: true } }),
+        tx.expenseItem.findMany({ where: { tenantID: tenantId, expense: { shopID: shopId }, isSimulated: false }, select: { id: true } }),
+      ]);
+      for (const [kind, rows] of [['sale', sales], ['payment', payments], ['expense', expenses]] as const)
+        for (const row of rows) await tx.$queryRaw`SELECT finance_sync_event(${kind}::text, ${row.id}::text, true)::text`;
+    };
+    if (simulationContext.getStore()) await synchronize(db());
+    else await db().$transaction(synchronize, { timeout: 120000 });
+    const commitmentsCreated = await this.importNoteCommitments(tenantId, shopId);
+    return { accounts: await refreshBalances(tenantId, shopId), synchronized: true, commitmentsCreated };
+  },
+
+  async importNoteCommitments(tenantId: string, shopId: string) {
+    await assertShop(tenantId, shopId);
     const raw = db();
-    const [sales, payments, expenseItems] = await Promise.all([
-      raw.checkout.findMany({ where: { shopID: shopId, tenantID: tenantId, isDraft: false }, select: { id: true, totalPrice: true, createdAt: true, status: true } }),
-      raw.debtPayments.findMany({ where: { debt: { shopID: shopId, tenantID: tenantId } }, select: { id: true, amount: true, createdAt: true } }).catch(() => []),
-      raw.expenseItem.findMany({ where: { tenantID: tenantId, expense: { shopID: shopId, tenantID: tenantId } }, select: { id: true, amount: true, expenseType: true, createdAt: true } }).catch(() => []),
-    ]);
-    const rows: any[] = [];
-    for (const s of sales)
-      if (s.status !== 'UNPAID')
-        rows.push({ tenantID: tenantId, shopID: shopId, accountID: primary.id, direction: 'IN', amount: roundCurrency(s.totalPrice), category: 'SALES_COLLECTION', occurredAt: s.createdAt, source: 'BACKFILL', sourceRefID: s.id, status: 'CLEARED', isBackfilled: true, description: 'Sale collection (backfill)' });
-    for (const p of payments)
-      rows.push({ tenantID: tenantId, shopID: shopId, accountID: primary.id, direction: 'IN', amount: roundCurrency(p.amount), category: 'INVOICE_PAYMENT', occurredAt: p.createdAt, source: 'BACKFILL', sourceRefID: p.id, status: 'CLEARED', isBackfilled: true, description: 'Debt payment (backfill)' });
-    for (const e of expenseItems)
-      rows.push({ tenantID: tenantId, shopID: shopId, accountID: primary.id, direction: 'OUT', amount: roundCurrency(e.amount), category: e.expenseType === 'PRODUCT' ? 'PRODUCT_PURCHASE' : e.expenseType === 'EMPLOYEE_SALARY' ? 'SALARY' : 'OPERATING_EXPENSE', occurredAt: e.createdAt, source: 'BACKFILL', sourceRefID: e.id, status: 'CLEARED', isBackfilled: true, description: 'Expense (backfill)' });
-    if (rows.length) await db().cashTransaction.createMany({ data: rows });
     // Notes with future due dates become commitments (§5.3[1]).
     const notes = await raw.note.findMany({ where: { shopID: shopId, tenantID: tenantId, isComplete: false, isDeleted: false, dueDate: { gte: new Date() } } }).catch(() => []);
     let commitments = 0;
@@ -143,15 +145,7 @@ export const cashflowService = {
       await db().cashCommitment.create({ data: { tenantID: tenantId, shopID: shopId, name: (n.name ?? n.note.slice(0, 40)) as string, category: 'OPERATING_EXPENSE', amount, dueDate: n.dueDate, recurrence: 'NONE', confidence: 0.8, source: 'IMPORTED_FROM_NOTE', note: n.note } });
       commitments++;
     }
-    const refreshed = await refreshBalances(tenantId, shopId);
-    const salesTotal = sumMoney(sales.filter((s: any) => s.status !== 'UNPAID').map((s: any) => s.totalPrice));
-    const ledgerIn = sumMoney(rows.filter((r) => r.direction === 'IN').map((r) => r.amount));
-    return {
-      transactionsCreated: rows.length,
-      commitmentsCreated: commitments,
-      accounts: refreshed,
-      reconciliation: { recordedSales: salesTotal, ledgerInflows: ledgerIn, withinOnePercent: salesTotal === 0 ? true : Math.abs(ledgerIn - salesTotal) / Math.max(1, salesTotal) <= 0.01 },
-    };
+    return commitments;
   },
 
   async getProjection(tenantId: string, shopId: string, horizon = 90, persist = true) {
@@ -225,6 +219,10 @@ export const cashflowService = {
     const profile = buildProfile(aggregates);
     const revSeries = await loadCashTransactions(tenantId, shopId, 35);
     const revHist = dailyNetSeries(revSeries, 35, asOf);
+    const recentExpenses = await db().expenseItem.findMany({
+      where: { tenantID: tenantId, expense: { shopID: shopId }, createdAt: { gt: new Date(asOf.getTime() - 180 * DAY), lte: asOf } },
+      select: { amount: true, expenseType: true, createdAt: true },
+    });
     const candidateAlerts = evaluateAlerts({
       projection,
       currentCash: projection.currentCash,
@@ -234,7 +232,7 @@ export const cashflowService = {
       commitmentsDueSoon: commitments.map((c: any) => ({ name: c.name, amount: c.amount, dueDate: new Date(c.dueDate).toISOString().slice(0, 10) })),
       revenue7d: sumMoney(revHist.slice(-7).map((h) => h.inflow)),
       revenue28dAvg: roundCurrency(sumMoney(revHist.slice(-35, -7).map((h) => h.inflow)) / 4),
-      largestExpenseRatio: 0,
+      largestExpenseRatio: expenseSpikeRatio(recentExpenses, asOf),
       ledgerDays: Math.min(180, history.filter((h) => h.inflow + h.outflow > 0).length),
       asOf,
     });
@@ -350,18 +348,42 @@ export const cashflowService = {
 
   async listCommitments(tenantId: string, shopId: string) {
     await assertShop(tenantId, shopId);
-    return db().cashCommitment.findMany({ where: { tenantID: tenantId, shopID: shopId }, orderBy: { dueDate: 'asc' } });
+    const rows = await db().cashCommitment.findMany({ where: { tenantID: tenantId, shopID: shopId, isPaid: false }, orderBy: { dueDate: 'asc' } });
+    const purchases = await db().expenseItem.findMany({ where: { tenantID: tenantId, expense: { shopID: shopId }, expenseType: 'PRODUCT', isSimulated: false }, select: { id: true, name: true, amount: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take: 200 });
+    const linked = await db().cashCommitment.findMany({ where: { tenantID: tenantId, shopID: shopId, paymentExpenseID: { not: null } }, select: { paymentExpenseID: true } });
+    const used = new Set(linked.map((r: any) => r.paymentExpenseID));
+    return rows.map((row: any) => ({ ...row, paymentCandidates: row.supplierPayable ? purchases.filter((p: any) => !used.has(p.id) && p.createdAt >= row.createdAt && roundCurrency(p.amount) === roundCurrency(row.amount)) : [] }));
   },
 
   async createCommitment(tenantId: string, shopId: string, body: any) {
     await assertShop(tenantId, shopId);
+    if (body.supplierPayable && body.recurrence && body.recurrence !== 'NONE') throw new ApiError(400, 'Record supplier invoices individually, not as recurring forecasts');
     return db().cashCommitment.create({
       data: {
-        tenantID: tenantId, shopID: shopId, name: body.name, category: (body.category ?? 'OPERATING_EXPENSE') as any,
+        tenantID: tenantId, shopID: shopId, name: body.name, category: body.supplierPayable ? 'PRODUCT_PURCHASE' : (body.category ?? 'OPERATING_EXPENSE') as any,
+        supplierPayable: body.supplierPayable === true,
         amount: roundCurrency(body.amount), dueDate: new Date(body.dueDate),
         recurrence: (body.recurrence ?? 'NONE') as any, confidence: body.confidence ?? 1,
         source: 'MANUAL', note: body.note ?? null,
       },
+    });
+  },
+
+  async settleCommitment(tenantId: string, shopId: string, id: string, expenseItemID: string) {
+    await assertShop(tenantId, shopId);
+    return db().$transaction(async (tx: any) => {
+      await tx.$queryRaw`SELECT id FROM cash_commitments WHERE id = ${id} AND "tenantID" = ${tenantId} AND "shopID" = ${shopId} FOR UPDATE`;
+      const row = await tx.cashCommitment.findFirst({ where: { id, tenantID: tenantId, shopID: shopId, supplierPayable: true } });
+      if (!row) throw new ApiError(404, 'Supplier obligation not found');
+      if (row.isPaid) {
+        if (row.paymentExpenseID !== expenseItemID) throw new ApiError(409, 'This obligation already has payment evidence');
+        return row;
+      }
+      await tx.$queryRaw`SELECT id FROM expense_item WHERE id = ${expenseItemID} FOR UPDATE`;
+      const expense = await tx.expenseItem.findFirst({ where: { id: expenseItemID, tenantID: tenantId, expense: { shopID: shopId }, expenseType: 'PRODUCT', isSimulated: false, createdAt: { gte: row.createdAt } } });
+      if (!expense || roundCurrency(expense.amount) !== roundCurrency(row.amount)) throw new ApiError(400, 'Link an actual same-shop purchase recorded after this obligation, with the same amount');
+      if (await tx.cashCommitment.findFirst({ where: { paymentExpenseID: expenseItemID } })) throw new ApiError(409, 'This purchase is already linked');
+      return tx.cashCommitment.update({ where: { id }, data: { isPaid: true, paidAt: expense.createdAt, paymentExpenseID: expenseItemID } });
     });
   },
 

@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 const shopId = z.string().min(1, 'shopId is required');
 export const agentsValidation = {
+  evaluationRun: z.object({query:z.object({shopId}),body:z.object({}).strict()}),
+  evaluationRead: z.object({query:z.object({shopId}),params:z.object({id:z.string().min(1)})}),
   shopQuery: z.object({ query: z.object({ shopId }) }),
   decisions: z.object({ query: z.object({ shopId, agentType: z.enum(['LENDER_AGENT', 'BORROWER_AGENT', 'TREASURER_AGENT', 'ANALYST_AGENT']).optional() }) }),
   updatePolicy: z.object({
