@@ -9,6 +9,7 @@ import { evaluateAlerts, buildActionMenu } from '../shared/alerts';
 import { guardTreasuryActions } from '../shared/guard';
 import { loadProfileAggregates, loadOpenDebts, loadCashTransactions, assertShop } from '../shared/shopData';
 import { ensureDefaultPolicies } from '../shared/catalog';
+import ApiError from '../../../../errors/ApiError';
 
 const db = () => prisma as any;
 const DAY = 86400000;
@@ -321,23 +322,27 @@ export const cashflowService = {
   },
 
   async executeAlertAction(tenantId: string, shopId: string, id: string, body: any) {
-    const alert = await db().cashAlert.findFirst({ where: { id, tenantID: tenantId, shopID: shopId } });
-    if (!alert) throw Object.assign(new Error('Alert not found'), { statusCode: 404 });
+    await assertShop(tenantId, shopId);
     await ensureDefaultPolicies(db());
-    const policy = await db().aiAgentPolicy.findFirst({ where: { agentType: 'TREASURER_AGENT', isActive: true } });
-    const actionType = (body?.actionType as string) ?? 'COLLECT_DEBT';
-    const amount = roundCurrency(body?.amount ?? alert.projectedShortfall ?? 0);
-    const action = await db().treasuryAction.create({
-      data: {
-        tenantID: tenantId, shopID: shopId, agentPolicyID: policy?.id ?? 'policy-treasurer-agent',
-        actionType: actionType as any, title: body?.title ?? `Act on: ${alert.title}`,
-        rationale: `Owner executed a recommended action from alert ${alert.triggerRule}.`,
-        amount, projectedImpact: roundCurrency(body?.projectedImpact ?? amount), status: 'EXECUTED',
-        requiresOwnerApproval: false, executedAt: new Date(),
-      },
+    return db().$transaction(async (tx: any) => {
+      await tx.$queryRaw`SELECT id FROM cash_alerts WHERE id = ${id} AND "tenantID" = ${tenantId} AND "shopID" = ${shopId} FOR UPDATE`;
+      const alert = await tx.cashAlert.findFirst({ where: { id, tenantID: tenantId, shopID: shopId } });
+      if (!alert) throw new ApiError(404, 'Alert not found');
+      if (!['OPEN', 'ACKNOWLEDGED'].includes(alert.status)) throw new ApiError(409, 'This alert is no longer active');
+      const recommendation = alert.recommendedActions?.[body.actionIndex];
+      if (!recommendation) throw new ApiError(400, 'Choose an available alert recommendation');
+      const targetRefID = `${id}:${body.actionIndex}`;
+      const existing = await tx.treasuryAction.findFirst({ where: { tenantID: tenantId, shopID: shopId, targetRefID, status: { in: ['PROPOSED', 'APPROVED'] } } });
+      if (existing) return existing;
+      const policy = await tx.aiAgentPolicy.findFirst({ where: { agentType: 'TREASURER_AGENT', isActive: true } });
+      return tx.treasuryAction.create({ data: {
+        tenantID: tenantId, shopID: shopId, agentPolicyID: policy.id,
+        actionType: recommendation.actionType, title: `Review: ${recommendation.description}`,
+        rationale: `Recommended by alert: ${alert.title}. Approval records intent only; complete and record the actual business transaction separately.`,
+        amount: 0, projectedImpact: roundCurrency(recommendation.projectedImpact), status: 'PROPOSED',
+        targetRefID, requiresOwnerApproval: true,
+      } });
     });
-    await db().cashAlert.update({ where: { id }, data: { status: 'RESOLVED', resolvedAt: new Date() } });
-    return action;
   },
 
   async listCommitments(tenantId: string, shopId: string) {
@@ -387,9 +392,10 @@ export const cashflowService = {
   async decideTreasuryAction(tenantId: string, shopId: string, id: string, approve: boolean) {
     const action = await db().treasuryAction.findFirst({ where: { id, tenantID: tenantId, shopID: shopId } });
     if (!action) throw Object.assign(new Error('Action not found'), { statusCode: 404 });
+    if (action.status !== 'PROPOSED') throw new ApiError(409, 'Only proposed actions can be approved or rejected');
     return db().treasuryAction.update({
-      where: { id },
-      data: approve ? { status: 'EXECUTED', executedAt: new Date() } : { status: 'REJECTED' },
+      where: { id, status: 'PROPOSED' },
+      data: { status: approve ? 'APPROVED' : 'REJECTED' },
     });
   },
 };

@@ -6,7 +6,8 @@ import {
     IUpdateLot,
     IUpdateProduct,
 } from './product.interface';
-import { ExpenseType, LotStatus } from '@prisma/client';
+import { ExpenseType, LotStatus, Prisma } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import ApiError from '../../../errors/ApiError';
 import httpStatus from 'http-status';
 import { JwtPayload } from '../../../interfaces/common';
@@ -59,7 +60,7 @@ const getTenantLotOrThrow = async (lotId: string, tenantId: string) => {
     return lot;
 };
 
-const addProductInShop = async (payload: IProduct, tenantId: string) => {
+const addProductInShop = async (payload: IProduct, tenantId: string, transaction?: Prisma.TransactionClient) => {
     let {
         lot,
         barcode,
@@ -89,6 +90,7 @@ const addProductInShop = async (payload: IProduct, tenantId: string) => {
             },
         });
         supplyId = supply?.id ?? null;
+        if (!supplyId) throw new ApiError(httpStatus.BAD_REQUEST, 'Select a supplier linked to this shop');
     }
 
     if (variantId) {
@@ -106,6 +108,8 @@ const addProductInShop = async (payload: IProduct, tenantId: string) => {
                 'Product variant not found',
             );
         }
+        productData.productID = existingVariant.productID ?? undefined;
+        productData.name = existingVariant.name ?? payload.name;
     }
 
     // set notify date for expiration and not sold
@@ -116,17 +120,18 @@ const addProductInShop = async (payload: IProduct, tenantId: string) => {
         },
     });
 
-    if (!productData?.notifyAfterNotSold) {
+    if (productData.notifyAfterNotSold === undefined) {
         productData.notifyAfterNotSold = shopConfig?.defaultNotSoldThreshold;
     }
-    if (!productData?.notifyBeforeExp) {
+    if (productData.notifyBeforeExp === undefined) {
         productData.notifyBeforeExp = shopConfig?.defaultExpirationThreshold;
     }
-    if (!productData?.lowStock) {
+    if (productData.lowStock === undefined) {
         productData.lowStock = shopConfig?.defaultLowStockThreshold;
     }
 
-    const result = await prisma.$transaction(async tx => {
+    const lotId = randomUUID();
+    const write = async (tx: Prisma.TransactionClient) => {
         let product = await tx.inventory.findUnique({
             where: {
                 id: productData.productID || '',
@@ -134,6 +139,10 @@ const addProductInShop = async (payload: IProduct, tenantId: string) => {
         });
 
         if (!product) {
+            if (variantId) throw new ApiError(httpStatus.BAD_REQUEST, 'Existing variant has no catalog product. Repair its catalog link before restocking.');
+            if (!payload.name?.trim() || !measuringUnit?.trim()) {
+                throw new ApiError(httpStatus.BAD_REQUEST, 'Product name and measuring unit are required');
+            }
             // handle no barcode
             const newBarcode = `${barcode}-custom-${shop.shopCode}`;
             product = await tx.inventory.create({
@@ -156,19 +165,24 @@ const addProductInShop = async (payload: IProduct, tenantId: string) => {
                 Lot: {
                     create: {
                         ...lot,
+                        id: lotId,
+                        expDate: lot.expDate ? new Date(lot.expDate) : undefined,
+                        mfgDate: lot.mfgDate ? new Date(lot.mfgDate) : undefined,
                         supplyId: supplyId,
                         tenantID: tenantId,
                     },
                 },
             },
             update: {
-                ...productData,
                 totalProducts: {
                     increment: lot.stock,
                 },
                 Lot: {
                     create: {
                         ...lot,
+                        id: lotId,
+                        expDate: lot.expDate ? new Date(lot.expDate) : undefined,
+                        mfgDate: lot.mfgDate ? new Date(lot.mfgDate) : undefined,
                         supplyId: supplyId,
                         tenantID: tenantId,
                     },
@@ -178,7 +192,7 @@ const addProductInShop = async (payload: IProduct, tenantId: string) => {
                 id: variantId || '',
             },
             include: {
-                Lot: true,
+                Lot: { where: { id: lotId } },
             },
         });
 
@@ -246,10 +260,11 @@ const addProductInShop = async (payload: IProduct, tenantId: string) => {
         });
 
         return result;
-    });
+    };
+    const result = transaction ? await write(transaction) : await prisma.$transaction(write);
 
     // sending notification to users
-    await notificationService.sendSyncTrigger(
+    if (!transaction) await notificationService.sendSyncTrigger(
         [
             {
                 dataType: 'SYNC',
@@ -270,9 +285,22 @@ const addProductInShop = async (payload: IProduct, tenantId: string) => {
             },
         ],
         result.shopID,
-    );
+    ).catch(() => console.warn('Inventory saved; sync notification could not be delivered.'));
 
     return result;
+};
+
+const addPurchase = async (lines: IProduct[], tenantId: string) => {
+    const results = await prisma.$transaction(async tx => {
+        const results = [];
+        for (const line of lines) results.push(await addProductInShop(line, tenantId, tx));
+        return results;
+    }, { timeout: 30000 });
+    await notificationService.sendSyncTrigger([{ dataType: 'SYNC', data: results.flatMap(result => [
+        { id: result.id, entity: 'VARIANT' as const, operation: 'UPDATE' as const, updatedAt: result.updatedAt.toISOString() },
+        { id: result.Lot[0].id, entity: 'LOT' as const, operation: 'UPDATE' as const, updatedAt: result.updatedAt.toISOString() },
+    ]) }], lines[0].shopID).catch(() => console.warn('Purchase saved; sync notification could not be delivered.'));
+    return results;
 };
 
 // Catalog create — product + N variants without lots (Option A, totalProducts=0, no Expense)
@@ -405,11 +433,19 @@ const updateProductInShop = async (
 ) => {
     await getTenantVariantOrThrow(productId, tenantId);
 
-    const result = await prisma.shopVariant.update({
-        where: {
-            id: productId,
-        },
-        data: payload,
+    const { sellPrice, expDate, ...variantData } = payload;
+    const updatedLots: SyncTriggerPayload[] = [];
+    const result = await prisma.$transaction(async tx => {
+        const variant = await tx.shopVariant.update({ where: { id: productId }, data: variantData });
+        if (sellPrice !== undefined || expDate !== undefined) {
+            await tx.lot.updateMany({ where: { shopVariantId: productId, tenantID: tenantId, stock: { gt: 0 }, status: LotStatus.ACTIVE },
+                data: { sellPrice, retail: sellPrice, mrp: sellPrice,
+                    expDate: expDate === null ? null : expDate ? new Date(expDate) : undefined },
+            });
+            const lots = await tx.lot.findMany({ where: { shopVariantId: productId, tenantID: tenantId, stock: { gt: 0 }, status: LotStatus.ACTIVE }, select: { id: true, updatedAt: true } });
+            updatedLots.push(...lots.map(lot => ({ id: lot.id, entity: 'LOT' as const, operation: 'UPDATE' as const, updatedAt: lot.updatedAt.toISOString() })));
+        }
+        return variant;
     });
 
     //NOTE: sending notification to users
@@ -424,11 +460,12 @@ const updateProductInShop = async (
                         operation: 'UPDATE',
                         updatedAt: result.updatedAt.toISOString(),
                     },
+                    ...updatedLots,
                 ],
             },
         ],
         result.shopID,
-    );
+    ).catch(() => console.warn('Product updated; sync notification could not be delivered.'));
 
     return result;
 };
@@ -444,7 +481,10 @@ const updateLotInShop = async (
         where: {
             id: lot.id,
         },
-        data: payload,
+        data: { ...payload,
+            expDate: payload.expDate === null ? null : payload.expDate ? new Date(payload.expDate) : undefined,
+            mfgDate: payload.mfgDate ? new Date(payload.mfgDate) : undefined,
+        },
     });
 
     const shopVariant = await getTenantVariantOrThrow(
@@ -736,6 +776,7 @@ const getSingleLotInShop = async (lotId: string, tenantId: string) => {
 };
 
 export const productService = {
+    addPurchase,
     addProductInShop,
     createProductWithVariants,
     deleteProductFromShop,

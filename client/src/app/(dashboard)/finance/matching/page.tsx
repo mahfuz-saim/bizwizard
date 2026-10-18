@@ -9,6 +9,7 @@ import { Bot, FileCheck, HandCoins, Loader2 } from "lucide-react"
 import { fmtBDT, fmtPct, matchingApi, type FinanceMatch, type FinanceOffer } from "@/lib/finance-api"
 import { PageLoadState, PageRefreshState } from "@/components/page-load-state"
 import { useStore } from "@/lib/store"
+import { financingOrder } from "@/lib/financing-order"
 
 export default function MatchingPage() {
   const { dataVersion } = useStore()
@@ -100,7 +101,7 @@ export default function MatchingPage() {
       {matches.length > 0 && (
         <div className="space-y-3">
           <h3 className="font-semibold">Ranked options (rule gate first, AI re-rank second)</h3>
-          {[...matches].sort((a, b) => b.finalScore - a.finalScore).map((m) => (
+          {[...matches].sort(financingOrder).map((m) => (
             <Card key={m.id}>
               <CardContent className="p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">

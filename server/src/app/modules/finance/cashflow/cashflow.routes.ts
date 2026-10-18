@@ -8,6 +8,7 @@ import { cashflowValidation } from './cashflow.validation';
 
 const router = express.Router();
 const guard = [auth(UserRole.ADMIN, UserRole.OWNER, UserRole.EMPLOYEE), verifyTenantAccess];
+const ownerGuard = [auth(UserRole.ADMIN, UserRole.OWNER), verifyTenantAccess];
 
 router.get('/accounts', ...guard, validateRequest(cashflowValidation.shopQuery), cashflowController.listAccounts);
 router.post('/accounts', ...guard, validateRequest(cashflowValidation.createAccount), cashflowController.createAccount);
@@ -20,11 +21,11 @@ router.post('/extract-commitment', ...guard, validateRequest(cashflowValidation.
 router.get('/projection', ...guard, validateRequest(cashflowValidation.projection), cashflowController.getProjection);
 router.post('/run', ...guard, validateRequest(cashflowValidation.backfill), cashflowController.runTreasury);
 router.get('/alerts', ...guard, validateRequest(cashflowValidation.shopQuery), cashflowController.listAlerts);
-router.post('/alerts/:id/ack', ...guard, cashflowController.ackAlert);
-router.post('/alerts/:id/execute', ...guard, cashflowController.executeAlert);
+router.post('/alerts/:id/ack', ...guard, validateRequest(cashflowValidation.alertStatus), cashflowController.ackAlert);
+router.post('/alerts/:id/execute', ...ownerGuard, validateRequest(cashflowValidation.alertRecommendation), cashflowController.executeAlert);
 router.get('/treasury-actions', ...guard, validateRequest(cashflowValidation.shopQuery), cashflowController.listTreasuryActions);
-router.post('/treasury-actions/:id/approve', ...guard, cashflowController.approveAction);
-router.post('/treasury-actions/:id/reject', ...guard, cashflowController.rejectAction);
+router.post('/treasury-actions/:id/approve', ...ownerGuard, validateRequest(cashflowValidation.idAction), cashflowController.approveAction);
+router.post('/treasury-actions/:id/reject', ...ownerGuard, validateRequest(cashflowValidation.idAction), cashflowController.rejectAction);
 router.post('/backfill', ...guard, validateRequest(cashflowValidation.backfill), cashflowController.backfill);
 
 export const cashflowRoutes = router;

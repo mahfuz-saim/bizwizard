@@ -132,7 +132,10 @@ async function request<T>(
   try { payload = (await res.json()) as ApiResponse<T> } catch { /* noop */ }
 
   if (!res.ok || !payload || payload.success === false) {
-    const msg = payload?.message || `Request failed (${res.status})`
+    const details = (payload as { errorMessages?: { path?: string; message?: string }[] } | null)?.errorMessages
+      ?.filter(e => e.path && e.message)
+      .map(e => `${e.path}: ${e.message}`).join("; ")
+    const msg = details || payload?.message || `Request failed (${res.status})`
     throw new ApiError(msg, res.status, payload)
   }
   return payload

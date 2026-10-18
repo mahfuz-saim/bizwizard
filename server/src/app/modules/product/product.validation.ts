@@ -20,13 +20,13 @@ const createProductValidation = z.object({
         supplierId: z.string().nullable().optional(),
         genericName: z.string().optional(),
         lot: z.object({
-            stock: z.number(),
+            stock: z.number().int().min(0),
             mrp: z.number(),
             isMRPDefault: z.boolean(),
             retail: z.number(),
             includeVAT: z.boolean(),
-            buyPrice: z.number(),
-            sellPrice: z.number(),
+            buyPrice: z.number().min(0),
+            sellPrice: z.number().min(0),
             vat: z.number().optional(),
             mfgDate: z.coerce.date().optional(),
             expDate: z.coerce.date().optional(),
@@ -45,7 +45,7 @@ const lotUpdateValidation = z.object({
         sellPrice: z.number().optional(),
         vat: z.number().optional(),
         mfgDate: z.coerce.date().optional(),
-        expDate: z.coerce.date().optional(),
+        expDate: z.coerce.date().nullable().optional(),
         locationAtStore: z.string().optional(),
         note: z.string().optional(),
     }),
@@ -53,6 +53,8 @@ const lotUpdateValidation = z.object({
 
 const updateProductValidation = z.object({
     body: z.object({
+        sellPrice: z.number().min(0).optional(),
+        expDate: z.coerce.date().nullable().optional(),
         name: z.string().optional(),
         variantName: z.string().optional(),
         variantCode: z.string().optional(),
@@ -60,7 +62,7 @@ const updateProductValidation = z.object({
         lowStock: z.number().int().optional(),
         lastSoldDate: z.coerce.date().optional(),
         notifyAfterNotSold: z.number().int().optional(),
-    }),
+    }).strict(),
 });
 
 const lotDeletionValidation = z.object({
@@ -99,6 +101,12 @@ const createCatalogValidation = z.object({
 });
 
 export const productZodSchema = {
+    purchaseValidation: z.object({ body: z.object({
+        lines: z.array(createProductValidation.shape.body.extend({
+            variantId: z.string().min(1),
+            lot: createProductValidation.shape.body.shape.lot.extend({ stock: z.number().int().positive() }),
+        })).min(1).max(100),
+    }).refine(body => body.lines.every(line => line.shopID === body.lines[0].shopID), { message: 'Purchase lines must belong to one shop', path: ['lines'] }) }),
     createProductValidation,
     lotUpdateValidation,
     updateProductValidation,

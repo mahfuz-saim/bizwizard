@@ -15,7 +15,9 @@ type Bucket = { date: string; inflow: number; outflow: number; closingBalance: n
 type Projection = { dailyBuckets: Bucket[]; daysOfBuffer: number; minProjectedBalance: number; troughDate: string | null; shortfallDate: string | null; closingBalance: number; currentCash: number; narrative?: string | null }
 
 export default function CashflowPage() {
-  const { dataVersion } = useStore()
+  const { dataVersion, session } = useStore()
+  const canApprove = ["OWNER", "ADMIN"].includes(session?.role ?? "")
+  const [notice, setNotice] = React.useState("")
   const sim = useSimulator()
   const [accounts, setAccounts] = React.useState<{ accounts: { id: string; name: string; accountType: string; currentBalance: number }[]; totalCash: number } | null>(null)
   const [projection, setProjection] = React.useState<Projection | null>(null)
@@ -61,7 +63,10 @@ export default function CashflowPage() {
   }, [sim.completedAt, load, dataVersion])
 
   const run = async (fn: () => Promise<unknown>) => {
+    if (busy) return
     setBusy(true)
+    setError("")
+    setNotice("")
     try { await fn(); await load() } catch (e) { setError(e instanceof Error ? e.message : "Action failed") } finally { setBusy(false) }
   }
 
@@ -110,6 +115,7 @@ export default function CashflowPage() {
       </div>
 
       <PageRefreshState loading={loading} error={error} retry={() => void load()} />
+      {notice && <p role="status" className="rounded-lg border bg-muted/40 p-3 text-sm">{notice}</p>}
 
       <div className="metric-grid grid grid-cols-1 gap-4 sm:grid-cols-4">
         <Card><CardContent className="p-4"><p className="flex items-center gap-1 text-xs text-muted-foreground"><Wallet className="h-3.5 w-3.5" /> Cash now</p><p className="mt-1 text-2xl font-bold">{fmtBDT(displayProjection?.currentCash ?? accounts?.totalCash)}</p>{(accounts?.accounts ?? []).map((a) => <p key={a.id} className="text-xs text-muted-foreground">{a.name}: {fmtBDT(a.currentBalance)}</p>)}</CardContent></Card>
@@ -152,10 +158,10 @@ export default function CashflowPage() {
                 {a.aiNarrative && <p className="mt-1 text-xs text-muted-foreground">Treasurer: {a.aiNarrative}</p>}
                 <div className="mt-2 flex flex-wrap gap-2">
                   {(a.recommendedActions ?? []).map((r, i) => (
-                    <Button key={i} size="sm" disabled={busy} onClick={() => void run(() => cashflowApi.executeAlert(a.id, { actionType: r.actionType, projectedImpact: r.projectedImpact }))}>{r.actionType.replaceAll("_", " ")} · {fmtBDT(r.projectedImpact)}</Button>
+                    <Button key={i} size="sm" disabled={busy || !canApprove} title={r.description} onClick={() => void run(async () => { await cashflowApi.executeAlert(a.id, { actionIndex: i }); setNotice("Recommendation added to Treasurer actions for review. No money has moved.") })}>Review {r.actionType.replaceAll("_", " ")} · {fmtBDT(r.projectedImpact)}</Button>
                   ))}
-                  <Button size="sm" variant="ghost" onClick={() => void run(() => cashflowApi.ackAlert(a.id, "ack"))}><Check className="mr-1 h-3.5 w-3.5" /> Acknowledge</Button>
-                  <Button size="sm" variant="ghost" onClick={() => void run(() => cashflowApi.ackAlert(a.id, "dismiss"))}><X className="mr-1 h-3.5 w-3.5" /> Dismiss</Button>
+                  <Button size="sm" variant="ghost" disabled={busy} onClick={() => void run(async () => { await cashflowApi.ackAlert(a.id, "ack"); setNotice("Alert acknowledged and removed from open alerts.") })}><Check className="mr-1 h-3.5 w-3.5" /> Acknowledge</Button>
+                  <Button size="sm" variant="ghost" disabled={busy} onClick={() => void run(async () => { await cashflowApi.ackAlert(a.id, "dismiss"); setNotice("Alert dismissed and removed from open alerts.") })}><X className="mr-1 h-3.5 w-3.5" /> Dismiss</Button>
                 </div>
               </div>
             ))}
@@ -166,11 +172,12 @@ export default function CashflowPage() {
           <Card>
             <CardHeader><CardTitle className="text-base">Treasurer actions — projected vs realized</CardTitle></CardHeader>
             <CardContent className="space-y-2">
+              <p className="text-xs text-muted-foreground">Approval records your decision only. Collect debts, move funds or change payments separately and record the actual transaction; projected impact is not realized income.</p>
               {actions.length === 0 && <p className="text-sm text-muted-foreground">No actions yet. The treasurer only proposes from a pre-computed menu; anything moving money needs your approval.</p>}
               {actions.map((a) => (
                 <div key={a.id} className="flex flex-col items-start justify-between gap-2 rounded-lg border p-3 sm:flex-row">
                   <div><p className="text-sm font-medium">{a.title}</p><p className="text-xs text-muted-foreground">{a.rationale}</p><p className="text-xs">Projected {fmtBDT(a.projectedImpact)} · Realized {a.realizedImpact == null ? "pending" : fmtBDT(a.realizedImpact)} · {a.status}</p></div>
-                  {a.status === "PROPOSED" && <div className="flex gap-1"><Button size="sm" onClick={() => void run(() => cashflowApi.decideAction(a.id, true))}>Approve</Button><Button size="sm" variant="ghost" onClick={() => void run(() => cashflowApi.decideAction(a.id, false))}>Reject</Button></div>}
+                  {a.status === "PROPOSED" && <div className="flex gap-1"><Button size="sm" disabled={busy || !canApprove} onClick={() => void run(async () => { await cashflowApi.decideAction(a.id, true); setNotice("Action approved. No money moved; complete and record the actual transaction separately.") })}>Approve plan</Button><Button size="sm" variant="ghost" disabled={busy || !canApprove} onClick={() => void run(() => cashflowApi.decideAction(a.id, false))}>Reject</Button></div>}
                 </div>
               ))}
             </CardContent>

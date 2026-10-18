@@ -196,9 +196,9 @@ export function Topbar({ onOpenMobileNav, shopName = "My Store" }: TopbarProps) 
               <RefreshCw className="mr-2 h-4 w-4" />
               {source === "backend" ? "Refresh data" : "Demo data (local)"}
             </DropdownMenuItem>
-            <DropdownMenuItem>Profile</DropdownMenuItem>
-            <DropdownMenuItem>Settings</DropdownMenuItem>
-            <DropdownMenuItem>Help & Support</DropdownMenuItem>
+            <DropdownMenuItem asChild><Link href="/account">Profile</Link></DropdownMenuItem>
+            <DropdownMenuItem asChild><Link href="/account#appearance">Settings</Link></DropdownMenuItem>
+            <DropdownMenuItem asChild><Link href="/help">Help &amp; Support</Link></DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={logout} className="text-destructive focus:text-destructive">
               {source === "mock" ? "Exit demo" : "Log out"}
