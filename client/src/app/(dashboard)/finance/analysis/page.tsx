@@ -1,4 +1,6 @@
 "use client"
+import { PageLoadState, PageRefreshState } from "@/components/page-load-state"
+import { useStore } from "@/lib/store"
 
 import * as React from "react"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -34,6 +36,7 @@ export default function AnalysisPage() {
 }
 
 function AnalysisInsights() {
+  const { dataVersion } = useStore()
   const sim = useSimulator()
   const [metrics, setMetrics] = React.useState<Record<string, Record<string, number>> | null>(null)
   const [insights, setInsights] = React.useState<Insight[]>([])
@@ -46,8 +49,12 @@ function AnalysisInsights() {
   const [scenarioResult, setScenarioResult] = React.useState("")
   const [error, setError] = React.useState("")
   const [busy, setBusy] = React.useState(false)
+  const [loading, setLoading] = React.useState(true)
+  const [loaded, setLoaded] = React.useState(false)
 
   const load = React.useCallback(async () => {
+    setLoading(true)
+    setError("")
     try {
       const [m, ins, e, d, f] = await Promise.all([
         analysisApi.metrics(), analysisApi.insights(), analysisApi.productEconomics(),
@@ -61,10 +68,14 @@ function AnalysisInsights() {
       setDecisions(d as typeof decisions)
       setForecastMeta(f as { backtestMAPE: number | null; method: string })
       setError("")
-    } catch (e) { setError(e instanceof Error ? e.message : "Could not load analysis. Log in and pick a shop, then try again.") }
+      setLoaded(true)
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not load analysis. Log in and pick a shop, then try again.") } finally { setLoading(false) }
   }, [])
-  React.useEffect(() => { void load() }, [load])
-  React.useEffect(() => { if (sim.completedAt > 0) void load() }, [sim.completedAt, load])
+  React.useEffect(() => {
+    let active = true
+    void Promise.resolve().then(() => { if (active) return load() })
+    return () => { active = false }
+  }, [sim.completedAt, load, dataVersion])
 
   // Layer 2: the simulator always produces one guaranteed VERIFIED insight
   // (built from the real verifyHypothesis() counterfactual, not a canned
@@ -95,6 +106,8 @@ function AnalysisInsights() {
     } catch (e) { setError(e instanceof Error ? e.message : "Simulation failed") } finally { setBusy(false) }
   }
 
+  if (!loaded) return <PageLoadState error={error} retry={() => void load()} />
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -105,7 +118,7 @@ function AnalysisInsights() {
         <Button disabled={busy} onClick={() => void run(() => analysisApi.generateInsights())}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />} Re-analyse</Button>
       </div>
 
-      {error && <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
+      <PageRefreshState loading={loading} error={error} retry={() => void load()} />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Revenue (90d)</p><p className="mt-1 text-2xl font-bold">{fmtBDT(pnl.revenue)}</p><p className="text-xs text-muted-foreground">Gross margin {fmtPct(pnl.grossMargin)}</p></CardContent></Card>
@@ -161,7 +174,7 @@ function AnalysisInsights() {
               <div className="flex flex-wrap gap-2">
                 <Input value={scenarioName} onChange={(e) => setScenarioName(e.target.value)} placeholder="Scenario name" />
                 <label className="flex items-center gap-2 text-sm">Price change %<Input className="w-24" inputMode="decimal" value={priceDelta} onChange={(e) => setPriceDelta(e.target.value)} /></label>
-                <Button disabled={busy} onClick={() => void simulate()}>Simulate &amp; rank</Button>
+                <Button disabled={busy} aria-busy={busy} onClick={() => void simulate()}>{busy && <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />}Simulate &amp; rank</Button>
               </div>
               {scenarioResult && <p className="text-sm text-muted-foreground">{scenarioResult}</p>}
             </CardContent>

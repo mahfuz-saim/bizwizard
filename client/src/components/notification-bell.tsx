@@ -18,7 +18,7 @@ function NotificationToast({ item, onDismiss }: { item: ShopNotification; onDism
   }, [item.id, onDismiss])
   return <div role="status" className="pointer-events-auto flex gap-3 rounded-lg border bg-background p-4 text-foreground shadow-lg">
     <Bell className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
-    <div className="min-w-0 flex-1"><p className="break-words text-sm font-semibold">{item.title}</p><p className="mt-1 whitespace-pre-wrap break-words text-sm text-muted-foreground">{item.body}</p></div>
+    <div className="min-w-0 flex-1"><p className="wrap-break-word text-sm font-semibold">{item.title}</p><p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm text-muted-foreground">{item.body}</p></div>
     <button aria-label="Dismiss notification toast" className="self-start rounded p-1 hover:bg-muted" onClick={() => onDismiss(item.id)}><X className="h-4 w-4" /></button>
   </div>
 }
@@ -100,14 +100,14 @@ export function NotificationBell() {
         <div className="max-h-96 overflow-y-auto" role="list" aria-label="Notification list">
           {items.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">No notifications yet. You’re all caught up.</p>}
           {items.map(item => <div key={item.id} role="listitem" className={cn("border-b p-3 last:border-0", isUnread(item) && "bg-primary/5")}>
-            <div className="flex items-start gap-2"><p className="min-w-0 flex-1 break-words text-sm font-semibold">{item.title}</p>{isUnread(item) && <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" aria-label={`Mark ${item.title} as read`} disabled={saving} onClick={() => void markRead([item])}><Check className="h-4 w-4" /></Button>}</div>
-            <p className="mt-1 whitespace-pre-wrap break-words text-sm text-muted-foreground">{item.body}</p>
+            <div className="flex items-start gap-2"><p className="min-w-0 flex-1 wrap-break-word text-sm font-semibold">{item.title}</p>{isUnread(item) && <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" aria-label={`Mark ${item.title} as read`} disabled={saving} onClick={() => void markRead([item])}><Check className="h-4 w-4" /></Button>}</div>
+            <p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm text-muted-foreground">{item.body}</p>
             <NotificationTime item={item} />
           </div>)}
         </div>
       </Popover.Content></Popover.Portal>
     </Popover.Root>
-    {toasts.length > 0 && createPortal(<div className="pointer-events-none fixed bottom-4 right-4 z-[100] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2" aria-label="New notifications">
+    {toasts.length > 0 && createPortal(<div className="pointer-events-none fixed bottom-4 right-4 z-100 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2" aria-label="New notifications">
       {toasts.map(item => <NotificationToast key={item.id} item={item} onDismiss={dismiss} />)}
     </div>, document.body)}
   </>

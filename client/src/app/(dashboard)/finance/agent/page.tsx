@@ -10,11 +10,14 @@ import { agentsApi, fmtBDT } from "@/lib/finance-api"
 import { useSimulator } from "@/lib/simulator-context"
 import { useCountUp } from "@/lib/use-count-up"
 import { formatNumber } from "@/lib/utils"
+import { PageLoadState, PageRefreshState } from "@/components/page-load-state"
+import { useStore } from "@/lib/store"
 
 type Policy = { id: string; agentType: string; name: string; objective: string; riskAppetite: number; maxExposure: number | null; bufferTargetDays: number | null; version: number }
 type Perf = { agentType: string; decisionsCount: number; executedCount: number; guardRejects: number; realizedImpactSum: number; benchmarkImpact: number; alpha: number; score: number; benchmarkPolicyVersion: string }
 
 export default function AgentLedgerPage() {
+  const { dataVersion } = useStore()
   const sim = useSimulator()
   const [policies, setPolicies] = React.useState<Policy[]>([])
   const [performance, setPerformance] = React.useState<Perf[]>([])
@@ -23,8 +26,13 @@ export default function AgentLedgerPage() {
   const [drafts, setDrafts] = React.useState<Record<string, { risk: string; exposure: string; buffer: string }>>({})
   const [error, setError] = React.useState("")
   const [busy, setBusy] = React.useState(false)
+  const [exporting, setExporting] = React.useState(false)
+  const [loading, setLoading] = React.useState(true)
+  const [loaded, setLoaded] = React.useState(false)
 
   const load = React.useCallback(async () => {
+    setLoading(true)
+    setError("")
     try {
       const [p, perf, d, r] = await Promise.all([
         agentsApi.policies(), agentsApi.performance(), agentsApi.decisions(), agentsApi.runs(),
@@ -34,13 +42,17 @@ export default function AgentLedgerPage() {
       setDecisions(d as typeof decisions)
       setRuns(r as typeof runs)
       setError("")
-    } catch (e) { setError(e instanceof Error ? e.message : "Could not load the agent ledger.") }
+      setLoaded(true)
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not load the agent ledger.") } finally { setLoading(false) }
   }, [])
-  React.useEffect(() => { void load() }, [load])
   // The simulator's TREASURER_AGENT reconciliation lands realizedImpact and
   // moves alpha for real — refetch once the run (or a reset) completes so
   // the scorecard below animates from the actual before/after, not a guess.
-  React.useEffect(() => { if (sim.completedAt > 0) void load() }, [sim.completedAt, load])
+  React.useEffect(() => {
+    let active = true
+    void Promise.resolve().then(() => { if (active) return load() })
+    return () => { active = false }
+  }, [sim.completedAt, load, dataVersion])
 
   const save = async (policy: Policy) => {
     const draft = drafts[policy.id]
@@ -57,6 +69,7 @@ export default function AgentLedgerPage() {
   }
 
   const downloadAudit = async () => {
+    setExporting(true)
     try {
       const payload = await agentsApi.auditExport()
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
@@ -66,8 +79,10 @@ export default function AgentLedgerPage() {
       a.download = "finance-agent-audit.json"
       a.click()
       URL.revokeObjectURL(url)
-    } catch (e) { setError(e instanceof Error ? e.message : "Export failed") }
+    } catch (e) { setError(e instanceof Error ? e.message : "Export failed") } finally { setExporting(false) }
   }
+
+  if (!loaded) return <PageLoadState error={error} retry={() => void load()} />
 
   return (
     <div className="space-y-6">
@@ -76,10 +91,10 @@ export default function AgentLedgerPage() {
           <h2 className="text-2xl font-bold tracking-tight">AI Agent Ledger</h2>
           <p className="max-w-3xl text-sm text-muted-foreground">The thesis, made inspectable: each agent holds a mandate and a position, takes binding decisions inside deterministic guards, and is scored against a pinned rule-based benchmark. <strong>Alpha = realized − benchmark.</strong> Without an OpenAI key the agents run on the deterministic core (model shown as <code>deterministic-fallback</code>) — same guards, same ledger.</p>
         </div>
-        <Button variant="outline" onClick={() => void downloadAudit()}><Download className="mr-2 h-4 w-4" /> Audit JSON</Button>
+        <Button variant="outline" disabled={exporting} aria-busy={exporting} onClick={() => void downloadAudit()}>{exporting ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} {exporting ? 'Exporting…' : 'Audit JSON'}</Button>
       </div>
 
-      {error && <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
+      <PageRefreshState loading={loading} error={error} retry={() => void load()} />
 
       <Card>
         <CardHeader><CardTitle className="text-base">Scorecards — alpha vs the pinned benchmark</CardTitle></CardHeader>
