@@ -18,11 +18,13 @@ export default function CashflowPage() {
   const { dataVersion, session } = useStore()
   const canApprove = ["OWNER", "ADMIN"].includes(session?.role ?? "")
   const [notice, setNotice] = React.useState("")
+  const [evidence, setEvidence] = React.useState<Record<string, { id: string; amount: number; createdAt: string }[]>>({})
+  const [paymentIDs, setPaymentIDs] = React.useState<Record<string, string>>({})
   const sim = useSimulator()
   const [accounts, setAccounts] = React.useState<{ accounts: { id: string; name: string; accountType: string; currentBalance: number }[]; totalCash: number } | null>(null)
   const [projection, setProjection] = React.useState<Projection | null>(null)
   const [alerts, setAlerts] = React.useState<CashAlert[]>([])
-  const [actions, setActions] = React.useState<{ id: string; title: string; rationale: string; projectedImpact: number; realizedImpact: number | null; status: string }[]>([])
+  const [actions, setActions] = React.useState<{ id: string; actionType: string; title: string; rationale: string; projectedImpact: number; realizedImpact: number | null; status: string }[]>([])
   const [commitments, setCommitments] = React.useState<{ id: string; name: string; amount: number; dueDate: string }[]>([])
   const [error, setError] = React.useState("")
   const [busy, setBusy] = React.useState(false)
@@ -109,8 +111,8 @@ export default function CashflowPage() {
           <p className="text-sm text-muted-foreground">Your 90-day cash position, watched by the Treasurer agent — every action is proposed, guarded, and later reconciled against what actually happened.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" disabled={busy} onClick={() => void run(() => cashflowApi.backfill())}><RefreshCw className="mr-2 h-4 w-4" /> Backfill ledger</Button>
-          <Button disabled={busy} onClick={() => void run(() => cashflowApi.run())}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />} Run treasurer</Button>
+          <Button variant="outline" disabled={busy || !canApprove} onClick={() => void run(() => cashflowApi.backfill())}><RefreshCw className="mr-2 h-4 w-4" /> Backfill ledger</Button>
+          <Button disabled={busy || !canApprove} onClick={() => void run(() => cashflowApi.run())}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />} Run treasurer</Button>
         </div>
       </div>
 
@@ -178,6 +180,15 @@ export default function CashflowPage() {
                 <div key={a.id} className="flex flex-col items-start justify-between gap-2 rounded-lg border p-3 sm:flex-row">
                   <div><p className="text-sm font-medium">{a.title}</p><p className="text-xs text-muted-foreground">{a.rationale}</p><p className="text-xs">Projected {fmtBDT(a.projectedImpact)} · Realized {a.realizedImpact == null ? "pending" : fmtBDT(a.realizedImpact)} · {a.status}</p></div>
                   {a.status === "PROPOSED" && <div className="flex gap-1"><Button size="sm" disabled={busy || !canApprove} onClick={() => void run(async () => { await cashflowApi.decideAction(a.id, true); setNotice("Action approved. No money moved; complete and record the actual transaction separately.") })}>Approve plan</Button><Button size="sm" variant="ghost" disabled={busy || !canApprove} onClick={() => void run(() => cashflowApi.decideAction(a.id, false))}>Reject</Button></div>}
+                  {a.status === "APPROVED" && a.actionType === "COLLECT_DEBT" && canApprove && <div className="w-full space-y-2 sm:max-w-sm">
+                    <Button size="sm" variant="outline" disabled={busy} onClick={() => void run(async () => { const payments = await cashflowApi.collectionEvidence(a.id); setEvidence(previous => ({ ...previous, [a.id]: payments })) })}>Load recorded collections</Button>
+                    {evidence[a.id] && (evidence[a.id].length ? <>
+                      <select aria-label="Recorded debt payment" className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={paymentIDs[a.id] ?? ""} onChange={event => setPaymentIDs(previous => ({ ...previous, [a.id]: event.target.value }))}>
+                        <option value="">Choose a recorded payment</option>{evidence[a.id].map(payment => <option key={payment.id} value={payment.id}>{fmtBDT(payment.amount)} · {payment.createdAt.slice(0, 10)} · {payment.id.slice(-6)}</option>)}
+                      </select>
+                      <Button size="sm" disabled={busy || !paymentIDs[a.id]} onClick={() => void run(async () => { await cashflowApi.recordCollection(a.id, paymentIDs[a.id]); setNotice("Existing payment linked as evidence. No additional payment or cash movement was created.") })}>Link collection evidence</Button>
+                    </> : <p className="text-xs text-muted-foreground">No unused payments recorded after approval. Record the actual customer payment in Debts, then reload.</p>)}
+                  </div>}
                 </div>
               ))}
             </CardContent>
@@ -193,9 +204,9 @@ export default function CashflowPage() {
                 <Input type="date" aria-label="Commitment due date" className="min-w-0" value={commitDate} onChange={(e) => setCommitDate(e.target.value)} />
               </div>
               <div className="flex flex-col gap-2 sm:flex-row">
-                <Button size="sm" disabled={busy || !commitName || !commitAmount || !commitDate} onClick={() => void run(async () => { await cashflowApi.createCommitment({ name: commitName, amount: Number(commitAmount), dueDate: commitDate }); setCommitName(""); setCommitAmount(""); setCommitDate("") })}>Add commitment</Button>
+                <Button size="sm" disabled={busy || !canApprove || !commitName || !commitAmount || !commitDate} onClick={() => void run(async () => { await cashflowApi.createCommitment({ name: commitName, amount: Number(commitAmount), dueDate: commitDate }); setCommitName(""); setCommitAmount(""); setCommitDate("") })}>Add commitment</Button>
                 <Input placeholder='Or paste a note: "Rent 45000 due in 5 days, monthly"' value={noteText} onChange={(e) => setNoteText(e.target.value)} />
-                <Button size="sm" variant="outline" disabled={busy || !noteText} onClick={() => void run(async () => { await cashflowApi.extractCommitment(noteText); setNoteText("") })}>Extract</Button>
+                <Button size="sm" variant="outline" disabled={busy || !canApprove || !noteText} onClick={() => void run(async () => { await cashflowApi.extractCommitment(noteText); setNoteText("") })}>Extract</Button>
               </div>
             </CardContent>
           </Card>

@@ -149,7 +149,7 @@ test('buildGuardBlockedOfferScenario is rejected by the real guard (high APR, sh
   assert.match(scenario.toastMessage, /affordability cap/);
 });
 
-test('buildReconciledTreasuryAction passes once the collection is applied to the trajectory, and reports alpha-positive realized impact', () => {
+test('buildReconciledTreasuryAction clears the trajectory without collecting more than the debt', () => {
   const dailyClosingBalances = [10000, 5000, -2000, -8000, -12000, -5000, 3000, 9000];
   const result = buildReconciledTreasuryAction({
     debtAmount: 15000,
@@ -160,7 +160,7 @@ test('buildReconciledTreasuryAction passes once the collection is applied to the
   });
   assert.equal(result.verdict.passed, true);
   assert.ok(Math.min(...result.adjustedBalances.slice(2)) >= 0, 'the lowest post-collection balance should clear the floor');
-  assert.ok(result.realizedImpact > result.projectedImpact, 'realized should beat the conservative projection');
+  assert.equal(result.realizedImpact, 15000, 'collection must not create money beyond the debt outstanding');
 });
 
 test('buildReconciledTreasuryAction is rejected when it would still breach the floor (e.g. collection too small)', () => {

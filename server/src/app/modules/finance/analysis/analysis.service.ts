@@ -10,6 +10,7 @@ import {
 import { verifyHypothesis, rankCandidates, type Candidate } from '../shared/verifier';
 import { simulateScenario, expectedValue, type ScenarioLever } from '../shared/scenario';
 import { loadProfileAggregates, loadDailySales, loadOpenDebts, assertShop } from '../shared/shopData';
+import ApiError from '../../../../errors/ApiError';
 
 const db = () => prisma as any;
 const DAY = 86400000;
@@ -337,6 +338,8 @@ export const analysisService = {
 
   async createCapitalDecision(tenantId: string, shopId: string, body: any) {
     await assertShop(tenantId, shopId);
+    if (body.insightID && !await db().insight.findFirst({ where: { id: body.insightID, tenantID: tenantId, shopID: shopId, verificationStatus: 'VERIFIED' } }))
+      throw new ApiError(400, 'Choose a verified insight from this shop');
     const row = await db().capitalDecision.create({
       data: {
         tenantID: tenantId, shopID: shopId, insightID: body.insightID ?? null,
@@ -365,7 +368,27 @@ export const analysisService = {
   async approveCapitalDecision(tenantId: string, shopId: string, id: string) {
     const row = await db().capitalDecision.findFirst({ where: { id, tenantID: tenantId, shopID: shopId } });
     if (!row) throw Object.assign(new Error('Capital decision not found'), { statusCode: 404 });
-    return db().capitalDecision.update({ where: { id }, data: { status: 'APPROVED', approvedAt: new Date() } });
+    if (row.status !== 'PROPOSED') throw new ApiError(409, 'Only proposed decisions can be approved');
+    const approvedAt = await shopClock(tenantId, shopId);
+    const baseline = buildProfile(await loadProfileAggregates(tenantId, shopId, 30, approvedAt));
+    return db().capitalDecision.update({ where: { id, status: 'PROPOSED' }, data: { status: 'APPROVED', approvedAt,
+      measurement: { basis: 'observed-before-after-not-causal', baselineStart: new Date(approvedAt.getTime() - 30 * DAY).toISOString(), baselineEnd: approvedAt.toISOString(), baselineNetProfit: baseline.netProfit },
+    } });
+  },
+
+  async measureCapitalDecision(tenantId: string, shopId: string, id: string) {
+    const row = await db().capitalDecision.findFirst({ where: { id, tenantID: tenantId, shopID: shopId } });
+    if (!row) throw new ApiError(404, 'Capital decision not found');
+    if (row.status === 'MEASURED') return row;
+    if (row.status !== 'APPROVED' || !row.approvedAt || !row.measurement) throw new ApiError(409, 'Decision needs an approved baseline before measurement');
+    const end = new Date(new Date(row.approvedAt).getTime() + 30 * DAY);
+    if ((await shopClock(tenantId, shopId)) < end) throw new ApiError(409, 'The 30-day observation window has not finished');
+    const observed = buildProfile(await loadProfileAggregates(tenantId, shopId, 30, end));
+    const change = roundCurrency(observed.netProfit - row.measurement.baselineNetProfit);
+    return db().capitalDecision.update({ where: { id, status: 'APPROVED' }, data: { status: 'MEASURED', measuredAt: end,
+      realizedProfitImpact: change, measurement: { ...row.measurement, observedEnd: end.toISOString(), observedNetProfit: observed.netProfit, observedChange: change,
+        limitation: 'Shop-level before/after change; not proven causal impact and not additive across overlapping decisions.' },
+    } });
   },
 
   async getReport(tenantId: string, shopId: string) {

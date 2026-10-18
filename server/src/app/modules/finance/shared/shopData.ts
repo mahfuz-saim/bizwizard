@@ -9,7 +9,7 @@ const DAY = 86400000;
 export async function assertShop(tenantId: string, shopId: string) {
   const shop = await (prisma as any).shop.findFirst({
     where: { id: shopId, tenantID: tenantId },
-    select: { id: true, shopName: true, category: true },
+    select: { id: true, shopName: true, category: true, simulationSourceShopID: true },
   });
   if (!shop) {
     const err = new Error('Shop not found') as Error & { statusCode?: number };
@@ -30,14 +30,14 @@ export async function loadProfileAggregates(
   const db = prisma as any;
   const [sales, items, opexItems, debts, lots, firstSale] = await Promise.all([
     db.checkout.findMany({
-      where: { shopID: shopId, tenantID: tenantId, isDraft: false, createdAt: { gte: start } },
+      where: { shopID: shopId, tenantID: tenantId, isDraft: false, createdAt: { gt: start, lte: asOf } },
       select: { id: true, totalPrice: true, totalDiscount: true, createdAt: true, buyerID: true, status: true },
     }),
     db.checkoutItem.findMany({
       where: {
         tenantID: tenantId,
         checkout: { shopID: shopId, tenantID: tenantId, isDraft: false },
-        createdAt: { gte: start },
+        createdAt: { gt: start, lte: asOf },
       },
       select: { quantity: true, discountedPrice: true, lotId: true, variantId: true, productName: true },
       include: undefined,
@@ -47,7 +47,7 @@ export async function loadProfileAggregates(
         tenantID: tenantId,
         expenseType: { not: 'PRODUCT' },
         expense: { shopID: shopId, tenantID: tenantId },
-        createdAt: { gte: start },
+        createdAt: { gt: start, lte: asOf },
       },
       select: { amount: true, expenseType: true, createdAt: true },
     }).catch(() => []),
@@ -155,7 +155,7 @@ export async function loadDailySales(tenantId: string, shopId: string, days: num
   const db = prisma as any;
   const start = new Date(asOf.getTime() - days * DAY);
   const sales = await db.checkout.findMany({
-    where: { shopID: shopId, tenantID: tenantId, isDraft: false, createdAt: { gte: start } },
+    where: { shopID: shopId, tenantID: tenantId, isDraft: false, createdAt: { gte: start, lte: asOf } },
     select: { totalPrice: true, createdAt: true, buyerID: true },
   }).catch(() => []);
   const map = new Map<string, number>();
@@ -176,7 +176,7 @@ export async function loadCashTransactions(tenantId: string, shopId: string, day
   const db = prisma as any;
   const start = new Date(asOf.getTime() - days * DAY);
   const rows = await db.cashTransaction.findMany({
-    where: { tenantID: tenantId, shopID: shopId, occurredAt: { gte: start } },
+    where: { tenantID: tenantId, shopID: shopId, occurredAt: { gte: start, lte: asOf } },
     orderBy: { occurredAt: 'asc' },
   }).catch(() => []);
   return rows as Array<{ occurredAt: Date; direction: 'IN' | 'OUT'; amount: number; category: string }>;

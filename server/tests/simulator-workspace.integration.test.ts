@@ -44,8 +44,10 @@ test('isolated demo: migration, copied history, next-month runs, locking, rollba
       cash:await prisma.cashTransaction.findMany({where:scope,orderBy:{id:'asc'}}),
       accounts:await prisma.cashAccount.findMany({where:scope}),
       lots:await prisma.lot.findMany({where:{shopVariantId:variant.id}}),
+      policies:await prisma.aiAgentPolicy.findMany({where:scope,orderBy:{id:'asc'}}),
     };
   }
+  await prisma.aiAgentPolicy.create({ data: { ...scope, agentType: 'TREASURER_AGENT', name: 'Source mandate', objective: 'Fixture', riskAppetite: 0.3, maxExposure: 500000, bufferTargetDays: 14 } });
   const before=await snapshot();
   for (const field of ['simulationSourceShopID', 'simulationBaselineAt', 'simulationAsOf', 'simulationRunID', 'simulationResult', 'simulationSource']) {
     await assert.rejects(() => shopValidation.updateShopZodSchema.parseAsync({body:{[field]:'forged'}}));
@@ -54,6 +56,7 @@ test('isolated demo: migration, copied history, next-month runs, locking, rollba
   await assert.rejects(()=>simulatorService.reset(tenant.id,source.id),/dedicated demo/);
   await assert.rejects(()=>simulatorService.prepare('wrong-tenant',source.id),/Shop not found/);
   const demo=await simulatorService.prepare(tenant.id,source.id);
+  assert.equal((await prisma.aiAgentPolicy.findFirstOrThrow({where:{tenantID:tenant.id,shopID:demo.id,agentType:'TREASURER_AGENT'}})).name,'Source mandate');
   const me = await AuthService.getMe({ userID: user.id, role: 'OWNER' });
   assert.equal(me?.defaultShopId, source.id, 'login never defaults to the cloned demo');
   config.jwt.secret = 'local-integration-test-only';
@@ -116,6 +119,8 @@ test('isolated demo: migration, copied history, next-month runs, locking, rollba
   const buckets=await prisma.expense.findMany({where:demoScope});
   assert.equal(buckets.reduce((sum,b)=>sum+b.totalAmount,0),100);
   await simulatorService.reset(tenant.id,demo.id);
+  const simulatedDebts = await prisma.debt.findMany({ where: { tenantID: tenant.id, shopID: demo.id, isSimulated: true }, include: { checkout: true } });
+  assert(simulatedDebts.every(debt => (debt.paidAmount ?? 0) <= debt.checkout.totalPrice), 'simulator cannot collect more than the debt');
   assert.deepEqual(await snapshot(),before,'original source is byte-for-byte unchanged');
   await prisma.$disconnect();
 });

@@ -2,31 +2,35 @@
 import prisma, { shopClock } from '../shared/database';
 import { roundCurrency, sumMoney } from '../shared/money';
 import { ensureDefaultPolicies } from '../shared/catalog';
-import { assertShop, loadOpenDebts } from '../shared/shopData';
-import { compositeScore, probabilityOfDefault, lossGivenDefault } from './agentCore';
-import {
-  BENCHMARK_POLICY_VERSION, lenderBenchmarkImpact, borrowerBenchmarkCost, borrowerCostOf,
-  treasurerBenchmarkImpact, analystBenchmarkImpact,
-} from './benchmarks';
+import { assertShop } from '../shared/shopData';
+import { probabilityOfDefault } from './agentCore';
+import { BENCHMARK_POLICY_VERSION } from './benchmarks';
 import { buildProfile } from '../shared/metricEngine';
 import { loadProfileAggregates } from '../shared/shopData';
+import ApiError from '../../../../errors/ApiError';
 
 const db = () => prisma as any;
 const AGENTS = ['LENDER_AGENT', 'BORROWER_AGENT', 'TREASURER_AGENT', 'ANALYST_AGENT'] as const;
 
 export const agentsService = {
-  async listPolicies(tenantId: string) {
-    void tenantId;
-    await ensureDefaultPolicies(db());
-    return db().aiAgentPolicy.findMany({ where: { isActive: true }, orderBy: { agentType: 'asc' } });
+  async listPolicies(tenantId: string, shopId: string) {
+    await assertShop(tenantId, shopId);
+    await ensureDefaultPolicies(db(), tenantId, shopId);
+    return db().aiAgentPolicy.findMany({ where: { tenantID: tenantId, shopID: shopId, isActive: true }, orderBy: { agentType: 'asc' } });
   },
 
-  async updatePolicy(id: string, body: any) {
-    const existing = await db().aiAgentPolicy.findUnique({ where: { id } });
-    if (!existing) throw Object.assign(new Error('Policy not found'), { statusCode: 404 });
-    return db().aiAgentPolicy.update({
-      where: { id },
-      data: {
+  async updatePolicy(tenantId: string, shopId: string, id: string, body: any) {
+    await assertShop(tenantId, shopId);
+    return db().$transaction(async (tx: any) => {
+      await tx.$queryRaw`SELECT id FROM ai_agent_policies WHERE id = ${id} AND "tenantID" = ${tenantId} AND "shopID" = ${shopId} FOR UPDATE`;
+      const existing = await tx.aiAgentPolicy.findFirst({ where: { id, tenantID: tenantId, shopID: shopId } });
+      if (!existing) throw new ApiError(404, 'Policy not found');
+      if (!existing.isActive) throw new ApiError(409, 'This mandate has a newer version. Refresh before saving.');
+      const { id: previousID, createdAt, updatedAt, ...previous } = existing;
+      void previousID; void createdAt; void updatedAt;
+      await tx.aiAgentPolicy.update({ where: { id }, data: { isActive: false } });
+      return tx.aiAgentPolicy.create({ data: {
+        ...previous,
         ...(body.name !== undefined ? { name: body.name } : {}),
         ...(body.objective !== undefined ? { objective: body.objective } : {}),
         ...(body.riskAppetite !== undefined ? { riskAppetite: Number(body.riskAppetite) } : {}),
@@ -34,7 +38,8 @@ export const agentsService = {
         ...(body.bufferTargetDays !== undefined ? { bufferTargetDays: body.bufferTargetDays } : {}),
         ...(body.config !== undefined ? { config: body.config } : {}),
         version: (existing.version ?? 1) + 1,
-      },
+        isActive: true,
+      } });
     });
   },
 
@@ -46,93 +51,67 @@ export const agentsService = {
     });
   },
 
-  async listRuns(tenantId: string) {
+  async listRuns(tenantId: string, shopId: string) {
+    await assertShop(tenantId, shopId);
     const now = new Date();
     const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const [runs, spent] = await Promise.all([
-      db().aiRun.findMany({ orderBy: { createdAt: 'desc' }, take: 100 }).catch(() => []),
-      db().aiRun.aggregate({ where: { createdAt: { gte: monthStart }, ...(tenantId ? { tenantID: tenantId } : {}) }, _sum: { costUsd: true } }).catch(() => ({ _sum: { costUsd: 0 } })),
+    const [runs, spent, budget] = await Promise.all([
+      db().aiRun.findMany({ where: { tenantID: tenantId, shopID: shopId }, orderBy: { createdAt: 'desc' }, take: 100 }),
+      db().aiRun.aggregate({ where: { createdAt: { gte: monthStart }, tenantID: tenantId }, _sum: { costUsd: true } }),
+      db().aiBudgetMonth.findUnique({ where: { tenantID_periodStart: { tenantID: tenantId, periodStart: monthStart } } }),
     ]);
-    return { runs, spentUsdThisMonth: roundCurrency(spent?._sum?.costUsd ?? 0), budgetUsd: Number(process.env.AI_PLAN_BUDGET_USD || 2) };
+    return { runs, spentUsdThisMonth: budget?.spentUsd ?? spent?._sum?.costUsd ?? 0, reservedUsd: budget?.reservedUsd ?? 0, budgetUsd: Number(process.env.AI_PLAN_BUDGET_USD ?? 2) };
   },
 
-  /** Scorecards: alpha = realized − benchmark, same universe, same PD/LGD (§1.1.1). */
+  /** Missing measured outcomes and matched counterfactuals remain unknown, never fabricated. */
   async performance(tenantId: string, shopId: string) {
-    await assertShop(tenantId, shopId);
+    const shop = await assertShop(tenantId, shopId);
     const periodEnd = await shopClock(tenantId, shopId);
     const periodStart = new Date(periodEnd.getTime() - 90 * 86400000);
     const profile = buildProfile(await loadProfileAggregates(tenantId, shopId, 90));
     const pd = probabilityOfDefault(profile);
     const results: any[] = [];
     for (const agentType of AGENTS) {
-      const decisions = await db().aiDecision.findMany({ where: { tenantID: tenantId, shopID: shopId, agentType: agentType as any } }).catch(() => []);
+      const decisions = await db().aiDecision.findMany({ where: { tenantID: tenantId, shopID: shopId, agentType: agentType as any, decidedAt: { gte: periodStart, lte: periodEnd } } });
       const projectedSum = sumMoney(decisions.map((d: any) => d.projectedImpact));
-      let realizedSum = sumMoney(decisions.map((d: any) => d.realizedImpact ?? 0));
-      let benchmarkImpact = 0;
-      let avoidedShortfallAmount = 0;
+      let realizedSum: number | null = null;
+      const benchmarkImpact = null;
+      const avoidedShortfallAmount = null;
+      let outcomeBasis = 'Pending recorded financial outcomes; accepted applications are not earned returns.';
       let offerAcceptanceRate: number | null = null;
       let costSavedVsBaseline: number | null = null;
       if (agentType === 'LENDER_AGENT') {
         const offers = await db().financingOffer.findMany({ where: { tenantID: tenantId, shopID: shopId } }).catch(() => []);
         const applications = await db().financingApplication.findMany({ where: { tenantID: tenantId, shopID: shopId } }).catch(() => []);
         offerAcceptanceRate = offers.length ? roundCurrency((applications.length / offers.length) * 10000) / 100 : null;
-        benchmarkImpact = lenderBenchmarkImpact(
-          offers.map((o: any) => ({
-            amount: o.offeredAmount, baseRate: 13, interestRateMin: Math.max(1, o.offeredRate - 4),
-            interestRateMax: o.offeredRate + 3, fundingCostPct: 8, tenorMonths: o.tenorMonths,
-            pd, lgd: lossGivenDefault(o.collateralRequired), expectedTenorFraction: 0.85,
-          })),
-        );
-        realizedSum = sumMoney(applications.map((a: any) => a.requestedAmount * 0.02));
       }
       if (agentType === 'BORROWER_AGENT') {
-        const offers = await db().financingOffer.findMany({ where: { tenantID: tenantId, shopID: shopId } }).catch(() => []);
-        const accepted = offers.filter((o: any) => o.status === 'ACCEPTED');
-        if (accepted.length && offers.length) {
-          costSavedVsBaseline = roundCurrency(borrowerBenchmarkCost(offers) - borrowerCostOf(accepted[0]));
-          realizedSum = costSavedVsBaseline;
-          benchmarkImpact = borrowerBenchmarkCost(offers);
-        }
+        outcomeBasis = 'Contracted repayment terms are estimates, not realized savings. A comparable original offer and repayment evidence are required.';
       }
       if (agentType === 'TREASURER_AGENT') {
-        const actions = await db().treasuryAction.findMany({ where: { tenantID: tenantId, shopID: shopId } }).catch(() => []);
-        realizedSum = sumMoney(actions.map((a: any) => a.realizedImpact ?? (a.status === 'EXECUTED' || a.status === 'RECONCILED' ? a.projectedImpact : 0)));
-        avoidedShortfallAmount = sumMoney(actions.filter((a: any) => a.actionType === 'COLLECT_DEBT').map((a: any) => a.realizedImpact ?? 0));
-        const debts = await loadOpenDebts(tenantId, shopId);
-        benchmarkImpact = treasurerBenchmarkImpact(
-          debts.map((d) => ({
-            amount: d.amount,
-            daysOverdue: Math.floor((periodEnd.getTime() - d.createdAt.getTime()) / 86400000),
-            collectedWithinHorizon: d.status === 'PAID',
-          })),
-        );
+        if (shop.simulationSourceShopID) {
+          const actions = await db().treasuryAction.findMany({ where: { tenantID: tenantId, shopID: shopId, isSimulated: true, status: 'RECONCILED', reconciledAt: { gte: periodStart, lte: periodEnd } } });
+          if (actions.length) realizedSum = sumMoney(actions.map((a: any) => a.realizedImpact ?? 0));
+          outcomeBasis = 'Scripted sandbox collection outcomes, not real-world profit or proven causal benefit.';
+        } else {
+          const evidence = await db().treasuryActionEvidence.findMany({ where: { tenantID: tenantId, shopID: shopId, createdAt: { gte: periodStart, lte: periodEnd } } });
+          if (evidence.length) realizedSum = sumMoney(evidence.map((e: any) => e.amount));
+          outcomeBasis = 'Unique recorded debt payments linked to approved plans. Gross collection, not incremental profit or causal alpha.';
+        }
       }
       if (agentType === 'ANALYST_AGENT') {
-        const decisionsRows = await db().capitalDecision.findMany({ where: { tenantID: tenantId, shopID: shopId } }).catch(() => []);
-        realizedSum = sumMoney(decisionsRows.map((d: any) => d.realizedProfitImpact ?? 0));
-        benchmarkImpact = analystBenchmarkImpact(
-          [{ key: 'all', revenue: profile.revenue, realizedProfitImpact: roundCurrency(profile.netProfit * 0.1) }],
-        );
+        outcomeBasis = '30-day before/after observations are shown per capital decision; overlapping windows are not summed or treated as causal alpha.';
       }
       const executed = decisions.filter((d: any) => d.status === 'EXECUTED' || d.status === 'RECONCILED').length;
       const guardRejects = decisions.filter((d: any) => d.guardResult === 'REJECTED_BY_GUARD').length;
-      const alpha = roundCurrency(realizedSum - benchmarkImpact);
-      const score = compositeScore({ decisions: decisions.length, executed, guardRejects, projectedSum, realizedSum });
-      const row = await db().agentPerformance.create({
-        data: {
+      const row = {
           tenantID: tenantId, shopID: shopId, agentType: agentType as any, periodStart, periodEnd,
           decisionsCount: decisions.length, executedCount: executed, guardRejects,
           projectedImpactSum: projectedSum, realizedImpactSum: realizedSum,
           avoidedShortfallAmount, forecastMAPE: null, offerAcceptanceRate, costSavedVsBaseline,
-          benchmarkImpact, alpha, benchmarkPolicyVersion: BENCHMARK_POLICY_VERSION, score,
-        },
-      }).catch(() => ({
-        tenantID: tenantId, shopID: shopId, agentType, periodStart, periodEnd,
-        decisionsCount: decisions.length, executedCount: executed, guardRejects,
-        projectedImpactSum: projectedSum, realizedImpactSum: realizedSum, avoidedShortfallAmount,
-        offerAcceptanceRate, costSavedVsBaseline, benchmarkImpact, alpha,
-        benchmarkPolicyVersion: BENCHMARK_POLICY_VERSION, score,
-      }));
+          benchmarkImpact, alpha: null, benchmarkPolicyVersion: BENCHMARK_POLICY_VERSION, score: null,
+          outcomeBasis, comparisonStatus: 'PENDING_MATCHED_COUNTERFACTUAL',
+      };
       results.push(row);
     }
     return { performance: results, benchmarkPolicyVersion: BENCHMARK_POLICY_VERSION, profile: { pd, dataCompleteness: profile.dataCompleteness } };
@@ -140,15 +119,15 @@ export const agentsService = {
 
   async auditExport(tenantId: string, shopId: string) {
     const [policies, decisions, runs] = await Promise.all([
-      this.listPolicies(tenantId),
+      this.listPolicies(tenantId, shopId),
       this.listDecisions(tenantId, shopId),
-      db().aiRun.findMany({ orderBy: { createdAt: 'desc' }, take: 200 }).catch(() => []),
+      db().aiRun.findMany({ where: { tenantID: tenantId, shopID: shopId }, orderBy: { createdAt: 'desc' }, take: 200 }),
     ]);
     const { performance } = await this.performance(tenantId, shopId);
     return {
       exportedAt: new Date().toISOString(),
       howThisWorks:
-        'Deterministic engines compute every number. AI agents select and explain within guard limits. Each decision is logged with model, prompt version, input hash, projected impact and (after reconciliation) realized impact. Alpha compares realized impact with the pinned rule-based benchmark in benchmarks.ts.',
+        'Deterministic engines compute financial arithmetic. Model-assisted decisions and deterministic fallbacks are labeled separately. Recorded collection evidence and sandbox outcomes are distinguished. Unknown returns, causal attribution, matched benchmark alpha and scores remain null rather than inferred from projections.',
       policies, decisions, performance, runs,
     };
   },
