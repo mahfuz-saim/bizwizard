@@ -3,9 +3,8 @@
 import * as React from "react"
 import { Package } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { NumberFriendlyInput as Input } from "@/components/ui/number-friendly-input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import {
   Dialog,
   DialogContent,
@@ -23,7 +22,8 @@ import {
 } from "@/components/ui/select"
 import { useStore } from "@/lib/store"
 import type { MeasuringUnit, Product } from "@/lib/types"
-import { categories, measuringUnits } from "@/lib/mock-data"
+import { measuringUnits } from "@/lib/mock-data"
+import { productCategories as categories, categoryLabel } from "@/lib/product-options"
 
 interface Props {
   open: boolean
@@ -40,7 +40,7 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
     variantName: "",
     variantCode: "",
     barcode: "",
-    category: "Grocery",
+    category: "PANTRY_STAPLES",
     measuringUnit: "Piece (pc)" as MeasuringUnit,
     stock: 0,
     lowStockThreshold: 10,
@@ -49,6 +49,8 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
     expiryDate: ""
   })
   const [errors, setErrors] = React.useState<Record<string, string>>({})
+  const [saving, setSaving] = React.useState(false)
+  const [submitError, setSubmitError] = React.useState("")
 
   React.useEffect(() => {
     if (open) {
@@ -72,7 +74,7 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
           variantName: "",
           variantCode: "",
           barcode: "",
-          category: "Grocery",
+          category: "PANTRY_STAPLES",
           measuringUnit: "Piece (pc)",
           stock: 0,
           lowStockThreshold: 10,
@@ -82,11 +84,9 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
         })
       }
       setErrors({})
+      setSubmitError("")
     }
   }, [open, product])
-
-  const [saving, setSaving] = React.useState(false)
-  const [submitError, setSubmitError] = React.useState("")
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -96,11 +96,12 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
     try {
       const errs: Record<string, string> = {}
       if (!form.name.trim()) errs.name = "Product name is required"
-      if (form.sellPrice <= 0)
+      if (!Number.isFinite(form.sellPrice) || form.sellPrice <= 0)
         errs.sellPrice = "Sell price must be greater than 0"
-      if (form.buyPrice < 0) errs.buyPrice = "Buy price can't be negative"
-      if (form.lowStockThreshold < 0)
-        errs.lowStockThreshold = "Invalid threshold"
+      if (!Number.isFinite(form.buyPrice) || form.buyPrice < 0) errs.buyPrice = "Buy price must be a non-negative number"
+      if (!Number.isInteger(form.lowStockThreshold) || form.lowStockThreshold < 0)
+        errs.lowStockThreshold = "Enter a non-negative whole-number threshold"
+      if (!Number.isInteger(form.stock) || form.stock < 0) errs.stock = "Enter a non-negative whole-number stock quantity"
       if (Object.keys(errs).length > 0) {
         setErrors(errs)
         return
@@ -117,7 +118,7 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
           lowStockThreshold: Number(form.lowStockThreshold),
           buyPrice: Number(form.buyPrice),
           sellPrice: Number(form.sellPrice),
-          expiryDate: form.expiryDate || undefined
+          expiryDate: form.expiryDate
         })
       } else {
         await addProduct({
@@ -207,6 +208,7 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
               <Label htmlFor="barcode">Barcode</Label>
               <Input
                 id="barcode"
+                disabled={isEdit}
                 placeholder="Scan or type barcode"
                 value={form.barcode}
                 onChange={(e) =>
@@ -218,6 +220,7 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
             <div>
               <Label htmlFor="category">Category</Label>
               <Select
+                disabled={isEdit}
                 value={form.category}
                 onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}
               >
@@ -225,9 +228,10 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
+                  {isEdit && !categories.some(c => c === form.category) && <SelectItem value={form.category}>{categoryLabel(form.category)}</SelectItem>}
                   {categories.map((c) => (
                     <SelectItem key={c} value={c}>
-                      {c}
+                      {categoryLabel(c)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -237,6 +241,7 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
             <div>
               <Label htmlFor="unit">Measuring Unit</Label>
               <Select
+                disabled={isEdit}
                 value={form.measuringUnit}
                 onValueChange={(v) =>
                   setForm((f) => ({ ...f, measuringUnit: v as MeasuringUnit }))
@@ -267,6 +272,7 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
                     setForm((f) => ({ ...f, stock: Number(e.target.value) }))
                   }
                 />
+                {errors.stock && <p className="mt-1 text-xs text-destructive">{errors.stock}</p>}
               </div>
             )}
 
@@ -300,6 +306,7 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
                 min={0}
                 step="0.01"
                 value={form.buyPrice}
+                disabled={isEdit}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, buyPrice: Number(e.target.value) }))
                 }
@@ -333,6 +340,7 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
             </div>
 
             <div className="md:col-span-2">
+              {isEdit && <p className="mb-3 text-xs text-muted-foreground">Category, barcode, unit and historical purchase cost are read-only. Sell price and expiry changes apply to all remaining stock batches.</p>}
               <Label htmlFor="expiry">Expiry Date (optional)</Label>
               <Input
                 id="expiry"
@@ -346,6 +354,7 @@ export function AddProductDialog({ open, onOpenChange, product }: Props) {
           </div>
 
           <DialogFooter className="pt-2">
+            {submitError && <p role="alert" className="text-sm text-destructive">{submitError}</p>}
             <Button
               type="button"
               variant="outline"

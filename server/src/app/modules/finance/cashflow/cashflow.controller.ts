@@ -50,7 +50,7 @@ export const cashflowController = {
   }),
   executeAlert: catchAsync(async (req: Request, res: Response) => {
     const result = await cashflowService.executeAlertAction(tenant(req), shop(req), req.params.id, req.body);
-    sendResponse(res, { success: true, statusCode: httpStatus.CREATED, message: 'Action executed', data: result });
+    sendResponse(res, { success: true, statusCode: httpStatus.CREATED, message: 'Recommendation proposed for review; no money moved', data: result });
   }),
   listCommitments: catchAsync(async (req: Request, res: Response) => {
     const result = await cashflowService.listCommitments(tenant(req), shop(req));
@@ -70,7 +70,7 @@ export const cashflowController = {
   }),
   approveAction: catchAsync(async (req: Request, res: Response) => {
     const result = await cashflowService.decideTreasuryAction(tenant(req), shop(req), req.params.id, true);
-    sendResponse(res, { success: true, statusCode: httpStatus.OK, message: 'Action approved and executed', data: result });
+    sendResponse(res, { success: true, statusCode: httpStatus.OK, message: 'Action approved; complete and record the actual transaction separately', data: result });
   }),
   rejectAction: catchAsync(async (req: Request, res: Response) => {
     const result = await cashflowService.decideTreasuryAction(tenant(req), shop(req), req.params.id, false);

@@ -69,7 +69,7 @@ export const cashflowApi = {
   backfill: () => data(api.post("/finance/cashflow/backfill", { shopId: getShopId() })),
   projection: (horizon = 90) => data(api.get("/finance/cashflow/projection", shopParams({ horizon }))),
   run: () => data(api.post("/finance/cashflow/run", { shopId: getShopId() })),
-  alerts: () => data(api.get("/finance/cashflow/alerts", shopParams())) as Promise<CashAlert[]>,
+  alerts: () => data(api.get("/finance/cashflow/alerts", shopParams({ status: "OPEN" }))) as Promise<CashAlert[]>,
   ackAlert: (id: string, action: "ack" | "dismiss" | "resolve") =>
     data(api.post(`/finance/cashflow/alerts/${id}/ack?shopId=${getShopId() ?? ""}`, { action })),
   executeAlert: (id: string, body: Record<string, unknown>) =>

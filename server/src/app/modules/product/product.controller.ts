@@ -32,6 +32,11 @@ const addProductInShop = catchAsync(
     },
 );
 
+const addPurchase = catchAsync(async (req: Request, res: Response) => {
+    const result = await productService.addPurchase(req.body.lines, getTenantIdFromRequest(req));
+    sendResponse(res, { success: true, statusCode: httpStatus.CREATED, message: 'Purchase saved', data: result });
+});
+
 const deleteProductFromShop = catchAsync(
     async (req: Request, res: Response, next: NextFunction) => {
         const { productId } = req.params;
@@ -252,6 +257,7 @@ const createProductWithVariants = catchAsync(
 );
 
 export const productController = {
+    addPurchase,
     addProductInShop,
     createProductWithVariants,
     deleteProductFromShop,

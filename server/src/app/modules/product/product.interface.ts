@@ -62,12 +62,14 @@ export interface IUpdateLot {
     sellPrice?: number;
     vat?: number;
     mfgDate?: Date;
-    expDate?: Date;
+    expDate?: Date | null;
     locationAtStore?: string;
     note?: string;
 }
 
 export interface IUpdateProduct {
+    sellPrice?: number;
+    expDate?: Date | null;
     name?: string;
     variantName?: string;
     variantCode?: string;

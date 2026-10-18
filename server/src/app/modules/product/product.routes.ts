@@ -8,6 +8,9 @@ import { verifyTenantAccess } from '../../middlewares/verifyTenant';
 
 const router = express.Router();
 
+router.post('/purchase', auth(UserRole.OWNER), verifyTenantAccess,
+    validateRequest(productZodSchema.purchaseValidation), productController.addPurchase);
+
 router.get(
     '/id/:productId',
     auth(UserRole.OWNER, UserRole.EMPLOYEE),

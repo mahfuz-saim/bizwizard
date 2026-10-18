@@ -16,6 +16,7 @@ export type MeasuringUnit =
 
 export interface Product {
   id: string
+  productID?: string
   name: string
   variantName?: string
   variantCode?: string
