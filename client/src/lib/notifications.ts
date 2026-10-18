@@ -4,6 +4,13 @@ export const NOTIFICATION_TOAST_MS = 2000
 export const isUnread = (notification: ShopNotification) =>
   !notification.ReadStatus?.some(status => status.isRead)
 
+export function notificationTime(notification: ShopNotification) {
+  const simulatedAt = notification.data?.simulationOccurredAt
+  const isSimulated = typeof notification.data?.simulationRunID === "string"
+    && typeof simulatedAt === "string" && Number.isFinite(Date.parse(simulatedAt))
+  return { dateTime: isSimulated ? simulatedAt : notification.createdAt, isSimulated }
+}
+
 export function newNotifications(items: ShopNotification[], seen: Set<string>) {
   const fresh = items.filter(item => !seen.has(item.id) && isUnread(item))
   items.forEach(item => seen.add(item.id))

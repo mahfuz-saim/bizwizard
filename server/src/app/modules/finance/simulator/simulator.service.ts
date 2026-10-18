@@ -244,7 +244,9 @@ export const simulatorService = {
     const preExistingAlertIDs = new Set(
       (await db().cashAlert.findMany({ where: { tenantID: tenantId, shopID: shopId, status: 'OPEN' }, select: { id: true } }).catch(() => [])).map((a: any) => a.id),
     );
-    let treasury = await cashflowService.runTreasury(tenantId, shopId);
+    const criticalCueDay = Math.max(18, plan.horizonDays - 6);
+    const notificationClock = { runID: simulationRunID, occurredAt: dayTimestamp(plan.days[criticalCueDay - 1].date) };
+    let treasury = await cashflowService.runTreasury(tenantId, shopId, notificationClock);
     let attempt = 0;
     while (!treasury.alerts.some((a: any) => a.severity === 'CRITICAL') && attempt < 3) {
       attempt++;
@@ -264,7 +266,7 @@ export const simulatorService = {
       lastStream.expense = roundCurrency(lastStream.expense + topUp);
       lastStream.runningBalance = roundCurrency(lastStream.runningBalance - topUp);
       await refreshBalances(tenantId, shopId);
-      treasury = await cashflowService.runTreasury(tenantId, shopId);
+      treasury = await cashflowService.runTreasury(tenantId, shopId, notificationClock);
     }
     const newAlertIDs = treasury.alerts.map((a: any) => a.id).filter((id: string) => !preExistingAlertIDs.has(id));
     if (newAlertIDs.length) {
@@ -359,7 +361,7 @@ export const simulatorService = {
     const alpha = treasuryAction?.realizedImpact != null ? roundCurrency(treasuryAction.realizedImpact - treasuryAction.projectedImpact) : 0;
     const toasts = [
       criticalAlert && {
-        id: 'critical', kind: 'critical', uiCueDay: Math.max(18, plan.horizonDays - 6),
+        id: 'critical', kind: 'critical', uiCueDay: criticalCueDay,
         title: '🚨 CRITICAL', message: `Cash shortfall of ${fmt(criticalAlert.projectedShortfall ?? treasury.projection.shortfallAmount ?? 0)} predicted on ${treasury.projection.shortfallDate ?? 'the near horizon'}. TREASURER_AGENT has proposed ${treasuryAction ? 1 : 0} action${treasuryAction ? '' : 's'}.`,
         actionLabel: 'View alert', actionHref: '/finance/cashflow', refID: criticalAlert.id,
       },

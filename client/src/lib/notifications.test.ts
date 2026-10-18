@@ -1,9 +1,21 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { isUnread, newNotifications, NOTIFICATION_TOAST_MS, readNotificationStream } from "./notifications"
+import { isUnread, newNotifications, notificationTime, NOTIFICATION_TOAST_MS, readNotificationStream } from "./notifications"
 import type { ShopNotification } from "./types"
 
 const item = (id: string): ShopNotification => ({ id, title: `Title ${id}`, body: "বাংলা notification", createdAt: "2026-10-17T00:00:00Z" })
+
+test("simulator notifications display the event clock without changing their audit timestamp", () => {
+  const notification = { ...item("simulation"), data: { simulationRunID: "run-1", simulationOccurredAt: "2026-10-11T12:00:00.000Z" } }
+  assert.deepEqual(notificationTime(notification), { dateTime: "2026-10-11T12:00:00.000Z", isSimulated: true })
+  assert.equal(notification.createdAt, "2026-10-17T00:00:00Z")
+})
+
+test("real, legacy and invalid simulator notifications keep their original timestamp", () => {
+  for (const data of [undefined, null, {}, { simulationOccurredAt: "2026-10-11T12:00:00Z" }, { simulationRunID: "run-1", simulationOccurredAt: "invalid" }]) {
+    assert.deepEqual(notificationTime({ ...item("real"), data }), { dateTime: item("real").createdAt, isSimulated: false })
+  }
+})
 
 test("only unseen unread notifications produce toasts, each for two seconds", () => {
   assert.equal(NOTIFICATION_TOAST_MS, 2000)
