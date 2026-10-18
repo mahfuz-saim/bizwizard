@@ -1,8 +1,8 @@
-import { api, getShopId } from "./api"
+import { api, getShopId, getSimulationSourceId } from "./api"
 
 /**
  * Judge-facing Finance Copilot simulator: plays 30 fabricated-but-real
- * business days into the owner's currently open shop in a single fast
+ * business days into a separate demo copy in a single atomic
  * backend transaction, then re-runs the real deterministic pipeline
  * (cashEngine, alert rules, guard, counterfactual verifier, agent
  * scorecards) on top of it. The frontend drip-feeds the returned
@@ -36,6 +36,7 @@ export interface SimDailyStreamDay {
 }
 
 export interface SimToast {
+  occurredAt: string
   id: "critical" | "guard" | "reconciled"
   kind: "critical" | "guard" | "reconciled"
   uiCueDay: number
@@ -80,6 +81,10 @@ export interface SimPerformanceRow {
 }
 
 export interface FastForwardResult {
+  shopID: string
+  sourceShopID: string
+  startedAt: string
+  endedAt: string
   simulationRunID: string
   shopName: string
   dailyEvents: SimDailyStreamDay[]
@@ -102,6 +107,8 @@ async function data(p: Promise<{ data?: unknown }>): Promise<any> {
 }
 
 export const simulatorApi = {
+  prepare: () => data(api.post("/finance/simulator/prepare", { shopId: getSimulationSourceId() ?? getShopId() })) as Promise<{ id: string; simulationSourceShopID: string }>,
+  workspace: () => data(api.get("/finance/simulator/workspace", { shopId: getShopId() ?? "" })) as Promise<{ simulationAsOf: string; simulationResult: FastForwardResult | null } | null>,
   fastForward: (template?: SimTemplate) =>
     data(api.post("/finance/simulator/fast-forward", { shopId: getShopId(), template })) as Promise<FastForwardResult>,
   reset: () => data(api.post("/finance/simulator/reset", { shopId: getShopId() })),

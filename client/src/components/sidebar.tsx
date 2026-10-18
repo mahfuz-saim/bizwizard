@@ -32,6 +32,7 @@ import {
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useStore } from "@/lib/store"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { formatDurationMs, MAX_SPEED_MS, MIN_SPEED_MS, SPEED_PRESETS, TRANSACTION_TEMPLATES, useSimulator } from "@/lib/simulator-context"
@@ -66,6 +67,8 @@ interface SidebarProps {
 export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
   const pathname = usePathname()
   const sim = useSimulator()
+  const { source, session } = useStore()
+  const canSimulate = source === "backend" && ["OWNER", "ADMIN"].includes(session?.role ?? "")
   const [simOpen, setSimOpen] = React.useState(false)
   // Uncontrolled-by-design: keyed on sim.speedMs so picking a preset (or
   // Apply succeeding) refreshes the shown default without needing an effect,
@@ -189,10 +192,11 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
               {!simActive && !simLoading && (
                 <button
                   onClick={() => void sim.runFastForward()}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
+                  disabled={!canSimulate || sim.status === "resetting"}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
                 >
                   <Zap className="h-4 w-4" />
-                  Fast-forward 30 days
+                  Simulate next 30 days in demo copy
                 </button>
               )}
 
@@ -233,7 +237,7 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
                   className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
                 >
                   {sim.status === "resetting" ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
-                  Reset simulation
+                  Reset demo from source
                 </button>
               )}
             </div>

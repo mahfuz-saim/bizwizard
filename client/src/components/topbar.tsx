@@ -32,6 +32,7 @@ import {
 import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useStore } from "@/lib/store"
+import { useSimulator } from "@/lib/simulator-context"
 import { NotificationBell } from "@/components/notification-bell"
 import { getApiBaseUrl } from "@/lib/api"
 
@@ -215,6 +216,8 @@ interface MobileNavSheetProps {
 }
 
 export function MobileNavSheet({ open, onOpenChange }: MobileNavSheetProps) {
+  const sim = useSimulator()
+  const { source, session } = useStore()
   const pathname = usePathname()
   const navItems = [
     { label: "Dashboard", href: "/" },
@@ -232,7 +235,7 @@ export function MobileNavSheet({ open, onOpenChange }: MobileNavSheetProps) {
   ]
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="left" className="w-72 p-0 bg-sidebar text-sidebar-foreground">
+      <SheetContent side="left" className="w-72 overflow-y-auto p-0 bg-sidebar text-sidebar-foreground">
         <div className="flex h-16 items-center gap-2 border-b border-sidebar-border px-4">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
             <Store className="h-5 w-5" />
@@ -258,6 +261,11 @@ export function MobileNavSheet({ open, onOpenChange }: MobileNavSheetProps) {
               {item.label}
             </Link>
           ))}
+          <Button variant="outline" className="mt-2 h-auto whitespace-normal py-2 text-sm" disabled={source !== "backend" || !["OWNER", "ADMIN"].includes(session?.role ?? "") || sim.status === "loading" || sim.status === "resetting"} onClick={() => {
+            onOpenChange(false)
+            if (sim.status === "playing" || sim.status === "paused") sim.setDrawerOpen(true)
+            else void sim.runFastForward()
+          }}>{sim.status === "playing" || sim.status === "paused" ? "View simulation" : "Simulate next 30 days in demo copy"}</Button>
         </nav>
       </SheetContent>
     </Sheet>

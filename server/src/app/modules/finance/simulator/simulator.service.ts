@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import prisma from '../../../../shared/prisma';
+import prisma, { simulationContext } from '../shared/database';
+import { lockedWorkspace, requireDemo, prepareWorkspace, workspaceFor, simulationError, restoreWorkspace } from './workspace';
 import { hashInput } from '../../../../lib/ai/client';
 import { roundCurrency, sumMoney } from '../shared/money';
 import { dailyNetSeries } from '../shared/cashEngine';
@@ -96,36 +97,44 @@ const CASH_CATEGORY_FOR_EXPENSE: Record<string, string> = {
 };
 
 export const simulatorService = {
-  /**
-   * Single fast "backend transaction" that plays out 30 simulated business
-   * days into the REAL tables (Checkout, ExpenseItem, Debt/DebtPayments,
-   * CashTransaction), then re-runs the real deterministic pipeline
-   * (cashEngine projection, 9 alert rules, guard, counterfactual verifier,
-   * agent scorecards) on top of it. Returns a day-by-day event list the
-   * frontend drip-feeds at a user-adjustable per-transaction delay, plus the
-   * final state every finance page needs to morph into (no extra round-trips).
-   *
-   * `template` picks the transaction density: 'LESS' (default — present pace,
-   * one sale + occasional expense/day) or 'MORE' (~3x more, smaller rows/day).
-   * Either way every row is a real, tagged (isSimulated/simulationRunID) write
-   * into the owner's own shop — the template only changes how many rows.
-   */
+  prepare: prepareWorkspace,
+  async workspace(tenantId: string, shopId: string) {
+    const source = await workspaceFor(tenantId, shopId);
+    return db().shop.findFirst({ where: { tenantID: tenantId, simulationSourceShopID: source.simulationSourceShopID ?? source.id } });
+  },
   async fastForward(tenantId: string, shopId: string, template?: SimTemplate) {
-    const shop = await assertShop(tenantId, shopId);
-    await ensureDefaultPolicies(db());
-    await ensureCatalog(db());
+    return lockedWorkspace(tenantId, shopId, async (tx, shop) => {
+      await requireDemo(tx, tenantId, shopId);
+      return simulationContext.run({ client: tx, asOf: new Date(shop.simulationAsOf) }, async () => {
+        const result = await simulatorService.playMonth(tenantId, shopId, template);
+        await tx.shop.update({ where: { id: shopId }, data: {
+          simulationAsOf: new Date(result.endedAt), simulationRunID: result.simulationRunID,
+          simulationResult: JSON.parse(JSON.stringify(result)),
+        } });
+        return result;
+      });
+    });
+  },
+  async playMonth(tenantId: string, shopId: string, template?: SimTemplate) {
+    const shop = await requireDemo(db(), tenantId, shopId);
+    const clock = simulationContext.getStore();
+    if (!clock) throw simulationError('Simulation requires an isolated transaction.');
+    const startedAt = new Date(clock.asOf);
+    await db().cashAlert.updateMany({ where: { tenantID: tenantId, shopID: shopId, isSimulated: true, status: 'OPEN' }, data: { status: 'RESOLVED', resolvedAt: startedAt } });
+    if (!await db().aiAgentPolicy.count()) await ensureDefaultPolicies(db());
+    if (!await db().financeProduct.count()) await ensureCatalog(db());
     const accounts = await ensureAccounts(tenantId, shopId);
     const primary = accounts.find((a: any) => a.isPrimary) ?? accounts[0];
 
     const recentTxns = await loadCashTransactions(tenantId, shopId, 28);
-    const recentHistory = dailyNetSeries(recentTxns as any, 28, new Date());
+    const recentHistory = dailyNetSeries(recentTxns as any, 28, startedAt);
     const activeDays = recentHistory.filter((h) => h.inflow + h.outflow > 0);
     const baselineDailyRevenue = activeDays.length ? sumMoney(recentHistory.map((h) => h.inflow)) / recentHistory.length : 0;
     const baselineDailyOutflow = activeDays.length ? sumMoney(recentHistory.map((h) => h.outflow)) / recentHistory.length : 0;
 
     const simulationRunID = newRunId();
     const seed = seedFromString(`${shopId}:${simulationRunID}`);
-    const plan = buildSimulationPlan({ seed, asOf: new Date(), baselineDailyRevenue, baselineDailyOutflow, template });
+    const plan = buildSimulationPlan({ seed, asOf: new Date(startedAt.getTime() + 30 * 86400000), baselineDailyRevenue, baselineDailyOutflow, template });
 
     const buyer = await ensureSimulatorBuyer(tenantId);
     await ensureShopBuyerLink(tenantId, shopId, buyer);
@@ -136,8 +145,11 @@ export const simulatorService = {
     let bigDebtId: string | null = null;
     let runningBalance = sumMoney(accounts.map((a: any) => a.currentBalance));
 
-    await db().$transaction(async (tx: any) => {
+    const tx = db();
+    let firstCriticalDay: number | null = null;
+    {
       for (const day of plan.days as SimDayPlan[]) {
+        clock.asOf = new Date(`${day.date}T23:59:59.999Z`);
         const events: DailyStreamEvent[] = [];
         let revenue = 0;
         let expenseTotal = 0;
@@ -165,7 +177,7 @@ export const simulatorService = {
             },
           });
           revenue += sale.amount;
-          events.push({ type: 'CHECKOUT', id: checkout.id, amount: sale.amount, direction: 'IN', description: `Sale receipt · ${sale.quantity} item(s)`, occurredAt: cashTxn.occurredAt.toISOString() });
+          events.push({ type: 'CHECKOUT', id: checkout.id, amount: sale.amount, direction: 'IN', description: `Sale receipt · ${sale.quantity} item(s)`, occurredAt: checkoutAt.toISOString() });
           events.push({ type: 'CASH_TRANSACTION', id: cashTxn.id, amount: sale.amount, direction: 'IN', description: 'Sales collection cleared', occurredAt: cashTxn.occurredAt.toISOString() });
         }
 
@@ -187,7 +199,7 @@ export const simulatorService = {
             },
           });
           expenseTotal += expense.amount;
-          events.push({ type: 'EXPENSE_ITEM', id: item.id, amount: expense.amount, direction: 'OUT', description: expense.label, occurredAt: cashTxn.occurredAt.toISOString() });
+          events.push({ type: 'EXPENSE_ITEM', id: item.id, amount: expense.amount, direction: 'OUT', description: expense.label, occurredAt: itemAt.toISOString() });
           events.push({ type: 'CASH_TRANSACTION', id: cashTxn.id, amount: expense.amount, direction: 'OUT', description: `${expense.label} cleared`, occurredAt: cashTxn.occurredAt.toISOString() });
         }
 
@@ -223,15 +235,18 @@ export const simulatorService = {
               },
             });
             revenue += amount;
-            events.push({ type: 'DEBT_PAYMENT', id: payment.id, amount, direction: 'IN', description: 'Debt payment received', occurredAt: cashTxn.occurredAt.toISOString() });
+            events.push({ type: 'DEBT_PAYMENT', id: payment.id, amount, direction: 'IN', description: 'Debt payment received', occurredAt: payment.createdAt.toISOString() });
             events.push({ type: 'CASH_TRANSACTION', id: cashTxn.id, amount, direction: 'IN', description: 'Collection cleared', occurredAt: cashTxn.occurredAt.toISOString() });
           }
         }
 
         runningBalance = roundCurrency(runningBalance + revenue - expenseTotal);
         streamDays.push({ day: day.day, date: day.date, phase: day.phase, events, runningBalance, revenue: roundCurrency(revenue), expense: roundCurrency(expenseTotal) });
+        await refreshBalances(tenantId, shopId);
+        const evaluated = await cashflowService.runTreasury(tenantId, shopId, { runID: simulationRunID, occurredAt: new Date(events[events.length - 1]?.occurredAt ?? clock.asOf) });
+        if (firstCriticalDay == null && evaluated.alerts.some((alert: any) => alert.severity === 'CRITICAL')) firstCriticalDay = day.day;
       }
-    }, { timeout: 30000, maxWait: 10000 });
+    }
 
     await refreshBalances(tenantId, shopId);
 
@@ -244,8 +259,12 @@ export const simulatorService = {
     const preExistingAlertIDs = new Set(
       (await db().cashAlert.findMany({ where: { tenantID: tenantId, shopID: shopId, status: 'OPEN' }, select: { id: true } }).catch(() => [])).map((a: any) => a.id),
     );
-    const criticalCueDay = Math.max(18, plan.horizonDays - 6);
-    const notificationClock = { runID: simulationRunID, occurredAt: dayTimestamp(plan.days[criticalCueDay - 1].date) };
+    const criticalCueDay = firstCriticalDay ?? plan.horizonDays;
+    const lastEventAt = () => {
+      const events = streamDays[streamDays.length - 1].events;
+      return events[events.length - 1]?.occurredAt ?? clock.asOf.toISOString();
+    };
+    const notificationClock = { runID: simulationRunID, occurredAt: new Date(lastEventAt()) };
     let treasury = await cashflowService.runTreasury(tenantId, shopId, notificationClock);
     let attempt = 0;
     while (!treasury.alerts.some((a: any) => a.severity === 'CRITICAL') && attempt < 3) {
@@ -266,16 +285,19 @@ export const simulatorService = {
       lastStream.expense = roundCurrency(lastStream.expense + topUp);
       lastStream.runningBalance = roundCurrency(lastStream.runningBalance - topUp);
       await refreshBalances(tenantId, shopId);
+      notificationClock.occurredAt = cashTxn.occurredAt;
       treasury = await cashflowService.runTreasury(tenantId, shopId, notificationClock);
     }
     const newAlertIDs = treasury.alerts.map((a: any) => a.id).filter((id: string) => !preExistingAlertIDs.has(id));
     if (newAlertIDs.length) {
       await db().cashAlert.updateMany({ where: { id: { in: newAlertIDs } }, data: { isSimulated: true, simulationRunID } }).catch(() => undefined);
     }
-    const criticalAlert = treasury.alerts.find((a: any) => a.severity === 'CRITICAL') ?? treasury.alerts[0] ?? null;
+    const criticalAlert = treasury.alerts.find((a: any) => a.severity === 'CRITICAL') ?? null;
+    const criticalNotification = criticalAlert?.notificationID ? await db().notification.findUnique({ where: { id: criticalAlert.notificationID } }) : null;
+    const criticalAt = criticalNotification?.data?.simulationOccurredAt ?? dayTimestamp(plan.days[criticalCueDay - 1].date).toISOString();
 
     // --- Guaranteed, guard-verified treasury reconciliation (Layer 3: 📈 toast) ---
-    const policy = await db().aiAgentPolicy.findFirst({ where: { agentType: 'TREASURER_AGENT', isActive: true } }).catch(() => null);
+    const policy = await db().aiAgentPolicy.findFirst({ where: { agentType: 'TREASURER_AGENT', isActive: true }, orderBy: { version: 'desc' } }).catch(() => null);
     let treasuryAction: any = null;
     if (bigDebtId) {
       const debtRow = await db().debt.findUnique({ where: { id: bigDebtId } });
@@ -288,7 +310,7 @@ export const simulatorService = {
           title: `Collect overdue balance — ${plan.bigDebtLabel}`, rationale: recon.verdict.passed ? `Collecting ৳${outstanding} clears the projected shortfall within the buffer floor.` : recon.verdict.reasons.join('; '),
           amount: outstanding, targetRefID: bigDebtId, expectedDaysToEffect: 3, projectedImpact: recon.projectedImpact,
           realizedImpact: recon.verdict.passed ? recon.realizedImpact : null, status: recon.verdict.passed ? 'RECONCILED' : 'REJECTED',
-          requiresOwnerApproval: false, executedAt: new Date(), reconciledAt: recon.verdict.passed ? new Date() : null,
+          requiresOwnerApproval: false, executedAt: new Date(clock.asOf), reconciledAt: recon.verdict.passed ? new Date(clock.asOf) : null,
           isSimulated: true, simulationRunID,
         },
       });
@@ -305,10 +327,10 @@ export const simulatorService = {
         },
       }).catch(() => undefined);
       if (recon.verdict.passed) {
-        const payment = await db().debtPayments.create({ data: { debtId: bigDebtId, amount: recon.realizedImpact, isSimulated: true, simulationRunID } });
+        const payment = await db().debtPayments.create({ data: { debtId: bigDebtId, amount: recon.realizedImpact, isSimulated: true, simulationRunID, createdAt: dayTimestamp(plan.days[plan.horizonDays - 1].date, 120) } });
         await db().debt.update({ where: { id: bigDebtId }, data: { paidAmount: recon.realizedImpact, status: 'PAID' } });
         const cashTxn = await db().cashTransaction.create({
-          data: { tenantID: tenantId, shopID: shopId, accountID: primary.id, direction: 'IN', amount: recon.realizedImpact, category: 'INVOICE_PAYMENT', occurredAt: new Date(), description: `Collected: ${plan.bigDebtLabel}`, source: 'SIMULATOR', sourceRefID: payment.id, status: 'CLEARED', isSimulated: true, simulationRunID },
+          data: { tenantID: tenantId, shopID: shopId, accountID: primary.id, direction: 'IN', amount: recon.realizedImpact, category: 'INVOICE_PAYMENT', occurredAt: dayTimestamp(plan.days[plan.horizonDays - 1].date, 120), description: `Collected: ${plan.bigDebtLabel}`, source: 'SIMULATOR', sourceRefID: payment.id, status: 'CLEARED', isSimulated: true, simulationRunID },
         });
         const lastStream = streamDays[streamDays.length - 1];
         lastStream.events.push({ type: 'DEBT_PAYMENT', id: payment.id, amount: recon.realizedImpact, direction: 'IN', description: `Treasurer collected: ${plan.bigDebtLabel}`, occurredAt: cashTxn.occurredAt.toISOString() });
@@ -361,24 +383,25 @@ export const simulatorService = {
     const alpha = treasuryAction?.realizedImpact != null ? roundCurrency(treasuryAction.realizedImpact - treasuryAction.projectedImpact) : 0;
     const toasts = [
       criticalAlert && {
-        id: 'critical', kind: 'critical', uiCueDay: criticalCueDay,
+        id: 'critical', kind: 'critical', uiCueDay: criticalCueDay, occurredAt: criticalAt,
         title: '🚨 CRITICAL', message: `Cash shortfall of ${fmt(criticalAlert.projectedShortfall ?? treasury.projection.shortfallAmount ?? 0)} predicted on ${treasury.projection.shortfallDate ?? 'the near horizon'}. TREASURER_AGENT has proposed ${treasuryAction ? 1 : 0} action${treasuryAction ? '' : 's'}.`,
         actionLabel: 'View alert', actionHref: '/finance/cashflow', refID: criticalAlert.id,
       },
       guardDecision && {
-        id: 'guard', kind: 'guard', uiCueDay: Math.max(22, plan.horizonDays - 3),
+        id: 'guard', kind: 'guard', uiCueDay: plan.horizonDays, occurredAt: lastEventAt(),
         title: '🛡️ GUARD BLOCKED', message: (plan as any).guardOfferScenario?.toastMessage ?? 'Offer rejected by the affordability guard.',
         actionLabel: 'View decision', actionHref: '/finance/agent', refID: guardDecision.id,
       },
       treasuryAction && treasuryAction.status === 'RECONCILED' && {
-        id: 'reconciled', kind: 'reconciled', uiCueDay: plan.horizonDays,
+        id: 'reconciled', kind: 'reconciled', uiCueDay: plan.horizonDays, occurredAt: dayTimestamp(plan.days[plan.horizonDays - 1].date, 120).toISOString(),
         title: '📈 RECONCILED', message: `Treasury action yielded +${fmt(treasuryAction.realizedImpact)} realized impact (+${fmt(alpha)} alpha vs. benchmark).`,
         actionLabel: 'View scorecard', actionHref: '/finance/agent', refID: treasuryAction.id,
       },
     ].filter(Boolean);
 
     return {
-      simulationRunID,
+      simulationRunID, shopID: shopId, sourceShopID: shop.simulationSourceShopID,
+      startedAt: startedAt.toISOString(), endedAt: clock.asOf.toISOString(),
       shopName: shop.shopName,
       seed,
       dailyEvents: streamDays,
@@ -420,29 +443,8 @@ export const simulatorService = {
     throw Object.assign(new Error('Unknown inspect type'), { statusCode: 400 });
   },
 
-  /** Wipes every row this simulator wrote for the shop, in FK-safe order, and recomputes balances. */
   async reset(tenantId: string, shopId: string) {
-    await assertShop(tenantId, shopId);
-    // Strict FK-safe order: DebtPayments → Debt → Checkout (cascades CheckoutItem),
-    // then the independent tables. Promise.all would race Debt against the
-    // Checkout it points to, so this stays sequential on purpose.
-    const debtPayments = await db().debtPayments.deleteMany({ where: { isSimulated: true, debt: { shopID: shopId, tenantID: tenantId } } });
-    const debts = await db().debt.deleteMany({ where: { shopID: shopId, tenantID: tenantId, isSimulated: true } });
-    const checkouts = await db().checkout.deleteMany({ where: { shopID: shopId, tenantID: tenantId, isSimulated: true } });
-    const expenseItems = await db().expenseItem.deleteMany({ where: { tenantID: tenantId, isSimulated: true, expense: { shopID: shopId, tenantID: tenantId } } });
-    const cashTxns = await db().cashTransaction.deleteMany({ where: { tenantID: tenantId, shopID: shopId, isSimulated: true } });
-    const alerts = await db().cashAlert.deleteMany({ where: { tenantID: tenantId, shopID: shopId, isSimulated: true } });
-    const actions = await db().treasuryAction.deleteMany({ where: { tenantID: tenantId, shopID: shopId, isSimulated: true } });
-    const insights = await db().insight.deleteMany({ where: { tenantID: tenantId, shopID: shopId, isSimulated: true } });
-    const decisions = await db().aiDecision.deleteMany({ where: { tenantID: tenantId, shopID: shopId, isSimulated: true } });
-    await db().financingOffer.deleteMany({ where: { tenantID: tenantId, shopID: shopId, isSimulated: true } }).catch(() => undefined);
-    await refreshBalances(tenantId, shopId);
-    return {
-      cleared: {
-        debtPayments: debtPayments.count, debts: debts.count, checkouts: checkouts.count, expenseItems: expenseItems.count,
-        cashTransactions: cashTxns.count, alerts: alerts.count, treasuryActions: actions.count, insights: insights.count, decisions: decisions.count,
-      },
-    };
+    return lockedWorkspace(tenantId, shopId, tx => restoreWorkspace(tx, tenantId, shopId));
   },
 };
 

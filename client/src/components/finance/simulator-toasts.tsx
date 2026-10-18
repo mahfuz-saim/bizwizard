@@ -21,7 +21,7 @@ export function SimulatorToastHost() {
   const sim = useSimulator()
 
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-[60] flex w-full max-w-sm flex-col gap-2">
+    <div className="pointer-events-none fixed bottom-4 right-4 z-[60] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2">
       {sim.activeToasts.map((t) => (
         <ToastCard key={t.id} toast={t} onClose={() => sim.dismissToast(t.id)} />
       ))}
@@ -48,6 +48,7 @@ function ToastCard({ toast, onClose }: { toast: SimToast; onClose: () => void })
         </button>
       </div>
       <p className="mt-1 text-sm">{toast.message}</p>
+      <time dateTime={toast.occurredAt} className="mt-1 block text-xs text-muted-foreground">Simulated · {new Date(toast.occurredAt).toLocaleString()}</time>
       <Link
         href={toast.actionHref}
         className="mt-2 inline-block text-xs font-medium underline underline-offset-2"

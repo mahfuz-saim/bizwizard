@@ -7,6 +7,8 @@ import {
   clearSession,
   getAccessToken,
   getShopId,
+  getSimulationSourceId,
+  setSimulationSourceId,
   loginWithCredentials,
   setShopId,
   setTenantId,
@@ -49,6 +51,8 @@ interface DataContextValue {
   logout: () => void
   refresh: (showLoading?: boolean) => Promise<void>
   dataVersion: number
+  simulationSourceId: string | null
+  switchSimulation: (shopId: string | null, sourceId: string | null) => Promise<void>
 
   products: Product[]
   customers: Customer[]
@@ -113,6 +117,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const demoMode = React.useRef(false)
   const generation = React.useRef(0)
   const [dataVersion, setDataVersion] = React.useState(0)
+  const [simulationSourceId, setSimulationSource] = React.useState<string | null>(null)
 
   const resetData = React.useCallback(() => {
     setProducts([])
@@ -125,6 +130,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setStats(emptyStats)
   }, [])
   const logout = React.useCallback(() => {
+    setSimulationSource(null)
     generation.current++
     demoMode.current = false
     clearSession()
@@ -135,6 +141,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     void api.post("/auth/logout").catch(() => {})
   }, [resetData])
   const runDemo = React.useCallback(() => {
+    setSimulationSource(null)
     generation.current++
     clearSession()
     setSession(null)
@@ -151,7 +158,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setSource("mock")
   }, [])
   const refresh = React.useCallback(
-    async (showLoading = true) => {
+    async (showLoading = true, propagateError = false) => {
       if (demoMode.current) return
       const request = ++generation.current
       if (!getAccessToken()) {
@@ -176,16 +183,24 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
             "This account has no accessible shop. Ask the owner to assign a shop."
           )
         setTenantId(me.defaultTenantId)
-        setShopId(me.defaultShopId)
+        let selectedShopId = me.defaultShopId
+        if (getSimulationSourceId() === me.defaultShopId && (me.role === "OWNER" || me.role === "ADMIN")) {
+          const workspace = await api.get<{ id: string } | null>("/finance/simulator/workspace", { shopId: me.defaultShopId })
+          if (request !== generation.current) return
+          if (workspace.data) selectedShopId = workspace.data.id
+          else setSimulationSourceId(null)
+        } else setSimulationSourceId(null)
+        setSimulationSource(getSimulationSourceId())
+        setShopId(selectedShopId)
         setSession({
           accessToken: getAccessToken()!,
           user: me.user,
           role: me.role,
           tenantId: me.defaultTenantId,
-          shopId: me.defaultShopId,
+          shopId: selectedShopId,
           tenants: me.tenants
         })
-        const data = await loadDashboardData(me.defaultShopId)
+        const data = await loadDashboardData(selectedShopId)
         if (request !== generation.current) return
         setProducts(data.products)
         setCustomers(data.customers)
@@ -206,6 +221,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           resetData()
           setSource("auth")
         } else if (showLoading) setSource("error") // Keep existing data visible when a background refresh fails.
+        if (propagateError) throw e
       }
     },
     [resetData]
@@ -242,6 +258,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, [refresh, invalidateRequests])
 
   function shopId() {
+    if (getSimulationSourceId()) throw new Error("Demo baseline is read-only. Return to your source shop to make business changes.")
     const id = getShopId()
     if (!id || source !== "backend")
       throw new Error("Connect to your shop before making changes")
@@ -469,6 +486,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }
   const value: DataContextValue = {
+    simulationSourceId,
+    switchSimulation: async (id, sourceId) => {
+      generation.current++
+      resetData()
+      setSimulationSourceId(sourceId)
+      setShopId(id)
+      await refresh(true, true)
+    },
     dataVersion,
     source,
     error,

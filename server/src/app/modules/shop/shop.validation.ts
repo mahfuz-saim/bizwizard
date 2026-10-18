@@ -21,7 +21,7 @@ const updateShopZodSchema = z.object({
         contact: z.string().optional(),
         tradeLicense: z.string().optional(),
         category: z.nativeEnum(ShopCategory).optional(),
-    }),
+    }).strict(),
 });
 
 const employeeRequestUpdate = z.object({

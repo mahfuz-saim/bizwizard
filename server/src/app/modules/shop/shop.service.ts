@@ -505,7 +505,12 @@ const updateShop = async (
         where: {
             id: existingShop.id,
         },
-        data: payload,
+        data: {
+            shopName: payload.shopName,
+            contact: payload.contact,
+            tradeLicense: payload.tradeLicense,
+            category: payload.category,
+        },
     });
 
     return updateResult;

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import prisma from '../../../../shared/prisma';
+import prisma, { shopClock } from './database';
 import { roundCurrency, sumMoney } from './money';
 import { buildProfile, isoDay, type ProfileAggregates } from './metricEngine';
 import type { DailyNet } from './cashEngine';
@@ -23,8 +23,9 @@ export async function loadProfileAggregates(
   tenantId: string,
   shopId: string,
   days = 90,
-  asOf = new Date(),
+  asOf?: Date,
 ): Promise<ProfileAggregates> {
+  asOf = asOf ?? await shopClock(tenantId, shopId);
   const start = new Date(asOf.getTime() - days * DAY);
   const db = prisma as any;
   const [sales, items, opexItems, debts, lots, firstSale] = await Promise.all([
@@ -128,7 +129,7 @@ export async function loadProfileAggregates(
   };
 }
 
-export async function loadProfile(tenantId: string, shopId: string, days = 90, asOf = new Date()) {
+export async function loadProfile(tenantId: string, shopId: string, days = 90, asOf?: Date) {
   return buildProfile(await loadProfileAggregates(tenantId, shopId, days, asOf));
 }
 
@@ -149,7 +150,8 @@ export async function loadOpenDebts(tenantId: string, shopId: string) {
   }));
 }
 
-export async function loadDailySales(tenantId: string, shopId: string, days: number, asOf = new Date()) {
+export async function loadDailySales(tenantId: string, shopId: string, days: number, asOf?: Date) {
+  asOf = asOf ?? await shopClock(tenantId, shopId);
   const db = prisma as any;
   const start = new Date(asOf.getTime() - days * DAY);
   const sales = await db.checkout.findMany({
@@ -169,7 +171,8 @@ export async function loadDailySales(tenantId: string, shopId: string, days: num
   return out;
 }
 
-export async function loadCashTransactions(tenantId: string, shopId: string, days: number, asOf = new Date()) {
+export async function loadCashTransactions(tenantId: string, shopId: string, days: number, asOf?: Date) {
+  asOf = asOf ?? await shopClock(tenantId, shopId);
   const db = prisma as any;
   const start = new Date(asOf.getTime() - days * DAY);
   const rows = await db.cashTransaction.findMany({

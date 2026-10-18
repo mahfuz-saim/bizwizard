@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import prisma from '../../../shared/prisma';
 import ApiError from '../../../errors/ApiError';
 import { assertShop } from '../finance/shared/shopData';
+import { shopClock } from '../finance/shared/database';
 
 const round = (n: number) => Math.round(n * 100) / 100;
 const validSales = (tenantId: string, shopId: string) => Prisma.sql`
@@ -85,7 +86,7 @@ async function transactions(tenantId: string, q: NavigationQuery, owner: boolean
 
 async function expenses(tenantId: string, q: NavigationQuery) {
     const where: Prisma.ExpenseItemWhereInput = { tenantID: tenantId, expense: { tenantID: tenantId, shopID: q.shopId }, expenseType: { not: 'PRODUCT' } };
-    const monthStart = new Date();
+    const monthStart = await shopClock(tenantId, q.shopId);
     monthStart.setUTCDate(1);
     monthStart.setUTCHours(0, 0, 0, 0);
     const [total, aggregate, month, categories] = await Promise.all([
@@ -101,13 +102,14 @@ async function expenses(tenantId: string, q: NavigationQuery) {
 }
 
 async function reports(tenantId: string, shopId: string) {
+    const asOf = await shopClock(tenantId, shopId);
     const [months, totals, costs] = await Promise.all([
         prisma.$queryRaw<Array<{ key: string; total: number }>>(Prisma.sql`SELECT to_char(c."createdAt" AT TIME ZONE 'UTC', 'YYYY-MM') AS key,
             SUM(c."totalPrice") AS total FROM checkouts c WHERE ${validSales(tenantId, shopId)} GROUP BY key ORDER BY key`),
         prisma.$queryRaw<Array<{ totalRevenue: number; weekRevenue: number; monthRevenue: number }>>(Prisma.sql`
             SELECT COALESCE(SUM(c."totalPrice"), 0)::float8 AS "totalRevenue",
-              COALESCE(SUM(c."totalPrice") FILTER (WHERE c."createdAt" >= date_trunc('day', NOW() AT TIME ZONE 'UTC') - INTERVAL '6 days'), 0)::float8 AS "weekRevenue",
-              COALESCE(SUM(c."totalPrice") FILTER (WHERE c."createdAt" >= date_trunc('month', NOW() AT TIME ZONE 'UTC')), 0)::float8 AS "monthRevenue"
+              COALESCE(SUM(c."totalPrice") FILTER (WHERE c."createdAt" >= date_trunc('day', ${asOf}::timestamp) - INTERVAL '6 days'), 0)::float8 AS "weekRevenue",
+              COALESCE(SUM(c."totalPrice") FILTER (WHERE c."createdAt" >= date_trunc('month', ${asOf}::timestamp)), 0)::float8 AS "monthRevenue"
             FROM checkouts c WHERE ${validSales(tenantId, shopId)}`),
         prisma.$queryRaw<Array<{ totalCost: number }>>(Prisma.sql`SELECT COALESCE(SUM(i.quantity * COALESCE(l."buyPrice", 0)), 0)::float8 AS "totalCost"
             FROM checkout_items i JOIN checkouts c ON c.id = i."checkoutID" LEFT JOIN lot l ON l.id = i."lotId"

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import prisma from '../../../../shared/prisma';
+import prisma, { shopClock, simulationContext } from '../shared/database';
 import { callStructured, hashInput } from '../../../../lib/ai/client';
 import * as prompts from '../../../../lib/ai/prompts';
 import { roundCurrency, sumMoney } from '../shared/money';
@@ -153,11 +153,12 @@ export const cashflowService = {
   },
 
   async getProjection(tenantId: string, shopId: string, horizon = 90, persist = true) {
+    const asOf = await shopClock(tenantId, shopId);
     await assertShop(tenantId, shopId);
     const accounts = await refreshBalances(tenantId, shopId);
     const currentCash = sumMoney(accounts.map((a: any) => a.currentBalance));
     const txns = await loadCashTransactions(tenantId, shopId, 180);
-    const history = dailyNetSeries(txns, 180, new Date());
+    const history = dailyNetSeries(txns, 180, asOf);
     const commitments = await db().cashCommitment.findMany({ where: { tenantID: tenantId, shopID: shopId, isPaid: false } }).catch(() => []);
     const debts = await loadOpenDebts(tenantId, shopId);
     const projection = buildProjection({
@@ -165,12 +166,12 @@ export const cashflowService = {
       history,
       commitments: commitments.map((c: any) => ({ name: c.name, amount: c.amount, dueDate: c.dueDate, recurrence: c.recurrence, confidence: c.confidence, isPaid: c.isPaid })),
       receivables: debts.map((d) => ({ id: d.id, amount: d.amount, createdAt: d.createdAt })),
-      asOf: new Date(),
+      asOf,
       horizonDays: horizon,
     });
     let narrative: string | null = null;
     let confidence: number | null = null;
-    const narration = await callStructured({
+    const narrationInput = {
       agentType: 'TREASURER_AGENT', purpose: 'narrate_projection', promptVersion: prompts.narrateProjection.version,
       tier: 'fast', pillar: 'cashflow', system: prompts.narrateProjection.system, tenantID: tenantId, shopID: shopId,
       input: { currentCash, daysOfBuffer: projection.daysOfBuffer, trough: projection.minProjectedBalance, troughDate: projection.troughDate, shortfallDate: projection.shortfallDate, closingBalance: projection.closingBalance },
@@ -181,14 +182,17 @@ export const cashflowService = {
           : `Cash stays positive over the next ${horizon} days, ending near ৳${Math.round(projection.closingBalance).toLocaleString('en-IN')} with ${projection.daysOfBuffer} days of buffer.`,
         confidence: 0.7,
       }),
-    });
+    } satisfies Parameters<typeof callStructured>[0];
+    const narration = simulationContext.getStore()
+      ? { data: narrationInput.fallback(), usedFallback: true, model: 'deterministic-fallback' }
+      : await callStructured(narrationInput);
     narrative = narration.data.narrative;
     confidence = narration.data.confidence;
     let saved: any = null;
     if (persist) {
       saved = await db().cashFlowProjection.create({
         data: {
-          tenantID: tenantId, shopID: shopId, asOf: new Date(), horizonDays: horizon,
+          tenantID: tenantId, shopID: shopId, asOf, horizonDays: horizon,
           dailyBuckets: JSON.parse(JSON.stringify(projection.dailyBuckets)),
           expectedInflows: projection.expectedInflows, expectedOutflows: projection.expectedOutflows,
           closingBalance: projection.closingBalance, minProjectedBalance: projection.minProjectedBalance,
@@ -204,17 +208,18 @@ export const cashflowService = {
   },
 
   async runTreasury(tenantId: string, shopId: string, simulation?: { runID: string; occurredAt: Date }) {
-    await ensureDefaultPolicies(db());
+    const asOf = simulation?.occurredAt ?? await shopClock(tenantId, shopId);
+    if (!simulationContext.getStore()) await ensureDefaultPolicies(db());
     const projection = await this.getProjection(tenantId, shopId, 90, true);
     const txns = await loadCashTransactions(tenantId, shopId, 180);
-    const history = dailyNetSeries(txns, 180, new Date());
+    const history = dailyNetSeries(txns, 180, asOf);
     const avgDailyOutflow = history.length ? roundCurrency(history.slice(-28).reduce((a, h) => a + h.outflow, 0) / Math.min(28, history.length)) : 0;
     const debts = await loadOpenDebts(tenantId, shopId);
-    const commitments = await db().cashCommitment.findMany({ where: { tenantID: tenantId, shopID: shopId, isPaid: false, dueDate: { lte: new Date(Date.now() + 3 * DAY) } } }).catch(() => []);
+    const commitments = await db().cashCommitment.findMany({ where: { tenantID: tenantId, shopID: shopId, isPaid: false, dueDate: { lte: new Date(asOf.getTime() + 3 * DAY) } } }).catch(() => []);
     const aggregates = await loadProfileAggregates(tenantId, shopId, 90);
     const profile = buildProfile(aggregates);
     const revSeries = await loadCashTransactions(tenantId, shopId, 35);
-    const revHist = dailyNetSeries(revSeries, 35, new Date());
+    const revHist = dailyNetSeries(revSeries, 35, asOf);
     const candidateAlerts = evaluateAlerts({
       projection,
       currentCash: projection.currentCash,
@@ -226,7 +231,7 @@ export const cashflowService = {
       revenue28dAvg: roundCurrency(sumMoney(revHist.slice(-35, -7).map((h) => h.inflow)) / 4),
       largestExpenseRatio: 0,
       ledgerDays: Math.min(180, history.filter((h) => h.inflow + h.outflow > 0).length),
-      asOf: new Date(),
+      asOf,
     });
     void profile;
     const savedAlerts: any[] = [];
@@ -240,6 +245,7 @@ export const cashflowService = {
           recommendedActions: JSON.parse(JSON.stringify(a.recommendedActions)),
           triggerRule: a.triggerRule, metricSnapshot: JSON.parse(JSON.stringify(a.metricSnapshot)),
           projectedShortfall: a.projectedShortfall ?? null, status: 'OPEN',
+          ...(simulation ? { isSimulated: true, simulationRunID: simulation.runID } : {}),
         },
       });
       if (a.severity === 'CRITICAL') {
@@ -258,7 +264,7 @@ export const cashflowService = {
     const bufferFloor = roundCurrency(14 * avgDailyOutflow);
     const menu = buildActionMenu({
       currentCash: projection.currentCash, bufferFloorAmount: bufferFloor, avgDailyOutflow,
-      openDebts: debts, deferrableOutflows: [], annualYieldPct: 8, asOf: new Date(),
+      openDebts: debts, deferrableOutflows: [], annualYieldPct: 8, asOf,
     });
     const picks = menu.filter((m) => m.projectedImpact > 0).slice(0, 2);
     const verdict = guardTreasuryActions({
@@ -274,6 +280,7 @@ export const cashflowService = {
             title: pick.title, rationale: pick.rationale, amount: roundCurrency(pick.amount),
             targetRefID: pick.targetRefID ?? null, expectedDaysToEffect: pick.expectedDaysToEffect,
             projectedImpact: roundCurrency(pick.projectedImpact), status: 'PROPOSED', requiresOwnerApproval: pick.requiresOwnerApproval,
+            ...(simulation ? { isSimulated: true, simulationRunID: simulation.runID } : {}),
           },
         }));
       }
@@ -283,11 +290,12 @@ export const cashflowService = {
           action: verdict.passed ? `Proposed ${picks.length} treasury action(s)` : 'Treasury picks blocked by guard',
           rationale: verdict.passed ? picks.map((p) => p.rationale).join(' ') : verdict.reasons.join('; '),
           confidence: 0.75, model: 'deterministic-core', promptVersion: prompts.chooseTreasuryActions.version,
-          inputHash: hashInput({ shopId, at: new Date().toISOString().slice(0, 10) }),
+          inputHash: hashInput({ shopId, at: asOf.toISOString().slice(0, 10) }),
           inputSnapshot: { menuSize: menu.length }, output: JSON.parse(JSON.stringify({ picks, verdict })),
           projectedImpact: sumMoney(picks.map((p) => p.projectedImpact)),
           guardResult: verdict.passed ? 'PASSED' : 'REJECTED_BY_GUARD', guardReason: verdict.reasons.join('; ') || null,
           status: verdict.passed ? 'PROPOSED' : 'REJECTED',
+          ...(simulation ? { isSimulated: true, simulationRunID: simulation.runID } : {}),
         },
       }).catch(() => undefined);
     }

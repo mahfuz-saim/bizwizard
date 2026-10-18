@@ -14,6 +14,7 @@ function stub(t: TestContext, target: object, name: string, implementation: (...
 for (const simulated of [false, true]) {
     for (const existing of [false, true]) {
         test(`treasury notification clock (simulated=${simulated}, existing=${existing})`, async t => {
+            stub(t, prisma.shop, 'findFirst', async () => ({ id: 'shop' }));
             for (const model of [prisma.cashTransaction, prisma.cashCommitment, prisma.checkout, prisma.checkoutItem,
                 prisma.expenseItem, prisma.debt, prisma.lot, prisma.cashAccount, prisma.financingApplication]) {
                 stub(t, model, 'findMany', async () => []);

@@ -307,6 +307,13 @@ model Shop {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   shopConfig   ShopConfig?
+  simulationSourceShopID String? @unique
+  simulationSource Shop? @relation("SimulationWorkspace", fields: [simulationSourceShopID], references: [id], onDelete: Restrict)
+  simulationWorkspace Shop? @relation("SimulationWorkspace")
+  simulationBaselineAt DateTime?
+  simulationAsOf DateTime?
+  simulationRunID String?
+  simulationResult Json?
 
   owner Owner @relation(fields: [ownerID], references: [userID])
 

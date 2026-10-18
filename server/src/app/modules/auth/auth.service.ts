@@ -298,7 +298,7 @@ const getMe = async (user: JwtPayload | null) => {
         if (profile) {
             const t = await prisma.tenant.findMany({
                 where: { ownerID: user.userID, isDeleted: false },
-                include: { shops: { select: { id: true, shopName: true } } },
+                include: { shops: { where: { simulationSourceShopID: null }, select: { id: true, shopName: true } } },
             });
             tenants = t.map((x: any) => ({ id: x.id, name: x.name, shops: x.shops }));
             defaultTenantId = t[0]?.id || null;

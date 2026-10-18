@@ -8,7 +8,8 @@ import * as Popover from "@radix-ui/react-popover"
 import { api, getApiBaseUrl } from "@/lib/api"
 import { useStore } from "@/lib/store"
 import type { ShopNotification } from "@/lib/types"
-import { isUnread, newNotifications, notificationTime, NOTIFICATION_TOAST_MS, readNotificationStream } from "@/lib/notifications"
+import { isUnread, newNotifications, notificationsThrough, notificationTime, NOTIFICATION_TOAST_MS, readNotificationStream } from "@/lib/notifications"
+import { useSimulator } from "@/lib/simulator-context"
 import { cn } from "@/lib/utils"
 
 function NotificationToast({ item, onDismiss }: { item: ShopNotification; onDismiss: (id: string) => void }) {
@@ -18,24 +19,31 @@ function NotificationToast({ item, onDismiss }: { item: ShopNotification; onDism
   }, [item.id, onDismiss])
   return <div role="status" className="pointer-events-auto flex gap-3 rounded-lg border bg-background p-4 text-foreground shadow-lg">
     <Bell className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
-    <div className="min-w-0 flex-1"><p className="wrap-break-word text-sm font-semibold">{item.title}</p><p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm text-muted-foreground">{item.body}</p></div>
+    <div className="min-w-0 flex-1"><p className="wrap-break-word text-sm font-semibold">{item.title}</p><p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm text-muted-foreground">{item.body}</p><NotificationTime item={item} /></div>
     <button aria-label="Dismiss notification toast" className="self-start rounded p-1 hover:bg-muted" onClick={() => onDismiss(item.id)}><X className="h-4 w-4" /></button>
   </div>
 }
 
 export function NotificationBell() {
-  const { notifications: items, updateNotifications: setItems, session, source } = useStore()
-  const baseline = React.useRef(items)
+  const { notifications: allItems, updateNotifications: setItems, session, source } = useStore()
+  const sim = useSimulator()
+  const through = sim.status === "loading" ? sim.result?.endedAt ?? null
+    : sim.status === "playing" || sim.status === "paused" ? sim.visibleEvents[0]?.occurredAt ?? sim.result?.startedAt ?? null : undefined
+  const items = React.useMemo(() => notificationsThrough(allItems, through), [allItems, through])
+  const seen = React.useRef(new Set(allItems.map(item => item.id)))
   const [toasts, setToasts] = React.useState<ShopNotification[]>([])
   const [connectionError, setConnectionError] = React.useState("")
   const [readError, setReadError] = React.useState("")
   const [saving, setSaving] = React.useState(false)
   const dismiss = React.useCallback((id: string) => setToasts(current => current.filter(item => item.id !== id)), [])
+  React.useEffect(() => {
+    const fresh = newNotifications(items, seen.current)
+    if (fresh.length) setToasts(current => [...current, ...fresh])
+  }, [items])
 
   React.useEffect(() => {
     if (source !== "backend" || !session?.shopId || !session.tenantId) return
     const controller = new AbortController()
-    const seen = new Set(baseline.current.map(item => item.id))
     let retryTimer: ReturnType<typeof setTimeout> | undefined
     let retries = 0
     const connect = async () => {
@@ -52,9 +60,7 @@ export function NotificationBell() {
           if (controller.signal.aborted) return
           retries = 0
           setConnectionError("")
-          const fresh = newNotifications(snapshot, seen)
           setItems(snapshot)
-          if (fresh.length) setToasts(current => [...current, ...fresh])
         })
         if (!controller.signal.aborted) throw new Error("Notification stream disconnected")
       } catch {

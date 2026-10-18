@@ -98,45 +98,43 @@ universe, same PD/LGD model, benchmark charged for loans the AI declined).
 
 ## Judge demo: the 30-day simulator
 
-A judge-facing "fast-forward" button that drives the *real* pipeline above
-with fabricated-but-real data, instead of asking anyone to wait 30 actual
-days or stare at an empty shop. Nothing about the three pillars changes for
-this: the simulator writes ordinary rows into the owner's own currently open
-shop, then calls the same `cashflowService.runTreasury`,
-`analysisService.generateInsights`-grade verifier, and
-`agentsService.performance` that real usage calls.
+The simulator is owner/admin-only and uses a separate demo shop in the same
+PostgreSQL database. It does not write simulated trading activity into the
+source shop. The frontend marks the demo workspace and provides a return-to-source
+button; normal inventory/sales writes are blocked in the demo UI.
 
-| Piece | Where |
-| --- | --- |
-| Deterministic 30-day plan (sales/expenses/debts/engineered anomaly/guard-blocked offer/reconciled collection), seeded from `shopId + runID` | `server/src/app/modules/finance/simulator/simulatorEngine.ts` (pure, unit-tested, no DB) |
-| Orchestration: writes real `Checkout`/`ExpenseItem`/`Debt`/`DebtPayments`/`CashTransaction` rows in one transaction, then re-runs `cashflowService.runTreasury`, builds a guard-verified `TreasuryAction`, a guard-rejected lender `AiDecision`, a VERIFIED `Insight`, and `agentsService.performance` | `server/src/app/modules/finance/simulator/simulator.service.ts` |
-| API | `POST /finance/simulator/fast-forward` (body: `{ shopId, template? }`, runs all 30 days, <1s typical on a local DB — see caveat below), `GET /finance/simulator/inspect?type=&id=` (returns the real row), `POST /finance/simulator/reset` (wipes only simulator-tagged rows) |
-| Launcher | Click the "Finance Simulator" entry at the bottom-left of the sidebar (above Help & Support) — a popup above the button runs/resets the simulator, toggles the live stream drawer, and holds the speed/template controls below |
-| Client | `client/src/lib/simulator-context.tsx` drip-feeds the response **one individual transaction row at a time** (not a whole day at once) at an adjustable delay — four presets (Slow/Normal/Fast/Turbo, 400/180/70/20 ms per transaction) plus a manual millisecond input, both live-adjustable mid-run — into three layers: a collapsible "Live Business Stream" drawer with a `[↗]` inspect action per row (Layer 1), in-place chart/gauge/insight/scorecard morphing on `/finance/cashflow`, `/finance/analysis`, `/finance/agent` (Layer 2), and up to two high-signal milestone toasts — 🚨 critical shortfall, 🛡️ guardrail-blocked offer, 📈 reconciled alpha (Layer 3) |
-| Transaction templates | `template: 'LESS'` (default, present pace — one sale + occasional expense/day) or `template: 'MORE'` (same daily totals fanned out into ~3x as many smaller, real rows/day) — chosen from the sidebar popup before a run; implemented in `simulatorEngine.ts`'s `sales[]`/`expenses[]` fan-out so the narrative/insight math (`sale`/`expense` aggregates) is unaffected by the template |
+1. `POST /finance/simulator/prepare` with the source `shopId` creates or reuses its
+   demo workspace. It copies core sales, expenses, debts/payments, stock lots,
+   customer/supplier links, cash accounts/transactions and commitments, remapping
+   record IDs. Legacy simulated rows are excluded. Users, passwords, credentials
+   and external-service settings are not copied.
+2. `POST /finance/simulator/fast-forward` accepts only the demo `shopId` and an
+   optional `LESS`/`MORE` template. It advances the persisted clock by 30 days,
+   beginning the day after the latest copied activity (or the preceding run).
+   Each day is evaluated by the real deterministic treasury pipeline using that
+   day's clock. Projection narration uses the deterministic fallback inside the
+   run, avoiding 30 external AI calls.
+3. The database computation commits atomically before playback starts. Pause,
+   resume and skip control **replay**, not database writes. Transactions can be
+   inspected in the drawer. Notifications and milestone toasts show simulated
+   timestamps and are revealed when playback reaches their transaction time.
+   A reload restores the last committed run, rather than running it again.
+4. `POST /finance/simulator/reset` accepts only a demo shop. It clears that
+   workspace's ledger and derived finance outputs, notification/read records and
+   run metadata, then copies the **current source baseline** again. It is not a
+   command for cleaning old simulated rows out of a real source shop.
 
-**How "real, not staged" is enforced:** every row the simulator writes gets
-`isSimulated: true` + `simulationRunID` (additive migration, see
-`20261017120000_finance_simulator`); the `[↗]` icon in the stream opens the
-literal database record via `GET /finance/simulator/inspect`. The CRITICAL
-alert, the guard rejection, and the reconciled treasury action are not
-hand-rolled strings — they come out of the same `evaluateAlerts`,
-`guardOffer`/`guardTreasuryActions`, and `verifyHypothesis` functions real
-traffic uses; the simulator only engineers the *inputs* (a shortfall-shaped
-30 days, a high-APR product pricing) that make those real functions land on
-the demo-relevant branch. `reset()` diffs against alerts that were already
-OPEN before the run so it only deletes what the run actually created.
+Prepare, run and reset use database transactions and advisory locks. A concurrent
+operation on the same workspace is rejected; failed operations roll back. Runs
+have a 120-second transaction timeout, not a wall-clock speed guarantee. The
+additive migration `20261018120000_isolated_simulation_workspace` stores the
+source relationship, baseline date, current date, run ID and last result. The
+existing deployment pipeline applies it with `prisma migrate deploy`.
 
-**Honest caveat:** "fast backend transaction" here means one Postgres
-transaction, not a literal sub-200ms wall-clock guarantee — on a remote/managed
-database the ~90 ('LESS') to ~280 ('MORE') sequential writes a 30-day run
-performs will typically take low seconds, not milliseconds; the transaction
-timeout is set generously (30s) to avoid failing on slower connections. The
-drip-feed animation starts as soon as the single response arrives and plays
-back at whatever per-transaction delay is currently selected, so perceived
-playback time is independent of backend latency — the sidebar popup shows a
-live "estimated total/remaining time" based on the chosen delay and the
-actual (or, before a run, a typical) transaction count.
+Verification includes `tests/simulator-workspace.integration.test.ts`, which is
+opt-in with `SIMULATOR_TEST_DATABASE=1` and refuses any database except a local
+loopback database named `simulator_test`. Normal `npm test` skips this real-database
+test; it must be run separately against a disposable migrated database.
 
 ## Honest limitations (v1, per PLAN §12)
 

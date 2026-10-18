@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import prisma from '../../../../shared/prisma';
+import prisma, { shopClock } from '../shared/database';
 import { callStructured, hashInput } from '../../../../lib/ai/client';
 import * as prompts from '../../../../lib/ai/prompts';
 import { roundCurrency, sumMoney } from '../shared/money';
@@ -16,7 +16,8 @@ const DAY = 86400000;
 
 async function loadProductSales(tenantId: string, shopId: string, days = 90): Promise<ProductSale[]> {
   const raw = db();
-  const start = new Date(Date.now() - days * DAY);
+  const asOf = await shopClock(tenantId, shopId);
+  const start = new Date(asOf.getTime() - days * DAY);
   const items = await raw.checkoutItem.findMany({
     where: { tenantID: tenantId, checkout: { shopID: shopId, tenantID: tenantId, isDraft: false }, createdAt: { gte: start } },
     select: { productName: true, variantId: true, quantity: true, discountedPrice: true, lotId: true, createdAt: true },
@@ -51,17 +52,18 @@ async function loadProductSales(tenantId: string, shopId: string, days = 90): Pr
     ...p,
     revenue: roundCurrency(p.revenue),
     cogs: roundCurrency(p.cogs),
-    daysSinceLastSale: lastSale ? Math.floor((Date.now() - lastSale) / DAY) : (lastSold.get(p.productKey) ? Math.floor((Date.now() - new Date(lastSold.get(p.productKey)!).getTime()) / DAY) : null),
+    daysSinceLastSale: lastSale ? Math.floor((asOf.getTime() - lastSale) / DAY) : (lastSold.get(p.productKey) ? Math.floor((asOf.getTime() - new Date(lastSold.get(p.productKey)!).getTime()) / DAY) : null),
   }));
 }
 
 async function metricPack(tenantId: string, shopId: string) {
+  const asOf = await shopClock(tenantId, shopId);
   const aggregates = await loadProfileAggregates(tenantId, shopId, 90);
   const profile = buildProfile(aggregates);
   const products = await loadProductSales(tenantId, shopId);
   const econ = productEconomics(products);
   const debts = await loadOpenDebts(tenantId, shopId);
-  const overdue = debts.filter((d) => (Date.now() - d.createdAt.getTime()) / DAY > 30);
+  const overdue = debts.filter((d) => (asOf.getTime() - d.createdAt.getTime()) / DAY > 30);
   const sales = await db().checkout.findMany({
     where: { shopID: shopId, tenantID: tenantId, isDraft: false },
     select: { buyerID: true, totalPrice: true },
@@ -102,7 +104,7 @@ export const analysisService = {
   async getMetrics(tenantId: string, shopId: string) {
     await assertShop(tenantId, shopId);
     const pack = await metricPack(tenantId, shopId);
-    const period = new Date().toISOString().slice(0, 7);
+    const period = (await shopClock(tenantId, shopId)).toISOString().slice(0, 7);
     const snapshots = [
       { metricKey: 'gross_margin', value: pack.profile.grossMargin, unit: 'PCT' },
       { metricKey: 'dso', value: pack.profile.dso, unit: 'DAYS' },
@@ -322,7 +324,7 @@ export const analysisService = {
   async getForecast(tenantId: string, shopId: string, target = 'REVENUE', horizon = 30) {
     await assertShop(tenantId, shopId);
     const daily = await loadDailySales(tenantId, shopId, 120);
-    const result = forecastDaily(daily, horizon, new Date());
+    const result = forecastDaily(daily, horizon, await shopClock(tenantId, shopId));
     const row = await db().forecast.create({
       data: {
         tenantID: tenantId, shopID: shopId, target: target as any, horizonDays: horizon,

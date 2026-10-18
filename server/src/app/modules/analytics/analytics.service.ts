@@ -3,6 +3,7 @@ import { IDateFilters } from '../../../interfaces/common';
 import prisma from '../../../shared/prisma';
 import ApiError from '../../../errors/ApiError';
 import httpStatus from 'http-status';
+import { shopClock } from '../finance/shared/database';
 
 const validateTenantId = (tenantId: string) => {
     if (!tenantId) {
@@ -186,8 +187,9 @@ const getDashboard = async (tenantId: string, shopId: string, includePurchases: 
     validateTenantId(tenantId);
     if (!shopId) throw new ApiError(httpStatus.BAD_REQUEST, 'Shop ID is required');
     await validateShopByTenant(tenantId, shopId);
-    const today = new Date().toISOString().slice(0, 10);
-    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const asOf = await shopClock(tenantId, shopId);
+    const today = asOf.toISOString().slice(0, 10);
+    const yesterday = new Date(asOf.getTime() - 86400000).toISOString().slice(0, 10);
     const salesWhere: Prisma.CheckoutWhereInput = {
         tenantID: tenantId, shopID: shopId, isDraft: false,
         status: { in: ['PAID', 'UNPAID', 'PENDING'] },

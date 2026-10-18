@@ -34,9 +34,9 @@ export function SimulatorDrawer() {
       <Sheet open={sim.drawerOpen} onOpenChange={sim.setDrawerOpen}>
         <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
           <SheetHeader className="border-b p-4 pr-12">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <SheetTitle>Live Business Stream</SheetTitle>
-              {(sim.status === "playing" || sim.status === "paused") && (
+              {(sim.status === "playing" || sim.status === "paused") && (<>
                 <Button
                   size="sm"
                   variant="outline"
@@ -46,7 +46,8 @@ export function SimulatorDrawer() {
                   {sim.status === "playing" ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
                   {sim.status === "playing" ? "Pause" : "Resume"}
                 </Button>
-              )}
+                <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={sim.skipToEnd}>Skip to end</Button>
+              </>)}
             </div>
             <SheetDescription>
               {sim.result
@@ -57,7 +58,7 @@ export function SimulatorDrawer() {
                         ? `paused at day ${sim.dayIndex} of 30 (${sim.revealedEvents}/${sim.totalEvents})`
                         : `${sim.visibleEvents.length} rows written`
                   }`
-                : "Hit \"Fast-forward 30 days\" to stream fabricated-but-real rows as they hit the database."}
+                : "Fast-forward creates an isolated demo copy and simulates its next 30 days. Playback replays committed demo records; pausing does not undo writes."}
             </SheetDescription>
           </SheetHeader>
           <div className="flex-1 space-y-2 overflow-y-auto p-4">
@@ -128,7 +129,7 @@ function InspectDialog({ event, onClose }: { event: VisibleStreamEvent | null; o
             {event ? LABELS[event.type] : ""} <Badge variant="outline">real database row</Badge>
           </DialogTitle>
           <DialogDescription>
-            This is the actual {event ? LABELS[event.type].toLowerCase() : "record"} written by the simulator — not a mock. Proof the demo touches real tables.
+            Actual {event ? LABELS[event.type].toLowerCase() : "record"} in the isolated demo workspace. Your source shop is not modified.
           </DialogDescription>
         </DialogHeader>
         {loading && (
