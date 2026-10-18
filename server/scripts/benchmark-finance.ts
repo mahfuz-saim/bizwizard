@@ -3,6 +3,7 @@ import path from 'node:path';
 import { callStructured, setAiBudgetGate } from '../src/lib/ai/client';
 import { comparisonChoice, comparisonInput, fixtureChoice, measureComparison } from '../src/app/modules/finance/agents/comparison';
 import { digest, saveEvidence, serverRoot } from './evidence-output';
+import { benchmarkSummary } from './cli-report';
 
 async function main() {
   const args = process.argv.slice(2);
@@ -40,6 +41,7 @@ async function main() {
     cases.push({ inputSha256: digest(input), mode: live ? 'live-provider' : 'fixture-policy-not-AI', success, valid, usedFallback: result.usedFallback, model: result.model, latencyMs: Date.now()-started,
       usage: { inputTokens: result.run.inputTokens, outputTokens: result.run.outputTokens, costUsdEstimate: result.run.costUsd, status: result.run.status }, comparison: comparison ?? null });
   }
+  console.log(benchmarkSummary(live,cases));
   saveEvidence('benchmark-results', { mode: live ? 'live-provider' : 'fixture-policy-not-AI', success: !failed, budgetUsdEstimateLimit: limit, costNote: 'Application pricing estimates are not a provider billing guarantee. API cost is USD and is not subtracted from BDT outcomes without an explicit exchange rate.', cases,
     limitations: 'Standalone policy selection over synthetic independent role models, not a replay of the application multi-agent negotiation pipeline, not a full economic backtest, not application scorecard alpha and not proof of real-world improvement. Fixture mode makes no AI-quality claim. All three risk cases are preserved, including failures.' });
   if (failed) process.exitCode = 1;

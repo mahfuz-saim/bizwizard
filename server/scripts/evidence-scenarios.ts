@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync, statSync } from 'node:fs';
 import { runMatchedReplay, replayHash } from '../src/app/modules/finance/agents/matchedReplay';
 import { digest, saveEvidence, serverRoot } from './evidence-output';
+import { evidenceSummary, replaySummary, type EvidenceOperation } from './cli-report';
 
 export function evidenceEnvironment(raw: string | undefined) {
   if (!raw) throw new Error('Set EVIDENCE_DATABASE_URL to a disposable local simulator_test database');
@@ -25,12 +26,13 @@ async function main() {
     const exported=document.report??document;
     const outcome=runMatchedReplay(exported.snapshot,exported.choices,exported.seed);
     const success=exported.status==='COMPLETE'&&replayHash(outcome)===replayHash(exported.outcome);
+    console.log(replaySummary(success,outcome.scorecards));
     saveEvidence('matched-replay-verification',{success,evaluationID:exported.id,outcomeHash:replayHash(outcome),scorecards:outcome.scorecards,mode:'saved-sandbox-replay-no-database-or-api'});
     if (!success) process.exitCode=1;
     return;
   }
   const { env, schema } = evidenceEnvironment(process.env.EVIDENCE_DATABASE_URL);
-  const operations: unknown[] = [];
+  const operations: (EvidenceOperation & { command: string; exitCode: number | null; events: unknown[]; capturedOutputSha256: string })[] = [];
   let success = true;
   const steps = [
     { name: 'apply-migrations', args: ['node_modules/prisma/build/index.js','migrate','deploy'] },
@@ -58,9 +60,10 @@ async function main() {
     const skipped = summaries.some(line => /^# skipped [1-9]/.test(line));
     const ok = code === 0 && !skipped && events.every(e => e.success) && (step.name !== 'finance-completion' || events.length >= 6) && (step.name === 'apply-migrations' || summaries.some(line => /^# pass [1-9]/.test(line)));
     operations.push({ name: step.name, command: `node ${step.args.join(' ')}`, success: ok, exitCode: code, durationMs: Date.now()-start, summaries, events, capturedOutputSha256: digest(output) });
-    console.log(`${step.name}: ${ok ? 'PASS' : 'FAIL'}${skipped ? ' (skipped scenarios are not accepted as evidence)' : ''}`);
+    console.log(`${step.name}: ${ok ? 'PASS' : 'FAIL'} (${((Date.now()-start)/1000).toFixed(2)}s)${skipped ? ' (skipped scenarios are not accepted as evidence)' : ''}`);
     if (!ok) { success = false; break; }
   }
+  console.log(evidenceSummary(success,operations,steps.length));
   saveEvidence('sandbox-operation-logs',{ success, mode: 'local-postgresql-deterministic-services-and-loopback-http', isolation: { host: '127.0.0.1', database: 'simulator_test', schema },
     externalAiCalled: false, operations,
     coverage: ['automatic cash source writes/edits/deletes and rollback','supplier obligations and same-shop recorded purchase evidence','expense-spike alert','tenant/shop permissions and approval gates','matching/negotiation/application schedule','30-day observed capital measurement','isolated demo copy, next-month simulation, locking and reset','shop-specific frozen inputs, paired replay, scoped export and duplicate paid-call protection'],

@@ -220,6 +220,9 @@ failed rather than silently retried with fresh outcomes or another paid call.
 
 ## Evidence files
 
+Both runners print aligned terminal summaries with timings and results. Colours are
+TTY-only; set `NO_COLOR=1` to disable them. Full evidence remains in the JSON files.
+
 Each runner creates a timestamped, uniquely named folder under `evidence/runs/`:
 
 - `benchmark-results.json`: inputs, choices, constraints, measurements, usage, limitations.
