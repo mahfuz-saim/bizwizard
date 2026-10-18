@@ -100,7 +100,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Greeting + Sell Banner */}
-      <div className="flex flex-col gap-4 rounded-2xl bg-linear-to-br from-brand-800 to-brand-600 p-6 text-white md:flex-row md:items-center md:justify-between md:p-8">
+      <div className="flex flex-col gap-4 rounded-2xl bg-linear-to-br from-brand-800 to-brand-600 p-4 text-white sm:p-6 md:flex-row md:items-center md:justify-between md:p-8">
         <div>
           <h2 className="text-2xl font-bold">Welcome back 👋</h2>
           <p className="mt-1 text-sm text-brand-100">
@@ -122,7 +122,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="metric-grid grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Today's Sales"
           value={formatCurrency(stats.todaySell)}

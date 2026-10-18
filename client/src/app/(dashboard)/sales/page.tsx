@@ -92,7 +92,7 @@ export default function SalesPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="metric-grid grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card><CardContent className="p-4">
           <p className="text-xs font-medium text-muted-foreground">Total Sales</p>
           <p className="mt-1 text-2xl font-bold text-success">{formatCurrency(totalSales)}</p>
@@ -127,7 +127,7 @@ export default function SalesPage() {
           </Tabs>
           <div className="rounded-lg border">
             {query.remote && <PageRefreshState loading={query.loading} error={query.error} retry={query.retry} />}
-            <Table aria-busy={query.remote && query.loading}>
+            <Table className="mobile-records" aria-busy={query.remote && query.loading}>
               <TableHeader className="bg-muted/50">
                 <TableRow>
                   <TableHead>Date</TableHead>
@@ -150,24 +150,24 @@ export default function SalesPage() {
                     const isSale = t.type === "SALE"
                     return (
                       <TableRow key={t.id}>
-                        <TableCell className="whitespace-nowrap text-sm">{formatDate(t.createdAt)}</TableCell>
-                        <TableCell>
+                        <TableCell data-label="Date" className="whitespace-nowrap text-sm">{formatDate(t.createdAt)}</TableCell>
+                        <TableCell data-label="Type">
                           <Badge variant={isSale ? "success" : "warning"} className="gap-1">
                             {isSale ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownLeft className="h-3 w-3" />}
                             {t.type}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-sm font-medium">
+                        <TableCell data-label="Party" className="text-sm font-medium">
                           {isSale ? t.customerName : t.supplierName}
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{t.items.length} items</TableCell>
-                        <TableCell>
+                        <TableCell data-label="Items" className="text-sm text-muted-foreground">{t.items.length} items</TableCell>
+                        <TableCell data-label="Payment">
                           <Badge variant="outline">{t.paymentMethod === "UNKNOWN" ? "Not recorded" : t.paymentMethod}</Badge>
                         </TableCell>
-                        <TableCell className={`text-right font-semibold ${isSale ? "text-success" : ""}`}>
+                        <TableCell data-label="Total" className={`text-right font-semibold ${isSale ? "text-success" : ""}`}>
                           {formatCurrency(t.total)}
                         </TableCell>
-                        <TableCell className={`text-right font-medium ${t.due > 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                        <TableCell data-label="Due" className={`text-right font-medium ${t.due > 0 ? "text-destructive" : "text-muted-foreground"}`}>
                           {t.paymentTracked === false ? "Not tracked" : t.due > 0 ? formatCurrency(t.due) : "—"}
                         </TableCell>
                       </TableRow>

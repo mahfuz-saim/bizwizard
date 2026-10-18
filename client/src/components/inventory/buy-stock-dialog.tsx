@@ -162,7 +162,7 @@ export function BuyStockDialog({ open, onOpenChange, prefillProduct }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Truck className="h-5 w-5 text-warning" />
@@ -278,9 +278,9 @@ export function BuyStockDialog({ open, onOpenChange, prefillProduct }: Props) {
                 return (
                   <div
                     key={idx}
-                    className="grid gap-2 border-b p-3 md:grid-cols-12 md:items-center md:gap-2 last:border-0"
+                    className="grid grid-cols-2 gap-2 border-b p-3 md:grid-cols-12 md:items-center md:gap-2 last:border-0"
                   >
-                    <div className="md:col-span-5">
+                    <div className="col-span-2 min-w-0 md:col-span-5">
                       <p className="text-sm font-medium">{p.name}</p>
                       {p.variantName && (
                         <p className="text-xs text-muted-foreground">
@@ -288,7 +288,8 @@ export function BuyStockDialog({ open, onOpenChange, prefillProduct }: Props) {
                         </p>
                       )}
                     </div>
-                    <div className="md:col-span-2">
+                    <label className="min-w-0 text-xs md:col-span-2">
+                      <span className="mb-1 block text-muted-foreground md:sr-only">Quantity</span>
                       <Input
                         type="number"
                         min={1}
@@ -298,8 +299,9 @@ export function BuyStockDialog({ open, onOpenChange, prefillProduct }: Props) {
                         }
                         className="text-right"
                       />
-                    </div>
-                    <div className="md:col-span-2">
+                    </label>
+                    <label className="min-w-0 text-xs md:col-span-2">
+                      <span className="mb-1 block text-muted-foreground md:sr-only">Unit price</span>
                       <Input
                         type="number"
                         min={0}
@@ -310,7 +312,7 @@ export function BuyStockDialog({ open, onOpenChange, prefillProduct }: Props) {
                         }
                         className="text-right"
                       />
-                    </div>
+                    </label>
                     <div className="md:col-span-2 text-right text-sm font-semibold">
                       {formatCurrency(it.quantity * it.buyPrice)}
                     </div>
@@ -319,6 +321,7 @@ export function BuyStockDialog({ open, onOpenChange, prefillProduct }: Props) {
                         type="button"
                         variant="ghost"
                         size="icon"
+                        aria-label={`Remove ${p.name}`}
                         onClick={() => removeItem(idx)}
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
@@ -370,7 +373,7 @@ export function BuyStockDialog({ open, onOpenChange, prefillProduct }: Props) {
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="sticky bottom-0 border-t bg-popover py-3 sm:static sm:border-0 sm:py-0">
             {submitError && (
               <p role="alert" className="text-sm text-destructive">
                 {submitError}

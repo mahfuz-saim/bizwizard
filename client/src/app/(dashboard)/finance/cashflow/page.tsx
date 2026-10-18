@@ -111,7 +111,7 @@ export default function CashflowPage() {
 
       <PageRefreshState loading={loading} error={error} retry={() => void load()} />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+      <div className="metric-grid grid grid-cols-1 gap-4 sm:grid-cols-4">
         <Card><CardContent className="p-4"><p className="flex items-center gap-1 text-xs text-muted-foreground"><Wallet className="h-3.5 w-3.5" /> Cash now</p><p className="mt-1 text-2xl font-bold">{fmtBDT(displayProjection?.currentCash ?? accounts?.totalCash)}</p>{(accounts?.accounts ?? []).map((a) => <p key={a.id} className="text-xs text-muted-foreground">{a.name}: {fmtBDT(a.currentBalance)}</p>)}</CardContent></Card>
         <Card className={bufferLow ? "border-destructive/50" : undefined}><CardContent className="p-4"><p className="text-xs text-muted-foreground">Days of buffer</p><p className={`mt-1 text-2xl font-bold transition-colors duration-500 ${bufferLow ? "text-destructive" : ""}`}>{displayProjection?.daysOfBuffer ?? "—"}</p><p className="text-xs text-muted-foreground">Target: 14 days{bufferLow ? " · below target" : ""}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Lowest point (90d)</p><p className="mt-1 text-2xl font-bold">{fmtBDT(displayProjection?.minProjectedBalance)}</p><p className="text-xs text-muted-foreground">{displayProjection?.troughDate ?? ""}</p></CardContent></Card>
@@ -168,7 +168,7 @@ export default function CashflowPage() {
             <CardContent className="space-y-2">
               {actions.length === 0 && <p className="text-sm text-muted-foreground">No actions yet. The treasurer only proposes from a pre-computed menu; anything moving money needs your approval.</p>}
               {actions.map((a) => (
-                <div key={a.id} className="flex items-start justify-between gap-2 rounded-lg border p-3">
+                <div key={a.id} className="flex flex-col items-start justify-between gap-2 rounded-lg border p-3 sm:flex-row">
                   <div><p className="text-sm font-medium">{a.title}</p><p className="text-xs text-muted-foreground">{a.rationale}</p><p className="text-xs">Projected {fmtBDT(a.projectedImpact)} · Realized {a.realizedImpact == null ? "pending" : fmtBDT(a.realizedImpact)} · {a.status}</p></div>
                   {a.status === "PROPOSED" && <div className="flex gap-1"><Button size="sm" onClick={() => void run(() => cashflowApi.decideAction(a.id, true))}>Approve</Button><Button size="sm" variant="ghost" onClick={() => void run(() => cashflowApi.decideAction(a.id, false))}>Reject</Button></div>}
                 </div>
@@ -179,13 +179,13 @@ export default function CashflowPage() {
           <Card>
             <CardHeader><CardTitle className="text-base">Upcoming commitments</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              {commitments.slice(0, 6).map((c) => <p key={c.id} className="flex justify-between text-sm"><span>{c.name}</span><span>{fmtBDT(c.amount)} · {String(c.dueDate).slice(0, 10)}</span></p>)}
-              <div className="grid grid-cols-3 gap-2">
+              {commitments.slice(0, 6).map((c) => <p key={c.id} className="flex flex-col justify-between gap-1 text-sm sm:flex-row"><span>{c.name}</span><span>{fmtBDT(c.amount)} · {String(c.dueDate).slice(0, 10)}</span></p>)}
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <Input placeholder="Name" value={commitName} onChange={(e) => setCommitName(e.target.value)} />
                 <Input placeholder="Amount" inputMode="numeric" value={commitAmount} onChange={(e) => setCommitAmount(e.target.value)} />
-                <Input type="date" value={commitDate} onChange={(e) => setCommitDate(e.target.value)} />
+                <Input type="date" aria-label="Commitment due date" className="min-w-0" value={commitDate} onChange={(e) => setCommitDate(e.target.value)} />
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <Button size="sm" disabled={busy || !commitName || !commitAmount || !commitDate} onClick={() => void run(async () => { await cashflowApi.createCommitment({ name: commitName, amount: Number(commitAmount), dueDate: commitDate }); setCommitName(""); setCommitAmount(""); setCommitDate("") })}>Add commitment</Button>
                 <Input placeholder='Or paste a note: "Rent 45000 due in 5 days, monthly"' value={noteText} onChange={(e) => setNoteText(e.target.value)} />
                 <Button size="sm" variant="outline" disabled={busy || !noteText} onClick={() => void run(async () => { await cashflowApi.extractCommitment(noteText); setNoteText("") })}>Extract</Button>

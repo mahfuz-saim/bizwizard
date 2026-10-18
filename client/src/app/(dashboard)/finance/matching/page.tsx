@@ -81,7 +81,7 @@ export default function MatchingPage() {
 
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2 text-base"><HandCoins className="h-4 w-4" /> What do you need?</CardTitle></CardHeader>
-        <CardContent className="flex flex-wrap items-end gap-3">
+        <CardContent className="grid grid-cols-1 items-end gap-3 sm:flex sm:flex-wrap [&>label]:min-w-0 [&>label>select]:w-full">
           <label className="text-sm">Amount (BDT)<Input inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} /></label>
           <label className="text-sm">Tenor (months)<Input inputMode="numeric" value={tenor} onChange={(e) => setTenor(e.target.value)} /></label>
           <label className="text-sm">Purpose

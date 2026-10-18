@@ -120,7 +120,7 @@ function AnalysisInsights() {
 
       <PageRefreshState loading={loading} error={error} retry={() => void load()} />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+      <div className="metric-grid grid grid-cols-1 gap-4 sm:grid-cols-4">
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Revenue (90d)</p><p className="mt-1 text-2xl font-bold">{fmtBDT(pnl.revenue)}</p><p className="text-xs text-muted-foreground">Gross margin {fmtPct(pnl.grossMargin)}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Cash conversion cycle</p><p className="mt-1 text-2xl font-bold">{fmtDecimal(wc.cashConversionCycle)} days</p><p className="text-xs text-muted-foreground">DSO {fmtDecimal(wc.dso)} · DIO {fmtDecimal(wc.dio)} · DPO {fmtDecimal(wc.dpo)}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Stock value</p><p className="mt-1 text-2xl font-bold">{fmtBDT(wc.inventoryValue)}</p><p className="text-xs text-muted-foreground">Receivables {fmtBDT(wc.receivables)}</p></CardContent></Card>
@@ -137,17 +137,17 @@ function AnalysisInsights() {
               const residualPct = i.verifiedMetrics && typeof i.verifiedMetrics.residualPct === "number" ? i.verifiedMetrics.residualPct : null
               return (
                 <div key={i.id} className={`rounded-lg border p-3 ${isSimPreview ? "animate-in slide-in-from-top-2 fade-in border-brand-400 bg-brand-50/50 duration-500 dark:bg-brand-900/30" : ""}`}>
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-col items-start justify-between gap-2 sm:flex-row">
                     <p className="text-sm font-medium">{i.title}</p>
                     <div className="flex items-center gap-1.5">
                       {residualPct != null && <Badge variant="outline" title="Counterfactual: remove the candidate cause and re-measure the gap">Δ residual {fmtPct(residualPct)}</Badge>}
                       <Badge variant={i.verificationStatus === "VERIFIED" ? "default" : "secondary"}>{i.verificationStatus === "VERIFIED" ? <><CheckCircle2 className="mr-1 h-3 w-3" /> Verified</> : <><XCircle className="mr-1 h-3 w-3" /> {i.verificationStatus}</>}</Badge>
                     </div>
                   </div>
-                  <p className="mt-1 text-sm text-muted-foreground">{i.summary}</p>
+                  <p className="mt-1 wrap-break-word text-sm text-muted-foreground">{i.summary}</p>
                   <p className="text-xs text-muted-foreground">Hypothesis: {i.hypothesis}</p>
                   {i.verifiedMetrics && <p className="text-xs text-muted-foreground">Evidence: {Object.entries(i.verifiedMetrics).map(([k, v]) => `${k}=${typeof v === "number" ? fmtDecimal(v) : String(v)}`).join(" · ")}</p>}
-                  <div className="mt-2 flex gap-2">
+                  <div className="mt-2 flex flex-wrap gap-2">
                     <Button size="sm" variant="outline" disabled={busy || isSimPreview} onClick={() => void run(() => analysisApi.createCapitalDecision({ insightID: i.id, decisionType: i.insightType === "WORKING_CAPITAL" ? "LIQUIDATE_STOCK" : "COLLECT_FAST", title: `Act on: ${i.title}`, rationale: i.hypothesis, capitalReleased: 0, projectedProfitImpact: 0 }))}>Propose capital action</Button>
                     <Button size="sm" variant="ghost" disabled={busy || isSimPreview} onClick={() => void run(() => analysisApi.dismissInsight(i.id))}>Dismiss</Button>
                   </div>
@@ -162,7 +162,7 @@ function AnalysisInsights() {
             <CardHeader><CardTitle className="text-base">Product economics (ABC quadrants)</CardTitle></CardHeader>
             <CardContent className="space-y-1">
               {econ.slice(0, 10).map((p) => (
-                <p key={p.productKey} className="flex justify-between text-sm"><span>{p.productName} <Badge variant="outline">{p.quadrant.replace("_", " ")}</Badge>{p.deadStock ? <Badge variant="destructive">dead stock</Badge> : null}</span><span>{fmtBDT(p.contribution)} · {fmtPct(p.contributionMargin)}</span></p>
+                <div key={p.productKey} className="flex flex-col justify-between gap-1 text-sm sm:flex-row"><span className="min-w-0 wrap-break-word">{p.productName} <Badge variant="outline">{p.quadrant.replace("_", " ")}</Badge>{p.deadStock ? <Badge variant="destructive">dead stock</Badge> : null}</span><span className="shrink-0">{fmtBDT(p.contribution)} · {fmtPct(p.contributionMargin)}</span></div>
               ))}
               {econ.length === 0 && <p className="text-sm text-muted-foreground">No product sales in the window yet.</p>}
             </CardContent>

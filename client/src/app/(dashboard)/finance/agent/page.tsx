@@ -99,7 +99,8 @@ export default function AgentLedgerPage() {
       <Card>
         <CardHeader><CardTitle className="text-base">Scorecards — alpha vs the pinned benchmark</CardTitle></CardHeader>
         <CardContent className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <p className="mb-2 text-xs text-muted-foreground sm:hidden">Swipe horizontally to see all scorecard columns.</p>
+          <table className="w-full min-w-[640px] text-sm">
             <thead><tr className="text-left text-muted-foreground"><th className="py-1">Agent</th><th>Decisions</th><th>Executed</th><th>Guard rejects</th><th>Realized</th><th>Benchmark</th><th>Alpha</th><th>Score</th></tr></thead>
             <tbody>
               {performance.map((p) => <PerfRow key={p.agentType} p={p} />)}
@@ -121,7 +122,7 @@ export default function AgentLedgerPage() {
                 <div key={p.id} className="rounded-lg border p-3">
                   <div className="flex items-center justify-between"><p className="text-sm font-medium">{p.name}</p><Badge variant="outline">v{p.version}</Badge></div>
                   <p className="text-xs text-muted-foreground">{p.objective}</p>
-                  <div className="mt-2 grid grid-cols-3 gap-2">
+                  <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
                     <label className="text-xs">Risk appetite (0–1)<Input value={draft.risk} onChange={(e) => set({ risk: e.target.value })} /></label>
                     <label className="text-xs">Max exposure<Input value={draft.exposure} onChange={(e) => set({ exposure: e.target.value })} placeholder="none" /></label>
                     <label className="text-xs">Buffer days<Input value={draft.buffer} onChange={(e) => set({ buffer: e.target.value })} placeholder="—" /></label>
@@ -172,7 +173,7 @@ function PerfRow({ p }: { p: Perf }) {
   const justUpdated = Math.abs(alpha - p.alpha) > 0.5
   return (
     <tr className="border-t">
-      <td className="py-2 font-medium">{p.agentType.replaceAll("_", " ")}</td>
+      <td className="whitespace-nowrap py-2 pr-3 font-medium">{p.agentType.replaceAll("_", " ")}</td>
       <td>{p.decisionsCount}</td><td>{p.executedCount}</td><td>{p.guardRejects}</td>
       <td className={justUpdated ? "text-emerald-600 transition-colors" : ""}>{fmtBDT(realized)}</td><td>{fmtBDT(p.benchmarkImpact)}</td>
       <td className={`font-semibold transition-colors ${alpha >= 0 ? "text-emerald-600" : "text-destructive"}`}>{fmtBDT(alpha)}</td>
