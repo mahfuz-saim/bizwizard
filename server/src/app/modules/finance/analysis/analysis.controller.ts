@@ -10,6 +10,7 @@ const ok = (res: Response, message: string, data: unknown, code: number = httpSt
   sendResponse(res, { success: true, statusCode: code, message, data });
 
 export const analysisController = {
+  measureCapitalDecision: catchAsync(async (req: Request, res: Response) => ok(res, '30-day observed outcome measured; not causal attribution', await analysisService.measureCapitalDecision(tenant(req), shop(req), req.params.id))),
   getMetrics: catchAsync(async (req: Request, res: Response) => ok(res, 'Metric pack computed', await analysisService.getMetrics(tenant(req), shop(req)))),
   getProductEconomics: catchAsync(async (req: Request, res: Response) => ok(res, 'Product economics computed', await analysisService.getProductEconomics(tenant(req), shop(req)))),
   getWorkingCapital: catchAsync(async (req: Request, res: Response) => ok(res, 'Working capital computed', await analysisService.getWorkingCapital(tenant(req), shop(req)))),

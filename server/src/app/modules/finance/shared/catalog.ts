@@ -75,7 +75,7 @@ export interface CatalogClient {
     upsert: (args: unknown) => Promise<unknown>;
     count: (args?: unknown) => Promise<number>;
   };
-  aiAgentPolicy: { upsert: (args: unknown) => Promise<unknown>; count: (args?: unknown) => Promise<number> };
+  aiAgentPolicy: { upsert: (args: unknown) => Promise<unknown>; count: (args?: unknown) => Promise<number>; findFirst: (args: unknown) => Promise<unknown> };
 }
 
 export async function ensureCatalog(db: CatalogClient): Promise<{ providers: number; products: number }> {
@@ -117,14 +117,17 @@ export async function ensureCatalog(db: CatalogClient): Promise<{ providers: num
   return { providers: providerIds.size, products };
 }
 
-export async function ensureDefaultPolicies(db: CatalogClient): Promise<void> {
+export async function ensureDefaultPolicies(db: CatalogClient, tenantID?: string, shopID?: string): Promise<void> {
   for (const p of DEFAULT_POLICIES) {
-    const id = `policy-${p.agentType.toLowerCase().replace(/_/g, '-')}`;
+    if (tenantID && shopID && await db.aiAgentPolicy.findFirst({ where: { tenantID, shopID, agentType: p.agentType, isActive: true } })) continue;
+    const id = `policy-${p.agentType.toLowerCase().replace(/_/g, '-')}${tenantID && shopID ? `-${tenantID}-${shopID}` : ''}`;
     await db.aiAgentPolicy.upsert({
       where: { id },
-      update: { isActive: true },
+      update: { id },
       create: {
         id,
+        tenantID: tenantID ?? null,
+        shopID: shopID ?? null,
         agentType: p.agentType,
         name: p.name,
         objective: p.objective,

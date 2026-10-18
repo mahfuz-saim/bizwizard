@@ -11,6 +11,7 @@ import { evaluateEligibility, deterministicScore, type ProductLike } from '../sh
 import { guardOffer, clampAiScore, blendScore } from '../shared/guard';
 import { ensureCatalog, ensureDefaultPolicies } from '../shared/catalog';
 import { priceOfferCore, runNegotiation } from '../agents/agentCore';
+import ApiError from '../../../../errors/ApiError';
 
 const db = () => prisma as any;
 
@@ -51,7 +52,6 @@ export const matchingService = {
   async listProviders(tenantId: string) {
     void tenantId;
     await ensureCatalog(db());
-    await ensureDefaultPolicies(db());
     const providers = await db().financeProvider.findMany({
       where: { isActive: true },
       include: { products: { where: { isActive: true } } },
@@ -79,7 +79,7 @@ export const matchingService = {
   async runMatching(tenantId: string, shopId: string, body: any) {
     const shop = await assertShop(tenantId, shopId);
     await ensureCatalog(db());
-    await ensureDefaultPolicies(db());
+    await ensureDefaultPolicies(db(), tenantId, shopId);
     const requestedAmount = roundCurrency(body.requestedAmount);
     const tenorMonths = Number(body.preferredTenorMonths ?? body.tenorMonths ?? 6);
     const { profile, profileID } = await persistProfile(tenantId, shopId, 90);
@@ -95,6 +95,7 @@ export const matchingService = {
     const market = body.marketID
       ? await db().financingMarketState.findFirst({ where: { id: body.marketID, tenantID: tenantId, shopID: shopId } })
       : await this.createMarket(tenantId, shopId, { ...body, preferredTenorMonths: tenorMonths });
+    if (!market) throw new ApiError(404, 'Financing request not found');
     const products = await db().financeProduct.findMany({
       where: { isActive: true },
       include: { provider: true },
@@ -221,6 +222,7 @@ export const matchingService = {
               shopID: shopId,
               financeProductID: m.product.id,
               providerID: m.product.providerID,
+              marketID: market.id,
               offeredAmount: pricedOffer.offeredAmount,
               offeredRate: pricedOffer.offeredRate,
               tenorMonths: pricedOffer.tenorMonths,
@@ -270,11 +272,17 @@ export const matchingService = {
   },
 
   async negotiate(tenantId: string, shopId: string, offerID: string) {
-    const offer = await db().financingOffer.findFirst({ where: { id: offerID, tenantID: tenantId, shopID: shopId } });
+    return db().$transaction(async (tx: any) => {
+    await tx.$queryRaw`SELECT id FROM financing_offers WHERE id = ${offerID} AND "tenantID" = ${tenantId} AND "shopID" = ${shopId} FOR UPDATE`;
+    const offer = await tx.financingOffer.findFirst({ where: { id: offerID, tenantID: tenantId, shopID: shopId } });
     if (!offer) throw Object.assign(new Error('Offer not found'), { statusCode: 404 });
-    const product = await db().financeProduct.findUnique({ where: { id: offer.financeProductID }, include: { provider: true } });
+    if (!['ISSUED', 'COUNTERED'].includes(offer.status)) throw new ApiError(409, 'Only open offers can be negotiated');
+    if (offer.expiresAt <= await shopClock(tenantId, shopId)) throw new ApiError(409, 'This offer has expired');
+    const product = await tx.financeProduct.findUnique({ where: { id: offer.financeProductID }, include: { provider: true } });
+    const market = offer.marketID ? await tx.financingMarketState.findFirst({ where: { id: offer.marketID, tenantID: tenantId, shopID: shopId } }) : null;
     const { profile } = await persistProfile(tenantId, shopId, 90);
-    const existing = await db().financingNegotiation.findMany({ where: { offerID }, orderBy: { round: 'asc' } });
+    const existing = await tx.financingNegotiation.findMany({ where: { offerID }, orderBy: { round: 'asc' } });
+    if (existing.length) throw new ApiError(409, 'This negotiation is complete. Accept or reject the resulting offer.');
     const result = runNegotiation({
       offeredAmount: offer.offeredAmount,
       offeredRate: offer.offeredRate,
@@ -282,14 +290,14 @@ export const matchingService = {
       processingFeePct: product?.processingFeePct ?? 0,
       monthlyFreeCashFlow: profile.monthlyFreeCashFlow,
       grossMarginPct: profile.grossMargin,
-      ownerMaxRate: null,
+      ownerMaxRate: market?.maxRate ?? null,
       productRateMin: product?.interestRateMin ?? 1,
       riskAppetite: product?.provider?.riskAppetite ?? 0.5,
     });
     const baseRound = existing.length ? Math.max(...existing.map((e: any) => e.round)) : 0;
     const rows = [] as any[];
     for (const step of result.steps) {
-      rows.push(await db().financingNegotiation.create({
+      rows.push(await tx.financingNegotiation.create({
         data: {
           tenantID: tenantId,
           shopID: shopId,
@@ -307,7 +315,7 @@ export const matchingService = {
       }));
     }
     const fee = product?.processingFeePct ?? 0;
-    const updated = await db().financingOffer.update({
+    const updated = await tx.financingOffer.update({
       where: { id: offerID },
       data: {
         offeredRate: result.finalRate,
@@ -317,36 +325,43 @@ export const matchingService = {
         status: result.outcome === 'REJECTED' ? 'REJECTED' : 'COUNTERED',
       },
     });
-    await db().aiDecision.create({
+    await tx.aiDecision.create({
       data: {
         tenantID: tenantId, shopID: shopId, agentType: 'BORROWER_AGENT', decisionType: 'NEGOTIATE_OFFER',
         action: `Negotiated ${product?.name ?? 'offer'} to ${result.finalRate}%`,
         rationale: result.steps.map((s) => s.reasoning).join(' '),
         confidence: 0.8, model: 'deterministic-core', promptVersion: prompts.evaluateOffer.version,
         inputHash: hashInput({ offerID, rate: offer.offeredRate }),
-        inputSnapshot: { offerID }, output: JSON.parse(JSON.stringify(result)),
+        inputSnapshot: { offerID, originalAmount: offer.offeredAmount, originalTenor: offer.tenorMonths, originalTotalRepayment: offer.totalRepayment }, output: JSON.parse(JSON.stringify(result)),
         projectedImpact: roundCurrency(offer.totalRepayment - updated.totalRepayment),
         guardResult: 'PASSED', status: result.outcome === 'REJECTED' ? 'REJECTED' : 'EXECUTED',
       },
     }).catch(() => undefined);
     return { offer: updated, negotiation: [...existing, ...rows], outcome: result.outcome };
+    });
   },
 
   async acceptOffer(tenantId: string, shopId: string, offerID: string, body: any) {
-    const offer = await db().financingOffer.findFirst({ where: { id: offerID, tenantID: tenantId, shopID: shopId } });
+    return db().$transaction(async (tx: any) => {
+    await tx.$queryRaw`SELECT id FROM financing_offers WHERE id = ${offerID} AND "tenantID" = ${tenantId} AND "shopID" = ${shopId} FOR UPDATE`;
+    const offer = await tx.financingOffer.findFirst({ where: { id: offerID, tenantID: tenantId, shopID: shopId } });
     if (!offer) throw Object.assign(new Error('Offer not found'), { statusCode: 404 });
+    const existing = await tx.financingApplication.findFirst({ where: { offerID, tenantID: tenantId, shopID: shopId } });
+    if (existing) return { application: existing, offer, schedule: await tx.loanSchedule.findMany({ where: { applicationID: existing.id, tenantID: tenantId, shopID: shopId }, orderBy: { installmentNo: 'asc' } }) };
+    if (!['ISSUED', 'COUNTERED'].includes(offer.status)) throw new ApiError(409, 'This offer cannot be accepted');
+    const now = await shopClock(tenantId, shopId);
+    if (offer.expiresAt <= now) throw new ApiError(409, 'This offer has expired. Request new offers.');
     const schedule = amortizationSchedule(offer.offeredAmount, offer.offeredRate, offer.tenorMonths);
-    const application = await db().financingApplication.create({
+    const application = await tx.financingApplication.create({
       data: {
         tenantID: tenantId, shopID: shopId, financeProductID: offer.financeProductID, offerID,
         requestedAmount: offer.offeredAmount, requestedTenorMonths: offer.tenorMonths,
         status: 'SUBMITTED', submittedDocs: body?.submittedDocs ?? offer.conditions ?? [],
-        ownerApproved: true, disbursedAt: await shopClock(tenantId, shopId),
-        firstRepaymentAt: new Date((await shopClock(tenantId, shopId)).getTime() + 30 * 86400000),
+        ownerApproved: true,
+        firstRepaymentAt: new Date(now.getTime() + 30 * 86400000),
       },
     });
-    const now = await shopClock(tenantId, shopId);
-    await db().loanSchedule.createMany({
+    await tx.loanSchedule.createMany({
       data: schedule.map((s) => ({
         tenantID: tenantId, shopID: shopId, applicationID: application.id,
         installmentNo: s.installmentNo,
@@ -355,14 +370,16 @@ export const matchingService = {
         status: 'DUE',
       })),
     });
-    const updatedOffer = await db().financingOffer.update({ where: { id: offerID }, data: { status: 'ACCEPTED' } });
+    const updatedOffer = await tx.financingOffer.update({ where: { id: offerID }, data: { status: 'ACCEPTED' } });
     return { application, offer: updatedOffer, schedule };
+    });
   },
 
   async rejectOffer(tenantId: string, shopId: string, offerID: string) {
     const offer = await db().financingOffer.findFirst({ where: { id: offerID, tenantID: tenantId, shopID: shopId } });
     if (!offer) throw Object.assign(new Error('Offer not found'), { statusCode: 404 });
-    return db().financingOffer.update({ where: { id: offerID }, data: { status: 'REJECTED' } });
+    if (!['ISSUED', 'COUNTERED'].includes(offer.status)) throw new ApiError(409, 'Only open offers can be rejected');
+    return db().financingOffer.update({ where: { id: offerID, status: { in: ['ISSUED', 'COUNTERED'] } }, data: { status: 'REJECTED' } });
   },
 
   async listApplications(tenantId: string, shopId: string) {

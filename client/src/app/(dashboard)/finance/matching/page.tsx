@@ -12,7 +12,8 @@ import { useStore } from "@/lib/store"
 import { financingOrder } from "@/lib/financing-order"
 
 export default function MatchingPage() {
-  const { dataVersion } = useStore()
+  const { dataVersion, session } = useStore()
+  const canAct = ["OWNER", "ADMIN"].includes(session?.role ?? "")
   const [amount, setAmount] = React.useState("300000")
   const [tenor, setTenor] = React.useState("6")
   const [purpose, setPurpose] = React.useState("INVENTORY")
@@ -91,7 +92,7 @@ export default function MatchingPage() {
             </select>
           </label>
           <label className="text-sm">Max rate % (optional)<Input inputMode="decimal" value={maxRate} onChange={(e) => setMaxRate(e.target.value)} /></label>
-          <Button disabled={busy} onClick={() => void run()}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Find &amp; negotiate offers</Button>
+          <Button disabled={busy || !canAct} onClick={() => void run()}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Find &amp; negotiate offers</Button>
         </CardContent>
       </Card>
 
@@ -133,9 +134,9 @@ export default function MatchingPage() {
                 <p className="text-xs text-muted-foreground">Documents: {(o.conditions ?? []).join(" · ") || "Standard KYC"}</p>
                 {["ISSUED", "COUNTERED"].includes(o.status) && (
                   <div className="mt-3 flex gap-2">
-                    <Button size="sm" disabled={busy} onClick={() => void negotiate(o)}><Bot className="mr-1 h-4 w-4" /> Let agents negotiate</Button>
-                    <Button size="sm" variant="outline" disabled={busy} onClick={() => void act(() => matchingApi.accept(o.id))}><FileCheck className="mr-1 h-4 w-4" /> Accept &amp; apply</Button>
-                    <Button size="sm" variant="ghost" disabled={busy} onClick={() => void act(() => matchingApi.reject(o.id))}>Walk away</Button>
+                    {o.status === "ISSUED" && <Button size="sm" disabled={busy || !canAct} onClick={() => void negotiate(o)}><Bot className="mr-1 h-4 w-4" /> Let agents negotiate</Button>}
+                    <Button size="sm" variant="outline" disabled={busy || !canAct} onClick={() => void act(() => matchingApi.accept(o.id))}><FileCheck className="mr-1 h-4 w-4" /> Accept &amp; apply</Button>
+                    <Button size="sm" variant="ghost" disabled={busy || !canAct} onClick={() => void act(() => matchingApi.reject(o.id))}>Walk away</Button>
                   </div>
                 )}
               </CardContent>

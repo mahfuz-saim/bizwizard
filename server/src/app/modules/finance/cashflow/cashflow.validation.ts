@@ -3,6 +3,7 @@ import { z } from 'zod';
 const shopId = z.string().min(1, 'shopId is required');
 const categories = z.enum(['SALES_COLLECTION', 'INVOICE_PAYMENT', 'PRODUCT_PURCHASE', 'OPERATING_EXPENSE', 'SALARY', 'RENT', 'UTILITY', 'TAX', 'LOAN_REPAYMENT', 'LOAN_DISBURSEMENT', 'FINANCING_FEE', 'OWNER_DRAWING', 'TRANSFER', 'OTHER']);
 export const cashflowValidation = {
+  collectionEvidence: z.object({ query: z.object({ shopId }), body: z.object({ paymentID: z.string().min(1) }).strict() }),
   alertRecommendation: z.object({ query: z.object({ shopId }), body: z.object({ actionIndex: z.number().int().min(0) }).strict() }),
   alertStatus: z.object({ query: z.object({ shopId }), body: z.object({ action: z.enum(['ack', 'dismiss', 'resolve']) }).strict() }),
   shopQuery: z.object({ query: z.object({ shopId }) }),

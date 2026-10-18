@@ -63,6 +63,7 @@ export async function copyBaseline(tx: any, source: any, demoID: string) {
   await copy('cashAccount', { shopID: source.id }, () => ({ shopID: demoID }));
   await copy('cashTransaction', { shopID: source.id, isSimulated: false }, r => ({ shopID: demoID, accountID: remap(r.accountID), sourceRefID: remap(r.sourceRefID) }));
   await copy('cashCommitment', { shopID: source.id }, () => ({ shopID: demoID }));
+  await copy('aiAgentPolicy', { shopID: source.id, isActive: true }, () => ({ shopID: demoID }));
   const baselineAt = new Date(latest || Date.now());
   baselineAt.setUTCHours(23, 59, 59, 999);
   await tx.shop.update({ where: { id: demoID }, data: { simulationBaselineAt: baselineAt, simulationAsOf: baselineAt, simulationRunID: null, simulationResult: Prisma.DbNull } });
@@ -96,6 +97,8 @@ export async function restoreWorkspace(tx: any, tenantID: string, shopID: string
   await tx.notificationRead.deleteMany({ where: { notification: notices } });
   await tx.notification.deleteMany({ where: notices });
   await tx.loanSchedule.deleteMany({ where: scope });
+  await tx.treasuryActionEvidence.deleteMany({ where: scope });
+  await tx.aiAgentPolicy.deleteMany({ where: scope });
   for (const model of ['financingNegotiation', 'financingApplication', 'financingOffer', 'financingMatch', 'financingMarketState', 'businessFinancialProfile', 'financialMetricSnapshot', 'cashFlowProjection', 'agentPerformance', 'capitalDecision', 'scenario', 'forecast', 'cashAlert', 'treasuryAction', 'insight', 'aiDecision', 'cashTransaction', 'cashAccount', 'cashCommitment']) {
     await tx[model].deleteMany({ where: scope });
   }

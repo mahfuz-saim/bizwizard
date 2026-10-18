@@ -36,7 +36,8 @@ export default function AnalysisPage() {
 }
 
 function AnalysisInsights() {
-  const { dataVersion } = useStore()
+  const { dataVersion, session } = useStore()
+  const canApprove = ["OWNER", "ADMIN"].includes(session?.role ?? "")
   const sim = useSimulator()
   const [metrics, setMetrics] = React.useState<Record<string, Record<string, number>> | null>(null)
   const [insights, setInsights] = React.useState<Insight[]>([])
@@ -115,7 +116,7 @@ function AnalysisInsights() {
           <h2 className="text-2xl font-bold tracking-tight">Financial Analysis</h2>
           <p className="text-sm text-muted-foreground">Verified insights only: the Analyst proposes a cause, then deterministic code re-tests it against your data before you ever see it. Refuted ideas are kept in the log — {refuted} refuted so far.</p>
         </div>
-        <Button disabled={busy} onClick={() => void run(() => analysisApi.generateInsights())}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />} Re-analyse</Button>
+        <Button disabled={busy || !canApprove} onClick={() => void run(() => analysisApi.generateInsights())}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />} Re-analyse</Button>
       </div>
 
       <PageRefreshState loading={loading} error={error} retry={() => void load()} />
@@ -148,8 +149,8 @@ function AnalysisInsights() {
                   <p className="text-xs text-muted-foreground">Hypothesis: {i.hypothesis}</p>
                   {i.verifiedMetrics && <p className="text-xs text-muted-foreground">Evidence: {Object.entries(i.verifiedMetrics).map(([k, v]) => `${k}=${typeof v === "number" ? fmtDecimal(v) : String(v)}`).join(" · ")}</p>}
                   <div className="mt-2 flex flex-wrap gap-2">
-                    <Button size="sm" variant="outline" disabled={busy || isSimPreview} onClick={() => void run(() => analysisApi.createCapitalDecision({ insightID: i.id, decisionType: i.insightType === "WORKING_CAPITAL" ? "LIQUIDATE_STOCK" : "COLLECT_FAST", title: `Act on: ${i.title}`, rationale: i.hypothesis, capitalReleased: 0, projectedProfitImpact: 0 }))}>Propose capital action</Button>
-                    <Button size="sm" variant="ghost" disabled={busy || isSimPreview} onClick={() => void run(() => analysisApi.dismissInsight(i.id))}>Dismiss</Button>
+                    <Button size="sm" variant="outline" disabled={busy || isSimPreview || !canApprove} onClick={() => void run(() => analysisApi.createCapitalDecision({ insightID: i.id, decisionType: i.insightType === "WORKING_CAPITAL" ? "LIQUIDATE_STOCK" : "COLLECT_FAST", title: `Act on: ${i.title}`, rationale: i.hypothesis, capitalReleased: 0, projectedProfitImpact: 0 }))}>Propose capital action</Button>
+                    <Button size="sm" variant="ghost" disabled={busy || isSimPreview || !canApprove} onClick={() => void run(() => analysisApi.dismissInsight(i.id))}>Dismiss</Button>
                   </div>
                 </div>
               )
@@ -174,7 +175,7 @@ function AnalysisInsights() {
               <div className="flex flex-wrap gap-2">
                 <Input value={scenarioName} onChange={(e) => setScenarioName(e.target.value)} placeholder="Scenario name" />
                 <label className="flex items-center gap-2 text-sm">Price change %<Input className="w-24" inputMode="decimal" value={priceDelta} onChange={(e) => setPriceDelta(e.target.value)} /></label>
-                <Button disabled={busy} aria-busy={busy} onClick={() => void simulate()}>{busy && <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />}Simulate &amp; rank</Button>
+                <Button disabled={busy || !canApprove} aria-busy={busy} onClick={() => void simulate()}>{busy && <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />}Simulate &amp; rank</Button>
               </div>
               {scenarioResult && <p className="text-sm text-muted-foreground">{scenarioResult}</p>}
             </CardContent>
@@ -183,11 +184,13 @@ function AnalysisInsights() {
           <Card>
             <CardHeader><CardTitle className="text-base">Capital decisions — projected vs realized</CardTitle></CardHeader>
             <CardContent className="space-y-2">
-              {decisions.length === 0 && <p className="text-sm text-muted-foreground">None yet. Approve one and its outcome is measured after 30/60 days into the Analyst scorecard.</p>}
+              <p className="text-xs text-muted-foreground">Approval freezes a 30-day profit baseline. After another 30 days, the observed change can be measured; this is not proven causal profit and overlapping decisions are not added together.</p>
+              {decisions.length === 0 && <p className="text-sm text-muted-foreground">No capital decisions yet.</p>}
               {decisions.map((d) => (
                 <div key={d.id} className="flex items-start justify-between gap-2 rounded-lg border p-3">
                   <div><p className="text-sm font-medium">{d.title}</p><p className="text-xs text-muted-foreground">{d.decisionType.replaceAll("_", " ")} · releases {fmtBDT(d.capitalReleased)} · projected {fmtBDT(d.projectedProfitImpact)} · realized {d.realizedProfitImpact == null ? "pending" : fmtBDT(d.realizedProfitImpact)} · {d.status}</p></div>
-                  {d.status === "PROPOSED" && <Button size="sm" disabled={busy} onClick={() => void run(() => analysisApi.approveCapitalDecision(d.id))}>Approve</Button>}
+                  {d.status === "PROPOSED" && <Button size="sm" disabled={busy || !canApprove} onClick={() => void run(() => analysisApi.approveCapitalDecision(d.id))}>Approve</Button>}
+                  {d.status === "APPROVED" && <Button size="sm" disabled={busy || !canApprove} onClick={() => void run(() => analysisApi.measureCapitalDecision(d.id))}>Measure 30-day outcome</Button>}
                 </div>
               ))}
             </CardContent>

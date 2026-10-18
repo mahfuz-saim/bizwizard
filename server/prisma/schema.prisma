@@ -1993,6 +1993,7 @@ model FinancingOffer {
   shopID             String
   financeProductID   String
   providerID         String
+  marketID           String?
   offeredAmount      Float
   offeredRate        Float
   tenorMonths        Int
@@ -2226,6 +2227,7 @@ model TreasuryAction {
   status                TreasuryActionStatus @default(PROPOSED)
   requiresOwnerApproval Boolean              @default(true)
   executedAt            DateTime?
+  approvedAt            DateTime?
   reconciledAt          DateTime?
   createdAt             DateTime             @default(now())
 
@@ -2298,6 +2300,7 @@ model CapitalDecision {
   status                CapitalDecisionStatus @default(PROPOSED)
   approvedAt            DateTime?
   measuredAt            DateTime?
+  measurement           Json?
   createdAt             DateTime              @default(now())
 
   @@index([tenantID, shopID, status])
@@ -2403,19 +2406,44 @@ model AgentPerformance {
   executedCount         Int         @default(0)
   guardRejects          Int         @default(0)
   projectedImpactSum    Float       @default(0)
-  realizedImpactSum     Float       @default(0)
+  realizedImpactSum     Float?
   avoidedShortfallAmount Float      @default(0)
   forecastMAPE          Float?
   offerAcceptanceRate   Float?
   costSavedVsBaseline   Float?
-  benchmarkImpact       Float       @default(0)
-  alpha                 Float       @default(0)
+  benchmarkImpact       Float?
+  alpha                 Float?
   benchmarkPolicyVersion String     @default("pinned-v1")
-  score                 Float       @default(0)
+  score                 Float?
   computedAt            DateTime    @default(now())
 
   @@index([tenantID, shopID, agentType])
   @@map("agent_performance")
+}
+
+model TreasuryActionEvidence {
+  id        String   @id @default(cuid())
+  tenantID  String
+  shopID    String
+  actionID  String
+  paymentID String   @unique
+  amount    Float
+  createdAt DateTime @default(now())
+
+  @@index([tenantID, shopID, actionID])
+  @@map("treasury_action_evidence")
+}
+
+model AiBudgetMonth {
+  tenantID    String
+  periodStart DateTime
+  spentUsd    Float    @default(0)
+  reservedUsd Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@id([tenantID, periodStart])
+  @@map("ai_budget_months")
 }
 
 model AiRun {

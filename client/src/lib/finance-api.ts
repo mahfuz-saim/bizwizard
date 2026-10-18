@@ -80,6 +80,8 @@ export const cashflowApi = {
   extractCommitment: (text: string) =>
     data(api.post("/finance/cashflow/extract-commitment", { shopId: getShopId(), text })),
   treasuryActions: () => data(api.get("/finance/cashflow/treasury-actions", shopParams())),
+  collectionEvidence: (id: string) => data(api.get(`/finance/cashflow/treasury-actions/${id}/evidence`, shopParams())) as Promise<{ id: string; amount: number; createdAt: string }[]>,
+  recordCollection: (id: string, paymentID: string) => data(api.post(`/finance/cashflow/treasury-actions/${id}/evidence?shopId=${getShopId() ?? ""}`, { paymentID })),
   decideAction: (id: string, approve: boolean) =>
     data(api.post(`/finance/cashflow/treasury-actions/${id}/${approve ? "approve" : "reject"}?shopId=${getShopId() ?? ""}`, {})),
 }
@@ -106,6 +108,7 @@ export const analysisApi = {
     data(api.post("/finance/analysis/capital-decisions", { shopId: getShopId(), ...body })),
   approveCapitalDecision: (id: string) =>
     data(api.post(`/finance/analysis/capital-decisions/${id}/approve?shopId=${getShopId() ?? ""}`, {})),
+  measureCapitalDecision: (id: string) => data(api.post(`/finance/analysis/capital-decisions/${id}/measure?shopId=${getShopId() ?? ""}`, {})),
   report: () => data(api.get("/finance/analysis/report", shopParams())),
 }
 
@@ -113,7 +116,7 @@ export const analysisApi = {
 export const agentsApi = {
   policies: () => data(api.get("/finance/agents/policies", shopParams())),
   updatePolicy: (id: string, body: Record<string, unknown>) =>
-    data(api.patch(`/finance/agents/policies/${id}`, body)),
+    data(api.patch(`/finance/agents/policies/${id}?shopId=${getShopId() ?? ""}`, body)),
   decisions: () => data(api.get("/finance/agents/decisions", shopParams())),
   runs: () => data(api.get("/finance/agents/runs", shopParams())),
   performance: () => data(api.get("/finance/agents/performance", shopParams())),

@@ -77,7 +77,7 @@ export interface SimInsight {
 
 export interface SimPerformanceRow {
   agentType: string; decisionsCount: number; executedCount: number; guardRejects: number
-  realizedImpactSum: number; benchmarkImpact: number; alpha: number; score: number
+  realizedImpactSum: number | null; benchmarkImpact: number | null; alpha: number | null; score: number | null
 }
 
 export interface FastForwardResult {

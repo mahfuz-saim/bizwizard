@@ -2,8 +2,8 @@
 
 Implements `PLAN.md` (AI as a financial participant) on the existing BizWizard
 stack. Thesis in one line: **the AI holds a mandate and a position, takes
-binding decisions inside deterministic guards, and is scored against a pinned
-rule-based benchmark — alpha = realized − benchmark.**
+decisions inside deterministic guards, and exposes evidence for evaluating
+outcomes. Matched benchmark alpha remains pending until supported by evidence.**
 
 ## The three pillars + the ledger
 
@@ -76,8 +76,8 @@ cd client && npm test           # payload normalization + existing suites
 cd client && npm run test:backend-contract   # client payloads vs real server Zod schemas
 ```
 
-No test touches the network or a database: the OpenAI client is injected, the
-engines are pure functions, and the benchmarks are checked against
+Normal tests inject the OpenAI client and use local fixtures. Opt-in integration
+tests additionally require an isolated local PostgreSQL database. The engines are pure functions, and the benchmarks are checked against
 hand-computed expectations (including the fairness rules — same ELIGIBLE
 universe, same PD/LGD model, benchmark charged for loans the AI declined).
 
@@ -137,6 +137,35 @@ loopback database named `simulator_test`. Normal `npm test` skips this real-data
 test; it must be run separately against a disposable migrated database.
 
 ## Honest limitations (v1, per PLAN §12)
+
+### Finance hardening release
+
+- Migration `20261018160000_ai_budget` adds persistent monthly AI budget accounting,
+  unique collection-evidence links, approval/measurement metadata and an offer's
+  originating market ID. Unknown scorecard values become nullable. Existing data
+  is not deleted; apply the migration before starting the updated backend.
+- Mandates are shop/tenant-scoped, owner/admin editable, and versioned by inserting
+  a new row. Old global policies remain historical; shops without scoped policies
+  receive code defaults. Review desired mandates after deployment. Demo reset
+  copies the source shop's active mandates without changing the source.
+- Budget admission reserves estimated maximum costs before a provider request,
+  including one repair retry. Accounting includes invalid responses and retains
+  conservative charges when usage is unknown. Database failures stop paid calls.
+  A process crash can retain a reservation until reviewed; this application estimate
+  is not a substitute for provider billing limits or current pricing configuration.
+- Owner/admin approval does not move money. Collection completion links an existing
+  real debt payment recorded after approval; each payment can be credited only once.
+  Gross collections are not incremental profit. Unsupported action outcomes stay pending.
+- Capital approval freezes the preceding 30-day profit baseline. After 30 more days,
+  measurement records observed shop-level change, not causal attribution; overlapping
+  observations are not summed as agent profit. Legacy approvals without a baseline
+  cannot be measured retrospectively by this endpoint.
+- Returns and matched benchmark alpha are not manufactured from application amounts,
+  projections or arbitrary profit percentages. Pending values remain null. Sandbox
+  collections cannot exceed debt outstanding and are labeled as simulated.
+- AI input redaction covers identifying field names and common email/phone patterns;
+  arbitrary personal details in free text are not guaranteed to be detected. Use
+  synthetic demo data and never paste secrets into notes sent for AI extraction.
 
 Simulated market only — no real lender is contacted and no real money moves;
 all executions are owner-approved. Payables are not tracked by the existing

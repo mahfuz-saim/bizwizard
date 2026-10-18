@@ -8,6 +8,12 @@ const tenant = (req: Request) => req.tenantId as string;
 const shop = (req: Request) => (req.query.shopId ?? req.body?.shopId) as string;
 
 export const cashflowController = {
+  collectionEvidence: catchAsync(async (req: Request, res: Response) => {
+    sendResponse(res, { success: true, statusCode: httpStatus.OK, message: 'Available recorded collections', data: await cashflowService.collectionEvidence(tenant(req), shop(req), req.params.id) });
+  }),
+  recordCollection: catchAsync(async (req: Request, res: Response) => {
+    sendResponse(res, { success: true, statusCode: httpStatus.OK, message: 'Recorded collection linked; no new payment created', data: await cashflowService.recordCollection(tenant(req), shop(req), req.params.id, req.body.paymentID) });
+  }),
   listAccounts: catchAsync(async (req: Request, res: Response) => {
     const result = await cashflowService.listAccounts(tenant(req), shop(req));
     sendResponse(res, { success: true, statusCode: httpStatus.OK, message: 'Cash accounts retrieved', data: result });

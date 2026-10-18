@@ -393,10 +393,6 @@ export function buildReconciledTreasuryAction(input: {
     projectedBalancesAfter: adjustedBalances,
     bufferFloorAmount: 0,
   });
-  const rand = mulberry32(input.seed + 271828);
-  // Realized slightly beats projected — the "alpha vs benchmark" flavor in the
-  // reconciliation toast — because collection landed a little faster/larger
-  // than the conservative projection assumed.
-  const realizedImpact = roundCurrency(input.debtAmount * between(rand, 1.04, 1.18));
+    const realizedImpact = roundCurrency(input.debtAmount);
   return { verdict, projectedImpact: roundCurrency(input.debtAmount), realizedImpact, adjustedBalances };
 }

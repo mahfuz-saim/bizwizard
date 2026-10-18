@@ -27,6 +27,9 @@ export interface AiRunRecord {
 
 type RunSink = (run: AiRunRecord) => Promise<void> | void;
 let runSink: RunSink | null = null;
+export type AiBudgetGate = (tenantID: string, maxCostUsd: number) => Promise<{ settle: (actualCostUsd: number) => Promise<void> } | null>;
+let budgetGate: AiBudgetGate | null = null;
+export function setAiBudgetGate(gate: AiBudgetGate | null) { budgetGate = gate; }
 export const recentRuns: AiRunRecord[] = [];
 export function setAiRunSink(sink: RunSink | null): void {
   runSink = sink;
@@ -47,8 +50,8 @@ export function aiConfig() {
     modelFast: process.env.OPENAI_MODEL_FAST || 'gpt-4o-mini',
     modelReasoning: process.env.OPENAI_MODEL_REASONING || 'gpt-4.1',
     modelEmbedding: process.env.OPENAI_MODEL_EMBEDDING || 'text-embedding-3-small',
-    monthlyBudgetUsd: Number(process.env.AI_PLAN_BUDGET_USD || 2),
-    flags: (process.env.AI_FEATURE_FLAGS || 'matching:cashflow:analysis:agents')
+    monthlyBudgetUsd: Number.isFinite(Number(process.env.AI_PLAN_BUDGET_USD ?? 2)) ? Math.max(0, Number(process.env.AI_PLAN_BUDGET_USD ?? 2)) : 0,
+    flags: (process.env.AI_FEATURE_FLAGS ?? 'matching,cashflow,analysis,agents')
       .split(',')
       .map((s) => s.trim()),
   };
@@ -56,7 +59,7 @@ export function aiConfig() {
 export function aiEnabled(pillar?: string): boolean {
   const cfg = aiConfig();
   if (!cfg.apiKey) return false;
-  if (pillar && cfg.flags.length && !cfg.flags.includes(pillar) && !cfg.flags.includes('all'))
+  if (pillar && !cfg.flags.includes(pillar) && !cfg.flags.includes('all'))
     return false;
   return true;
 }
@@ -70,12 +73,13 @@ export function redactPII<T>(value: T): T {
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      if (/^(.*_)?(name|phone|email|address|number|nid)$/i.test(k) && typeof v === 'string')
+      if (/(name|phone|email|address|number|nid)$/i.test(k) && typeof v === 'string')
         out[k] = '[redacted]';
       else out[k] = redactPII(v);
     }
     return out as T;
   }
+  if (typeof value === 'string') return value.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[redacted-email]').replace(/(?:\+?88)?01[3-9][\d\s-]{8,12}\d/g, '[redacted-phone]') as T;
   return value;
 }
 
@@ -127,6 +131,11 @@ export async function callStructured<T>(call: StructuredCall<T>): Promise<Struct
   const cfg = aiConfig();
   const model = call.tier === 'reasoning' ? cfg.modelReasoning : cfg.modelFast;
   const subBudget = call.subBudgetMs ?? (call.tier === 'reasoning' ? 12000 : 6000);
+  const deadline = started + subBudget;
+  let reservation: Awaited<ReturnType<AiBudgetGate>> = null;
+  let totalInput = 0;
+  let totalOutput = 0;
+  let charge = 0;
   const finish = async (
     data: T,
     usedModel: string,
@@ -142,9 +151,9 @@ export async function callStructured<T>(call: StructuredCall<T>): Promise<Struct
       purpose: call.purpose,
       model: usedModel,
       promptVersion: call.promptVersion,
-      inputTokens: inTok,
-      outputTokens: outTok,
-      costUsd: usedFallback ? 0 : estimateCostUsd(usedModel, inTok, outTok),
+      inputTokens: totalInput || inTok,
+      outputTokens: totalOutput || outTok,
+      costUsd: charge,
       latencyMs: Date.now() - started,
       status,
       retryCount,
@@ -153,8 +162,12 @@ export async function callStructured<T>(call: StructuredCall<T>): Promise<Struct
       shopID: call.shopID ?? null,
       createdAt: new Date(),
     };
+    if (reservation) {
+      try { await reservation.settle(charge); }
+      catch { run.error = 'AI budget settlement unavailable; reservation retained'; }
+    }
     await record(run);
-    return { data: call.postProcess ? call.postProcess(data) : data, model: usedModel, inputHash, usedFallback, run };
+    return { data: call.postProcess ? call.postProcess(data) : data, model: usedFallback ? 'deterministic-fallback' : usedModel, inputHash, usedFallback, run };
   };
 
   if (!aiEnabled(call.pillar)) {
@@ -163,10 +176,20 @@ export async function callStructured<T>(call: StructuredCall<T>): Promise<Struct
 
   const fetchImpl = call.fetchImpl ?? fetch;
   const payload = JSON.stringify(redactPII(call.input));
+  const maxOutput = 2048;
+  const maxInput = Buffer.byteLength(call.system + payload, 'utf8') + 4096;
+  const attemptCap = estimateCostUsd(model, maxInput, maxOutput);
+  if (!call.tenantID || !budgetGate || !PRICE_PER_1K[model])
+    return finish(await call.fallback(), 'deterministic-fallback', true, 'GUARD_FAIL', 0, 'AI disabled: tenant budget or model pricing unavailable');
+  try { reservation = await budgetGate(call.tenantID, attemptCap * 2); }
+  catch { return finish(await call.fallback(), 'deterministic-fallback', true, 'GUARD_FAIL', 0, 'AI budget check unavailable'); }
+  if (!reservation) return finish(await call.fallback(), 'deterministic-fallback', true, 'GUARD_FAIL', 0, 'AI paused: monthly budget reached');
   let lastError = '';
   for (let attempt = 0; attempt <= 1; attempt++) {
+    if (Date.now() >= deadline) return finish(await call.fallback(), 'deterministic-fallback', true, 'TIMEOUT', attempt, 'AI deadline reached');
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), subBudget);
+    const timer = setTimeout(() => controller.abort(), Math.max(1, deadline - Date.now()));
+    let usageKnown = false;
     try {
       const res = await fetchImpl('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -178,6 +201,7 @@ export async function callStructured<T>(call: StructuredCall<T>): Promise<Struct
         body: JSON.stringify({
           model,
           temperature: 0,
+          max_completion_tokens: maxOutput,
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: call.system },
@@ -186,12 +210,13 @@ export async function callStructured<T>(call: StructuredCall<T>): Promise<Struct
               content:
                 attempt === 0
                   ? payload
-                  : `${payload}\n\nYour previous reply failed validation: ${lastError}. Reply with valid JSON only.`,
+                  : `${payload}\n\nYour previous reply failed validation: ${lastError.slice(0, 1000)}. Reply with valid JSON only.`,
             },
           ],
         }),
       });
       if (res.status === 429) {
+        usageKnown = true;
         return finish(await call.fallback(), model, true, 'RATE_LIMIT', attempt, 'rate limited');
       }
       if (!res.ok) throw new Error(`OpenAI HTTP ${res.status}`);
@@ -200,6 +225,12 @@ export async function callStructured<T>(call: StructuredCall<T>): Promise<Struct
         usage?: { prompt_tokens?: number; completion_tokens?: number };
       };
       const content = json.choices?.[0]?.message?.content ?? '';
+      const inputTokens = json.usage?.prompt_tokens ?? maxInput;
+      const outputTokens = json.usage?.completion_tokens ?? maxOutput;
+      totalInput += inputTokens;
+      totalOutput += outputTokens;
+      charge += estimateCostUsd(model, inputTokens, outputTokens);
+      usageKnown = true;
       let parsed: unknown;
       try {
         parsed = JSON.parse(content);
@@ -218,8 +249,9 @@ export async function callStructured<T>(call: StructuredCall<T>): Promise<Struct
       return finish(validated.data, model, false, 'SUCCESS', attempt, undefined,
         json.usage?.prompt_tokens ?? roughTokens(payload), json.usage?.completion_tokens ?? roughTokens(content));
     } catch (err) {
-      lastError = err instanceof Error ? err.message : String(err);
-      const isTimeout = lastError.includes('abort') || lastError.includes('Abort');
+      if (!usageKnown) { charge += attemptCap; usageKnown = true; }
+      const isTimeout = controller.signal.aborted || (err instanceof Error && err.name === 'AbortError');
+      lastError = isTimeout ? 'AI request timed out' : 'AI request failed';
       if (attempt === 1 || isTimeout)
         return finish(await call.fallback(), model, true, isTimeout ? 'TIMEOUT' : 'SCHEMA_FAIL', attempt, lastError);
     } finally {

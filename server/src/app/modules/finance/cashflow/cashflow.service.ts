@@ -79,6 +79,7 @@ export const cashflowService = {
     await assertShop(tenantId, shopId);
     const accounts = await ensureAccounts(tenantId, shopId);
     const accountID = body.accountID ?? accounts.find((a: any) => a.isPrimary)?.id ?? accounts[0]?.id;
+    if (!accounts.some((a: any) => a.id === accountID)) throw new ApiError(400, 'Choose an active account in this shop');
     const row = await db().cashTransaction.create({
       data: {
         tenantID: tenantId, shopID: shopId, accountID,
@@ -209,8 +210,11 @@ export const cashflowService = {
   },
 
   async runTreasury(tenantId: string, shopId: string, simulation?: { runID: string; occurredAt: Date }) {
+    await assertShop(tenantId, shopId);
     const asOf = simulation?.occurredAt ?? await shopClock(tenantId, shopId);
-    if (!simulationContext.getStore()) await ensureDefaultPolicies(db());
+    await ensureDefaultPolicies(db(), tenantId, shopId);
+    const policy = await db().aiAgentPolicy.findFirst({ where: { tenantID: tenantId, shopID: shopId, agentType: 'TREASURER_AGENT', isActive: true }, orderBy: { version: 'desc' } });
+    const bufferTargetDays = policy?.bufferTargetDays ?? 14;
     const projection = await this.getProjection(tenantId, shopId, 90, true);
     const txns = await loadCashTransactions(tenantId, shopId, 180);
     const history = dailyNetSeries(txns, 180, asOf);
@@ -225,7 +229,7 @@ export const cashflowService = {
       projection,
       currentCash: projection.currentCash,
       avgDailyOutflow,
-      bufferTargetDays: 14,
+      bufferTargetDays,
       openDebts: debts,
       commitmentsDueSoon: commitments.map((c: any) => ({ name: c.name, amount: c.amount, dueDate: new Date(c.dueDate).toISOString().slice(0, 10) })),
       revenue7d: sumMoney(revHist.slice(-7).map((h) => h.inflow)),
@@ -261,8 +265,7 @@ export const cashflowService = {
       savedAlerts.push(alert);
     }
     // Treasury action menu + guard + agent picks (deterministic fallback = greedy by impact).
-    const policy = await db().aiAgentPolicy.findFirst({ where: { agentType: 'TREASURER_AGENT', isActive: true }, orderBy: { version: 'desc' } }).catch(() => null);
-    const bufferFloor = roundCurrency(14 * avgDailyOutflow);
+    const bufferFloor = roundCurrency(bufferTargetDays * avgDailyOutflow);
     const menu = buildActionMenu({
       currentCash: projection.currentCash, bufferFloorAmount: bufferFloor, avgDailyOutflow,
       openDebts: debts, deferrableOutflows: [], annualYieldPct: 8, asOf,
@@ -323,7 +326,7 @@ export const cashflowService = {
 
   async executeAlertAction(tenantId: string, shopId: string, id: string, body: any) {
     await assertShop(tenantId, shopId);
-    await ensureDefaultPolicies(db());
+    await ensureDefaultPolicies(db(), tenantId, shopId);
     return db().$transaction(async (tx: any) => {
       await tx.$queryRaw`SELECT id FROM cash_alerts WHERE id = ${id} AND "tenantID" = ${tenantId} AND "shopID" = ${shopId} FOR UPDATE`;
       const alert = await tx.cashAlert.findFirst({ where: { id, tenantID: tenantId, shopID: shopId } });
@@ -334,7 +337,7 @@ export const cashflowService = {
       const targetRefID = `${id}:${body.actionIndex}`;
       const existing = await tx.treasuryAction.findFirst({ where: { tenantID: tenantId, shopID: shopId, targetRefID, status: { in: ['PROPOSED', 'APPROVED'] } } });
       if (existing) return existing;
-      const policy = await tx.aiAgentPolicy.findFirst({ where: { agentType: 'TREASURER_AGENT', isActive: true } });
+      const policy = await tx.aiAgentPolicy.findFirst({ where: { tenantID: tenantId, shopID: shopId, agentType: 'TREASURER_AGENT', isActive: true } });
       return tx.treasuryAction.create({ data: {
         tenantID: tenantId, shopID: shopId, agentPolicyID: policy.id,
         actionType: recommendation.actionType, title: `Review: ${recommendation.description}`,
@@ -395,7 +398,40 @@ export const cashflowService = {
     if (action.status !== 'PROPOSED') throw new ApiError(409, 'Only proposed actions can be approved or rejected');
     return db().treasuryAction.update({
       where: { id, status: 'PROPOSED' },
-      data: { status: approve ? 'APPROVED' : 'REJECTED' },
+      data: { status: approve ? 'APPROVED' : 'REJECTED', ...(approve ? { approvedAt: new Date() } : {}) },
+    });
+  },
+
+  async collectionEvidence(tenantId: string, shopId: string, id: string) {
+    const action = await db().treasuryAction.findFirst({ where: { id, tenantID: tenantId, shopID: shopId, actionType: 'COLLECT_DEBT', status: 'APPROVED' } });
+    if (!action?.approvedAt) throw new ApiError(409, 'Approve a collection plan before linking evidence');
+    const used = await db().treasuryActionEvidence.findMany({ where: { tenantID: tenantId, shopID: shopId }, select: { paymentID: true } });
+    return db().debtPayments.findMany({ where: {
+      debt: { tenantID: tenantId, shopID: shopId, ...(action.targetRefID && !action.targetRefID.includes(':') ? { id: action.targetRefID } : {}) },
+      id: { notIn: used.map((e: any) => e.paymentID) }, createdAt: { gte: action.approvedAt }, isSimulated: false, amount: { gt: 0 },
+    }, select: { id: true, amount: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take: 50 });
+  },
+
+  async recordCollection(tenantId: string, shopId: string, id: string, paymentID: string) {
+    return db().$transaction(async (tx: any) => {
+      await tx.$queryRaw`SELECT id FROM treasury_actions WHERE id = ${id} AND "tenantID" = ${tenantId} AND "shopID" = ${shopId} FOR UPDATE`;
+      const action = await tx.treasuryAction.findFirst({ where: { id, tenantID: tenantId, shopID: shopId, actionType: 'COLLECT_DEBT', status: 'APPROVED' } });
+      if (!action?.approvedAt) throw new ApiError(409, 'Only an approved collection plan can be completed');
+      const payment = await tx.debtPayments.findFirst({ where: { id: paymentID,
+        debt: { tenantID: tenantId, shopID: shopId, ...(action.targetRefID && !action.targetRefID.includes(':') ? { id: action.targetRefID } : {}) },
+        createdAt: { gte: action.approvedAt }, isSimulated: false, amount: { gt: 0 },
+      } });
+      if (!payment) throw new ApiError(400, 'Choose a real payment recorded after this plan was approved');
+      const claimed = await tx.treasuryActionEvidence.findUnique({ where: { paymentID } });
+      if (claimed) throw new ApiError(409, 'This payment is already linked to a completed action');
+      await tx.treasuryActionEvidence.create({ data: { tenantID: tenantId, shopID: shopId, actionID: id, paymentID, amount: roundCurrency(payment.amount) } });
+      await tx.aiDecision.create({ data: { tenantID: tenantId, shopID: shopId, agentType: 'TREASURER_AGENT', decisionType: 'COLLECTION_EVIDENCE',
+        action: action.title, rationale: 'Owner linked a recorded debt payment. This is observed cash collection, not incremental profit or causal alpha.',
+        confidence: 1, model: 'deterministic-core', promptVersion: 'collection-evidence-v1',
+        inputHash: hashInput({ id, paymentID }), inputSnapshot: { treasuryActionID: id, paymentID }, output: { amount: payment.amount },
+        projectedImpact: action.projectedImpact, realizedImpact: roundCurrency(payment.amount), guardResult: 'NO_GUARD_REQUIRED', status: 'RECONCILED', reconciledAt: new Date(),
+      } });
+      return tx.treasuryAction.update({ where: { id }, data: { realizedImpact: roundCurrency(payment.amount), status: 'RECONCILED', executedAt: payment.createdAt, reconciledAt: new Date() } });
     });
   },
 };

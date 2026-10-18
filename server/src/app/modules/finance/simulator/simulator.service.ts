@@ -121,7 +121,7 @@ export const simulatorService = {
     if (!clock) throw simulationError('Simulation requires an isolated transaction.');
     const startedAt = new Date(clock.asOf);
     await db().cashAlert.updateMany({ where: { tenantID: tenantId, shopID: shopId, isSimulated: true, status: 'OPEN' }, data: { status: 'RESOLVED', resolvedAt: startedAt } });
-    if (!await db().aiAgentPolicy.count()) await ensureDefaultPolicies(db());
+    await ensureDefaultPolicies(db(), tenantId, shopId);
     if (!await db().financeProduct.count()) await ensureCatalog(db());
     const accounts = await ensureAccounts(tenantId, shopId);
     const primary = accounts.find((a: any) => a.isPrimary) ?? accounts[0];
@@ -297,7 +297,7 @@ export const simulatorService = {
     const criticalAt = criticalNotification?.data?.simulationOccurredAt ?? dayTimestamp(plan.days[criticalCueDay - 1].date).toISOString();
 
     // --- Guaranteed, guard-verified treasury reconciliation (Layer 3: 📈 toast) ---
-    const policy = await db().aiAgentPolicy.findFirst({ where: { agentType: 'TREASURER_AGENT', isActive: true }, orderBy: { version: 'desc' } }).catch(() => null);
+    const policy = await db().aiAgentPolicy.findFirst({ where: { tenantID: tenantId, shopID: shopId, agentType: 'TREASURER_AGENT', isActive: true }, orderBy: { version: 'desc' } });
     let treasuryAction: any = null;
     if (bigDebtId) {
       const debtRow = await db().debt.findUnique({ where: { id: bigDebtId } });
@@ -328,13 +328,14 @@ export const simulatorService = {
       }).catch(() => undefined);
       if (recon.verdict.passed) {
         const payment = await db().debtPayments.create({ data: { debtId: bigDebtId, amount: recon.realizedImpact, isSimulated: true, simulationRunID, createdAt: dayTimestamp(plan.days[plan.horizonDays - 1].date, 120) } });
-        await db().debt.update({ where: { id: bigDebtId }, data: { paidAmount: recon.realizedImpact, status: 'PAID' } });
+        await db().debt.update({ where: { id: bigDebtId }, data: { paidAmount: { increment: recon.realizedImpact }, status: 'PAID' } });
         const cashTxn = await db().cashTransaction.create({
           data: { tenantID: tenantId, shopID: shopId, accountID: primary.id, direction: 'IN', amount: recon.realizedImpact, category: 'INVOICE_PAYMENT', occurredAt: dayTimestamp(plan.days[plan.horizonDays - 1].date, 120), description: `Collected: ${plan.bigDebtLabel}`, source: 'SIMULATOR', sourceRefID: payment.id, status: 'CLEARED', isSimulated: true, simulationRunID },
         });
         const lastStream = streamDays[streamDays.length - 1];
         lastStream.events.push({ type: 'DEBT_PAYMENT', id: payment.id, amount: recon.realizedImpact, direction: 'IN', description: `Treasurer collected: ${plan.bigDebtLabel}`, occurredAt: cashTxn.occurredAt.toISOString() });
         lastStream.events.push({ type: 'CASH_TRANSACTION', id: cashTxn.id, amount: recon.realizedImpact, direction: 'IN', description: 'Treasury collection cleared', occurredAt: cashTxn.occurredAt.toISOString() });
+        lastStream.runningBalance = roundCurrency(lastStream.runningBalance + recon.realizedImpact);
         await refreshBalances(tenantId, shopId);
       }
     }
@@ -380,7 +381,6 @@ export const simulatorService = {
     const performance = await agentsService.performance(tenantId, shopId);
     const finalProjection = await cashflowService.getProjection(tenantId, shopId, 90, false);
 
-    const alpha = treasuryAction?.realizedImpact != null ? roundCurrency(treasuryAction.realizedImpact - treasuryAction.projectedImpact) : 0;
     const toasts = [
       criticalAlert && {
         id: 'critical', kind: 'critical', uiCueDay: criticalCueDay, occurredAt: criticalAt,
@@ -394,7 +394,7 @@ export const simulatorService = {
       },
       treasuryAction && treasuryAction.status === 'RECONCILED' && {
         id: 'reconciled', kind: 'reconciled', uiCueDay: plan.horizonDays, occurredAt: dayTimestamp(plan.days[plan.horizonDays - 1].date, 120).toISOString(),
-        title: '📈 RECONCILED', message: `Treasury action yielded +${fmt(treasuryAction.realizedImpact)} realized impact (+${fmt(alpha)} alpha vs. benchmark).`,
+        title: '📈 RECONCILED', message: `Sandbox debt collection of ${fmt(treasuryAction.realizedImpact)} recorded. This is simulated cash collection, not real-world profit or measured benchmark alpha.`,
         actionLabel: 'View scorecard', actionHref: '/finance/agent', refID: treasuryAction.id,
       },
     ].filter(Boolean);
