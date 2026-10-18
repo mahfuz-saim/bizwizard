@@ -5,106 +5,110 @@
 
 :root {
   /* App brand palette */
-  --brand-50: #E8F2FF;
-  --brand-100: #D1E5FF;
-  --brand-200: #A2CBFF;
-  --brand-300: #74B1FF;
-  --brand-400: #4597FF;
-  --brand-500: #177DFF;
-  --brand-600: #195FE1;
-  --brand-700: #1264CC;
-  --brand-800: #0E4B99;
-  --brand-900: #093266;
+  --brand-50: #eff9f4;
+  --brand-100: #dcf2e6;
+  --brand-200: #b9e5d0;
+  --brand-300: #87d4b3;
+  --brand-400: #49b98e;
+  --brand-500: #21966e;
+  --brand-600: #147658;
+  --brand-700: #145f49;
+  --brand-800: #144c3c;
+  --brand-900: #123e32;
 
-  --background: #F0F8FF;
-  --foreground: #051933;
+  color-scheme: light;
+  --background: #f5f7f5;
+  --foreground: #1a2d26;
 
   --card: #FFFFFF;
-  --card-foreground: #051933;
+  --card-foreground: #1a2d26;
 
   --popover: #FFFFFF;
-  --popover-foreground: #051933;
+  --popover-foreground: #1a2d26;
 
-  --primary: #195FE1;
+  --primary: #147658;
   --primary-foreground: #FFFFFF;
 
-  --secondary: #78B9EB;
-  --secondary-foreground: #051933;
+  --secondary: #e8efea;
+  --secondary-foreground: #294c3c;
 
-  --muted: #E2E8F0;
-  --muted-foreground: #64748B;
+  --muted: #edf1ee;
+  --muted-foreground: #627269;
 
-  --accent: #7BD2E7;
-  --accent-foreground: #051933;
+  --accent: #e2f1e9;
+  --accent-foreground: #145f49;
 
-  --destructive: #E11D48;
+  --destructive: #c23550;
   --destructive-foreground: #FFFFFF;
 
-  --success: #16A34A;
+  --success: #147658;
   --success-foreground: #FFFFFF;
 
-  --warning: #F59E0B;
+  --warning: #96570d;
   --warning-foreground: #FFFFFF;
 
-  --border: #C0C6CC;
-  --input: #C0C6CC;
-  --ring: #195FE1;
+  --border: #dce5de;
+  --input: #cbd8ce;
+  --ring: #21966e;
+  --scrollbar-thumb: #b4c5b9;
 
-  --radius: 0.625rem;
+  --radius: 0.875rem;
 
-  --sidebar: #0E4B99;
-  --sidebar-foreground: #E8F2FF;
-  --sidebar-primary: #177DFF;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #1264CC;
-  --sidebar-accent-foreground: #E8F2FF;
-  --sidebar-border: #1264CC;
-  --sidebar-ring: #4597FF;
+  --sidebar: #fbfcfa;
+  --sidebar-foreground: #344b3e;
+  --sidebar-primary: #e0f1e7;
+  --sidebar-primary-foreground: #145f49;
+  --sidebar-accent: #edf2ed;
+  --sidebar-accent-foreground: #1a2d26;
+  --sidebar-border: #e4eae3;
+  --sidebar-ring: #21966e;
 }
 
 .dark {
-  --background: #051933;
-  --foreground: #E8F2FF;
+  color-scheme: dark;
+  --background: #101815;
+  --foreground: #e5ede7;
 
-  --card: #07264D;
-  --card-foreground: #E8F2FF;
+  --card: #18231e;
+  --card-foreground: #e5ede7;
 
-  --popover: #07264D;
-  --popover-foreground: #E8F2FF;
+  --popover: #1c2922;
+  --popover-foreground: #e5ede7;
 
-  --primary: #4597FF;
-  --primary-foreground: #020D1A;
+  --primary: #7bd8b4;
+  --primary-foreground: #10281d;
 
-  --secondary: #0E4B99;
-  --secondary-foreground: #E8F2FF;
+  --secondary: #25372d;
+  --secondary-foreground: #d5e8db;
 
-  --muted: #093266;
-  --muted-foreground: #A2CBFF;
+  --muted: #223128;
+  --muted-foreground: #9fb4a6;
 
-  --accent: #1264CC;
-  --accent-foreground: #E8F2FF;
+  --accent: #263f31;
+  --accent-foreground: #a4e8cb;
 
-  --destructive: #EF4444;
-  --destructive-foreground: #FFFFFF;
+  --destructive: #ff94a4;
+  --destructive-foreground: #3e1221;
 
-  --success: #22C55E;
-  --success-foreground: #020D1A;
+  --success: #7bd8b4;
+  --success-foreground: #10281d;
 
-  --warning: #FBBF24;
-  --warning-foreground: #020D1A;
+  --warning: #eac078;
+  --warning-foreground: #34250d;
 
-  --border: #1264CC;
-  --input: #1264CC;
-  --ring: #4597FF;
+  --border: #2b3b30;
+  --input: #3e5144;
+  --ring: #7bd8b4;
+  --scrollbar-thumb: #485e4e;
 
-  --sidebar: #020D1A;
-  --sidebar-foreground: #E8F2FF;
-  --sidebar-primary: #4597FF;
-  --sidebar-primary-foreground: #020D1A;
-  --sidebar-accent: #093266;
-  --sidebar-accent-foreground: #E8F2FF;
-  --sidebar-border: #093266;
-  --sidebar-ring: #4597FF;
+  --sidebar: #131d17;
+  --sidebar-foreground: #b8cbbd;
+  --sidebar-primary: #244936;
+  --sidebar-primary-foreground: #a4e8cb;
+  --sidebar-accent: #203126;
+  --sidebar-accent-foreground: #e5ede7;
+  --sidebar-border: #28382d;
+  --sidebar-ring: #7bd8b4;
 }
 
 @theme inline {
@@ -157,12 +161,17 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
-  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: "Segoe UI Variable", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --shadow-sm: 0 1px 2px rgb(15 35 23 / 0.04);
+  --shadow-md: 0 4px 16px rgb(15 35 23 / 0.07);
+  --shadow-lg: 0 12px 40px rgb(0 0 0 / 0.14);
 }
 
 @layer base {
   * {
     border-color: var(--border);
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
   }
   html, body {
     height: 100%;
@@ -177,6 +186,48 @@
     background-color: var(--background);
     color: var(--foreground);
     font-feature-settings: "rlig" 1, "calt" 1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.012em;
+    line-height: 1.55;
+  }
+  h1, h2, h3 {
+    letter-spacing: -0.035em;
+    text-wrap: balance;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+  }
+  button:enabled, [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--primary) 24%, transparent);
+  }
+  ::-webkit-scrollbar { width: 7px; height: 7px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 999px; }
+  ::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--scrollbar-thumb) 75%, var(--primary)); }
+  ::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+  ::-webkit-scrollbar-corner { background: transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (forced-colors: active) {
+  * { scrollbar-color: auto; }
+}
+
+@layer base {
+  @supports selector(::-webkit-scrollbar) {
+    * { scrollbar-width: auto; scrollbar-color: auto; }
   }
 }
 

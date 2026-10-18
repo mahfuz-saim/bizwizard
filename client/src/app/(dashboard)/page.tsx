@@ -100,7 +100,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Greeting + Sell Banner */}
-      <div className="flex flex-col gap-4 rounded-xl bg-gradient-to-r from-brand-700 to-brand-500 p-6 text-white shadow-md md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-4 rounded-2xl bg-linear-to-br from-brand-800 to-brand-600 p-6 text-white md:flex-row md:items-center md:justify-between md:p-8">
         <div>
           <h2 className="text-2xl font-bold">Welcome back 👋</h2>
           <p className="mt-1 text-sm text-brand-100">
@@ -191,7 +191,7 @@ export default function DashboardPage() {
             <Link
               key={m.label}
               href={m.href}
-              className="group flex items-center gap-3 rounded-xl border bg-card p-4 transition-all hover:border-brand-400 hover:shadow-md"
+              className="group flex items-center gap-3 rounded-xl border bg-card p-4 transition-[border-color,background-color] duration-150 hover:border-primary/40 hover:bg-accent/40"
             >
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50 text-brand-600 transition-colors group-hover:bg-brand-500 group-hover:text-white dark:bg-brand-900/40 dark:text-brand-200">
                 <Icon className="h-5 w-5" />

@@ -239,7 +239,7 @@ export function MobileNavSheet({ open, onOpenChange }: MobileNavSheetProps) {
           </div>
           <div>
             <div className="text-base font-semibold leading-tight">BizWizard</div>
-            <div className="text-xs text-brand-200/90">Inventory · Sales</div>
+            <div className="text-xs text-muted-foreground">Inventory · Sales</div>
           </div>
         </div>
         <nav className="flex flex-col gap-1 p-3">

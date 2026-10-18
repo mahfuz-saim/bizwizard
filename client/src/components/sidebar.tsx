@@ -108,13 +108,13 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
         {!collapsed && (
           <div className="flex flex-col">
             <span className="text-base font-semibold leading-tight">BizWizard</span>
-            <span className="text-xs text-brand-200/90">Inventory · Sales</span>
+            <span className="text-xs text-muted-foreground">Inventory · Sales</span>
           </div>
         )}
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-4 scrollbar-thin">
+      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-5">
         {primaryNav.map((item) => {
           const Icon = item.icon
           const active = isActive(item.href)
@@ -122,12 +122,13 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
             <Link
               key={item.href}
               href={item.href}
+              aria-current={active ? "page" : undefined}
               onClick={onNavigate}
               className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
+                "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors duration-150",
                 active
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
-                  : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                  ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                  : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                 collapsed && "justify-center px-2"
               )}
             >
