@@ -8,7 +8,7 @@ import * as Popover from "@radix-ui/react-popover"
 import { api, getApiBaseUrl } from "@/lib/api"
 import { useStore } from "@/lib/store"
 import type { ShopNotification } from "@/lib/types"
-import { isUnread, newNotifications, NOTIFICATION_TOAST_MS, readNotificationStream } from "@/lib/notifications"
+import { isUnread, newNotifications, notificationTime, NOTIFICATION_TOAST_MS, readNotificationStream } from "@/lib/notifications"
 import { cn } from "@/lib/utils"
 
 function NotificationToast({ item, onDismiss }: { item: ShopNotification; onDismiss: (id: string) => void }) {
@@ -102,7 +102,7 @@ export function NotificationBell() {
           {items.map(item => <div key={item.id} role="listitem" className={cn("border-b p-3 last:border-0", isUnread(item) && "bg-primary/5")}>
             <div className="flex items-start gap-2"><p className="min-w-0 flex-1 wrap-break-word text-sm font-semibold">{item.title}</p>{isUnread(item) && <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" aria-label={`Mark ${item.title} as read`} disabled={saving} onClick={() => void markRead([item])}><Check className="h-4 w-4" /></Button>}</div>
             <p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm text-muted-foreground">{item.body}</p>
-            <time dateTime={item.createdAt} className="mt-2 block text-xs text-muted-foreground">{new Date(item.createdAt).toLocaleString()}</time>
+            <NotificationTime item={item} />
           </div>)}
         </div>
       </Popover.Content></Popover.Portal>
@@ -111,4 +111,9 @@ export function NotificationBell() {
       {toasts.map(item => <NotificationToast key={item.id} item={item} onDismiss={dismiss} />)}
     </div>, document.body)}
   </>
+}
+
+function NotificationTime({ item }: { item: ShopNotification }) {
+  const { dateTime, isSimulated } = notificationTime(item)
+  return <time dateTime={dateTime} className="mt-2 block text-xs text-muted-foreground">{isSimulated ? "Simulated · " : ""}{new Date(dateTime).toLocaleString()}</time>
 }

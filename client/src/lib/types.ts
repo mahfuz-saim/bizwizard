@@ -117,4 +117,4 @@ export interface DashboardStats {
   totalSuppliers: number
 }
 
-export interface ShopNotification { id: string; title: string; body: string; createdAt: string; ReadStatus?: { isRead: boolean }[] }
+export interface ShopNotification { id: string; title: string; body: string; createdAt: string; data?: Record<string, unknown> | null; ReadStatus?: { isRead: boolean }[] }

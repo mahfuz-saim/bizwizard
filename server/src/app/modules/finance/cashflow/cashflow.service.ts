@@ -203,7 +203,7 @@ export const cashflowService = {
     return { ...projection, currentCash, narrative, confidence, savedID: saved?.id ?? null };
   },
 
-  async runTreasury(tenantId: string, shopId: string) {
+  async runTreasury(tenantId: string, shopId: string, simulation?: { runID: string; occurredAt: Date }) {
     await ensureDefaultPolicies(db());
     const projection = await this.getProjection(tenantId, shopId, 90, true);
     const txns = await loadCashTransactions(tenantId, shopId, 180);
@@ -244,7 +244,10 @@ export const cashflowService = {
       });
       if (a.severity === 'CRITICAL') {
         const notification = await (prisma as any).notification.create({
-          data: { shopId, tenantID: tenantId, title: a.title, body: a.message, data: { alertID: alert.id, source: 'finance-copilot' }, role: ['OWNER'], isPublic: false },
+          data: { shopId, tenantID: tenantId, title: a.title, body: a.message, data: {
+            alertID: alert.id, source: 'finance-copilot',
+            ...(simulation ? { simulationRunID: simulation.runID, simulationOccurredAt: simulation.occurredAt.toISOString() } : {}),
+          }, role: ['OWNER'], isPublic: false },
         }).catch(() => null);
         if (notification) await db().cashAlert.update({ where: { id: alert.id }, data: { notificationID: notification.id } }).catch(() => undefined);
       }
