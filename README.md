@@ -293,3 +293,22 @@ changes. Backend and frontend deployments are separate; inspect both statuses.
 
 Technical/security PDFs, presentation, and video are separate submission deliverables.
 Neither these scripts nor passing tests guarantee full marks or regulatory certification.
+
+## Build the submission PDFs
+
+Editable LaTeX sources are in `submission/technical/main.tex` and
+`submission/security/main.tex`, with a shared `submission/preamble.tex` for styling
+and vector diagrams. Edit these sources rather than the generated PDFs.
+
+Install [Tectonic](https://tectonic-typesetting.github.io/book/latest/installation/)
+and run from the repository root:
+
+```powershell
+.\submission\build.ps1
+# Or pass the location of a portable compiler:
+.\submission\build.ps1 -TectonicPath 'C:\path\to\tectonic.exe'
+```
+
+The first build downloads LaTeX packages. Both PDFs are written to `output/pdf/`;
+intermediate files stay in Git-ignored `submission/.build/`. Building documents does
+not run the application, call AI, or regenerate the financial evidence.
