@@ -16,6 +16,16 @@ const TOKEN_KEY = "bizwizard_access_token"
 const TENANT_KEY = "bizwizard_tenant_id"
 const SHOP_KEY = "bizwizard_shop_id"
 const USER_KEY = "bizwizard_user"
+const SIMULATION_KEY = "bizwizard_simulation_source"
+
+export function getSimulationSourceId(): string | null {
+  return typeof window === "undefined" ? null : localStorage.getItem(SIMULATION_KEY)
+}
+export function setSimulationSourceId(id: string | null) {
+  if (typeof window === "undefined") return
+  if (id) localStorage.setItem(SIMULATION_KEY, id)
+  else localStorage.removeItem(SIMULATION_KEY)
+}
 
 export function getApiBaseUrl() {
   return API_BASE
@@ -178,6 +188,7 @@ export async function loginWithCredentials(
 }
 
 export function clearSession() {
+  setSimulationSourceId(null)
   setAccessToken(null)
   setTenantId(null)
   setShopId(null)

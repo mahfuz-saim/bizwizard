@@ -1,9 +1,22 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { isUnread, newNotifications, notificationTime, NOTIFICATION_TOAST_MS, readNotificationStream } from "./notifications"
+import { isUnread, newNotifications, notificationsThrough, notificationTime, NOTIFICATION_TOAST_MS, readNotificationStream } from "./notifications"
 import type { ShopNotification } from "./types"
 
 const item = (id: string): ShopNotification => ({ id, title: `Title ${id}`, body: "বাংলা notification", createdAt: "2026-10-17T00:00:00Z" })
+
+test("playback releases notifications only when their simulated transaction time is reached", () => {
+  const early = { ...item("early"), data: { simulationRunID: "run", simulationOccurredAt: "2026-10-20T12:02:00Z" } }
+  const late = { ...item("late"), data: { simulationRunID: "run", simulationOccurredAt: "2026-10-21T12:00:00Z" } }
+  const records = [late, early, item("real")]
+  const seen = new Set<string>()
+  assert.deepEqual(notificationsThrough(records, null), [item("real")])
+  assert.deepEqual(newNotifications(notificationsThrough(records, "2026-10-20T12:01:00Z"), seen).map(n => n.id), ["real"])
+  assert.equal(seen.has("early"), false)
+  assert.deepEqual(newNotifications(notificationsThrough(records, "2026-10-20T12:02:00Z"), seen).map(n => n.id), ["early"])
+  assert.deepEqual(newNotifications(notificationsThrough(records, "2026-10-20T12:02:00Z"), seen), [])
+  assert.deepEqual(newNotifications(notificationsThrough(records, undefined), seen).map(n => n.id), ["late"])
+})
 
 test("simulator notifications display the event clock without changing their audit timestamp", () => {
   const notification = { ...item("simulation"), data: { simulationRunID: "run-1", simulationOccurredAt: "2026-10-11T12:00:00.000Z" } }

@@ -8,12 +8,20 @@ const tenant = (req: Request) => req.tenantId as string;
 const shop = (req: Request) => (req.query.shopId ?? req.body?.shopId) as string;
 
 export const simulatorController = {
+  prepare: catchAsync(async (req: Request, res: Response) => {
+    const data = await simulatorService.prepare(tenant(req), req.body.shopId);
+    sendResponse(res, { success: true, statusCode: httpStatus.OK, message: 'Isolated demo workspace ready', data });
+  }),
+  workspace: catchAsync(async (req: Request, res: Response) => {
+    const data = await simulatorService.workspace(tenant(req), shop(req));
+    sendResponse(res, { success: true, statusCode: httpStatus.OK, message: 'Demo workspace retrieved', data });
+  }),
   fastForward: catchAsync(async (req: Request, res: Response) => {
     const result = await simulatorService.fastForward(tenant(req), req.body.shopId, req.body.template);
     sendResponse(res, {
       success: true,
       statusCode: httpStatus.OK,
-      message: `Simulated ${result.dailyEvents.length} days of business activity into the live shop ledger`,
+      message: `Simulated ${result.dailyEvents.length} days in the isolated demo ledger; source shop unchanged`,
       data: result,
     });
   }),

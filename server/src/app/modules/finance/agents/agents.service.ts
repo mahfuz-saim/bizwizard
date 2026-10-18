@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import prisma from '../../../../shared/prisma';
+import prisma, { shopClock } from '../shared/database';
 import { roundCurrency, sumMoney } from '../shared/money';
 import { ensureDefaultPolicies } from '../shared/catalog';
 import { assertShop, loadOpenDebts } from '../shared/shopData';
@@ -59,7 +59,7 @@ export const agentsService = {
   /** Scorecards: alpha = realized − benchmark, same universe, same PD/LGD (§1.1.1). */
   async performance(tenantId: string, shopId: string) {
     await assertShop(tenantId, shopId);
-    const periodEnd = new Date();
+    const periodEnd = await shopClock(tenantId, shopId);
     const periodStart = new Date(periodEnd.getTime() - 90 * 86400000);
     const profile = buildProfile(await loadProfileAggregates(tenantId, shopId, 90));
     const pd = probabilityOfDefault(profile);
@@ -102,7 +102,7 @@ export const agentsService = {
         benchmarkImpact = treasurerBenchmarkImpact(
           debts.map((d) => ({
             amount: d.amount,
-            daysOverdue: Math.floor((Date.now() - d.createdAt.getTime()) / 86400000),
+            daysOverdue: Math.floor((periodEnd.getTime() - d.createdAt.getTime()) / 86400000),
             collectedWithinHorizon: d.status === 'PAID',
           })),
         );

@@ -11,6 +11,14 @@ export function notificationTime(notification: ShopNotification) {
   return { dateTime: isSimulated ? simulatedAt : notification.createdAt, isSimulated }
 }
 
+export function notificationsThrough(items: ShopNotification[], through: string | null | undefined) {
+  if (through === undefined) return items
+  return items.filter(item => {
+    const time = notificationTime(item)
+    return !time.isSimulated || (through !== null && Date.parse(time.dateTime) <= Date.parse(through))
+  })
+}
+
 export function newNotifications(items: ShopNotification[], seen: Set<string>) {
   const fresh = items.filter(item => !seen.has(item.id) && isUnread(item))
   items.forEach(item => seen.add(item.id))

@@ -1,6 +1,8 @@
 "use client"
 
 import * as React from "react"
+import { useStore } from "./store"
+import { getAccessToken } from "./api"
 import { simulatorApi, type FastForwardResult, type SimDailyStreamEvent, type SimTemplate, type SimToast, type StreamEventType } from "./simulator-api"
 
 const TOTAL_DAYS = 30
@@ -64,6 +66,7 @@ interface SimulatorState {
 }
 
 interface SimulatorContextValue extends SimulatorState {
+  exitSimulation: () => Promise<void>
   runFastForward: () => Promise<void>
   skipToEnd: () => void
   pauseSimulation: () => void
@@ -79,6 +82,7 @@ interface SimulatorContextValue extends SimulatorState {
 const SimulatorContext = React.createContext<SimulatorContextValue | null>(null)
 
 export function FinanceSimulatorProvider({ children }: { children: React.ReactNode }) {
+  const store = useStore()
   const [state, setState] = React.useState<SimulatorState>({
     status: "idle", error: null, result: null, dayIndex: 0, progress: 0, totalEvents: 0, revealedEvents: 0,
     visibleEvents: [], activeToasts: [], drawerOpen: false, speedMs: DEFAULT_SPEED_MS, template: "LESS", completedAt: 0,
@@ -86,12 +90,26 @@ export function FinanceSimulatorProvider({ children }: { children: React.ReactNo
   const eventsRef = React.useRef<VisibleStreamEvent[]>([])
   const revealedRef = React.useRef(0)
   const shownToastIds = React.useRef<Set<string>>(new Set())
+  React.useEffect(() => {
+    if (!store.simulationSourceId || !store.session?.shopId || state.status !== "idle") return
+    let active = true
+    void simulatorApi.workspace().then(workspace => {
+      if (!active || !workspace?.simulationResult) return
+      const result = workspace.simulationResult
+      const events = flattenEvents(result)
+      eventsRef.current = events
+      revealedRef.current = events.length
+      setState(s => s.status !== "idle" ? s : ({ ...s, result, status: "done", dayIndex: result.dailyEvents.length, progress: 1, visibleEvents: events.slice().reverse(), totalEvents: events.length, revealedEvents: events.length }))
+    }).catch(() => {})
+    return () => { active = false }
+  }, [store.simulationSourceId, store.session?.shopId, state.status])
 
   const applyRevealed = React.useCallback((result: FastForwardResult, revealed: number) => {
     const events = eventsRef.current
     const visible = events.slice(0, revealed).slice().reverse()
     const dayIndex = revealed > 0 ? events[revealed - 1].day : 0
-    const dueToasts = result.toasts.filter((t) => dayIndex >= t.uiCueDay && !shownToastIds.current.has(t.id))
+    const through = revealed > 0 ? Date.parse(events[revealed - 1].occurredAt) : -Infinity
+    const dueToasts = result.toasts.filter((t) => through >= Date.parse(t.occurredAt) && !shownToastIds.current.has(t.id))
     dueToasts.forEach((t) => shownToastIds.current.add(t.id))
     setState((s) => ({
       ...s,
@@ -125,11 +143,19 @@ export function FinanceSimulatorProvider({ children }: { children: React.ReactNo
   }, [state.status, state.speedMs, state.result, applyRevealed])
 
   const runFastForward = React.useCallback(async () => {
+    const token = getAccessToken()
+    const assertSession = () => { if (getAccessToken() !== token) throw new Error("Account changed; simulation UI operation cancelled.") }
     shownToastIds.current = new Set()
     setState((s) => ({ ...s, status: "loading", error: null, drawerOpen: true }))
     try {
       const template = state.template
+      if (store.source !== "backend" || !["OWNER", "ADMIN"].includes(store.session?.role ?? "")) throw new Error("Log in as a shop owner to use the isolated demo simulator.")
+      const demo = await simulatorApi.prepare()
+      assertSession()
+      await store.switchSimulation(demo.id, demo.simulationSourceShopID)
+      assertSession()
       const result = await simulatorApi.fastForward(template)
+      assertSession()
       const flat = flattenEvents(result)
       eventsRef.current = flat
       revealedRef.current = 0
@@ -138,9 +164,10 @@ export function FinanceSimulatorProvider({ children }: { children: React.ReactNo
         visibleEvents: [], activeToasts: [],
       }))
     } catch (e) {
+      if (getAccessToken() !== token) return
       setState((s) => ({ ...s, status: "error", error: e instanceof Error ? e.message : "Simulation failed to run." }))
     }
-  }, [state.template])
+  }, [state.template, store])
 
   // Pausing just flips status away from "playing" — the ticking effect above
   // already tears its interval down whenever status isn't "playing", and
@@ -162,9 +189,12 @@ export function FinanceSimulatorProvider({ children }: { children: React.ReactNo
   }, [state.result, applyRevealed])
 
   const resetSimulation = React.useCallback(async () => {
+    const token = getAccessToken()
     setState((s) => ({ ...s, status: "resetting", error: null }))
     try {
       await simulatorApi.reset()
+      if (getAccessToken() !== token) return
+      await store.refresh(false)
       shownToastIds.current = new Set()
       eventsRef.current = []
       revealedRef.current = 0
@@ -175,12 +205,18 @@ export function FinanceSimulatorProvider({ children }: { children: React.ReactNo
     } catch (e) {
       setState((s) => ({ ...s, status: "error", error: e instanceof Error ? e.message : "Reset failed." }))
     }
-  }, [])
+  }, [store])
 
   const dismissToast = React.useCallback((id: string) => {
     setState((s) => ({ ...s, activeToasts: s.activeToasts.filter((t) => t.id !== id) }))
   }, [])
   const setDrawerOpen = React.useCallback((open: boolean) => setState((s) => ({ ...s, drawerOpen: open })), [])
+  const exitSimulation = React.useCallback(async () => {
+    if (state.status === "loading" || state.status === "resetting") return
+    eventsRef.current = []
+    setState(s => ({ ...s, status: "idle", result: null, visibleEvents: [], activeToasts: [], drawerOpen: false, dayIndex: 0, progress: 0 }))
+    await store.switchSimulation(null, null)
+  }, [state.status, store])
   const setSpeedMs = React.useCallback((ms: number) => {
     const clamped = Math.round(Math.max(MIN_SPEED_MS, Math.min(MAX_SPEED_MS, ms)))
     setState((s) => ({ ...s, speedMs: clamped }))
@@ -188,8 +224,8 @@ export function FinanceSimulatorProvider({ children }: { children: React.ReactNo
   const setTemplate = React.useCallback((template: SimTemplate) => setState((s) => ({ ...s, template })), [])
 
   const value = React.useMemo<SimulatorContextValue>(() => ({
-    ...state, runFastForward, skipToEnd, pauseSimulation, resumeSimulation, resetSimulation, dismissToast, setDrawerOpen, setSpeedMs, setTemplate, inspect: simulatorApi.inspect,
-  }), [state, runFastForward, skipToEnd, pauseSimulation, resumeSimulation, resetSimulation, dismissToast, setDrawerOpen, setSpeedMs, setTemplate])
+    ...state, exitSimulation, runFastForward, skipToEnd, pauseSimulation, resumeSimulation, resetSimulation, dismissToast, setDrawerOpen, setSpeedMs, setTemplate, inspect: simulatorApi.inspect,
+  }), [state, exitSimulation, runFastForward, skipToEnd, pauseSimulation, resumeSimulation, resetSimulation, dismissToast, setDrawerOpen, setSpeedMs, setTemplate])
 
   return <SimulatorContext.Provider value={value}>{children}</SimulatorContext.Provider>
 }

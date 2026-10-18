@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import prisma from '../../../../shared/prisma';
+import prisma, { shopClock } from '../shared/database';
 import type { z } from 'zod';
 import { callStructured, hashInput } from '../../../../lib/ai/client';
 import * as prompts from '../../../../lib/ai/prompts';
@@ -236,7 +236,7 @@ export const matchingService = {
               confidence: pricedOffer.confidence,
               aiModel: 'deterministic-core',
               promptVersion: prompts.priceOffer.version,
-              expiresAt: new Date(Date.now() + 7 * 86400000),
+              expiresAt: new Date((await shopClock(tenantId, shopId)).getTime() + 7 * 86400000),
             },
           });
         })(),
@@ -341,11 +341,11 @@ export const matchingService = {
         tenantID: tenantId, shopID: shopId, financeProductID: offer.financeProductID, offerID,
         requestedAmount: offer.offeredAmount, requestedTenorMonths: offer.tenorMonths,
         status: 'SUBMITTED', submittedDocs: body?.submittedDocs ?? offer.conditions ?? [],
-        ownerApproved: true, disbursedAt: new Date(),
-        firstRepaymentAt: new Date(Date.now() + 30 * 86400000),
+        ownerApproved: true, disbursedAt: await shopClock(tenantId, shopId),
+        firstRepaymentAt: new Date((await shopClock(tenantId, shopId)).getTime() + 30 * 86400000),
       },
     });
-    const now = new Date();
+    const now = await shopClock(tenantId, shopId);
     await db().loanSchedule.createMany({
       data: schedule.map((s) => ({
         tenantID: tenantId, shopID: shopId, applicationID: application.id,
