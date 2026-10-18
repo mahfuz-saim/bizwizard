@@ -4,7 +4,7 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 import { Trash2, Barcode, Plus, Search, CheckCircle2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { NumberFriendlyInput as Input } from "@/components/ui/number-friendly-input"
 import { Label } from "@/components/ui/label"
 import {
   Dialog,
@@ -51,6 +51,8 @@ export function SellDialog({ open, onOpenChange, prefillProduct }: Props) {
   const [discount, setDiscount] = React.useState<number>(0)
   const [paid, setPaid] = React.useState<number>(0)
   const [items, setItems] = React.useState<LineItem[]>([])
+  const [saving, setSaving] = React.useState(false)
+  const [submitError, setSubmitError] = React.useState("")
   const [success, setSuccess] = React.useState<{
     total: number
     due: number
@@ -72,6 +74,7 @@ export function SellDialog({ open, onOpenChange, prefillProduct }: Props) {
   React.useEffect(() => {
     if (!open) return
     reset()
+    setSubmitError("")
     if (prefillProduct) {
       setItems([
         {
@@ -124,8 +127,8 @@ export function SellDialog({ open, onOpenChange, prefillProduct }: Props) {
         : it.quantity * it.sellPrice),
     0
   )
-  const total = Math.max(0, subtotal - (Number(discount) || 0))
-  const due = Math.max(0, total - (Number(paid) || 0))
+  const total = Math.max(0, Math.round((subtotal - (Number(discount) || 0)) * 100) / 100)
+  const due = Math.max(0, Math.round((total - (Number(paid) || 0)) * 100) / 100)
 
   const filteredProducts = React.useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -140,9 +143,6 @@ export function SellDialog({ open, onOpenChange, prefillProduct }: Props) {
       )
       .slice(0, 8)
   }, [products, search])
-
-  const [saving, setSaving] = React.useState(false)
-  const [submitError, setSubmitError] = React.useState("")
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

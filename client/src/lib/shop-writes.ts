@@ -12,6 +12,9 @@ export function purchaseBody(
   return {
     shopID,
     variantId: product.id,
+    productID: product.productID,
+    name: product.name,
+    measuringUnit: product.measuringUnit,
     category: product.category,
     supplierId: supplier?.userID,
     lot: {
@@ -38,7 +41,7 @@ export function checkoutBody(
 ) {
   const { items, discount, paid, customerId } = payload
   const total =
-    items.reduce((n, i) => n + i.quantity * i.sellPrice, 0) - discount
+    Math.round((items.reduce((n, i) => n + i.quantity * i.sellPrice, 0) - discount) * 100) / 100
   if (!items.length || ![total, paid, discount].every(Number.isFinite) || total < 0 || paid < 0 || paid > total || discount < 0)
     throw new Error("Invalid sale totals")
   if (paid < total && !customerId)
@@ -162,9 +165,9 @@ export function makeLocalSale(
     })),
     subtotal,
     discount: payload.discount,
-    total: subtotal - payload.discount,
+    total: Math.round((subtotal - payload.discount) * 100) / 100,
     paid: payload.paid,
-    due: subtotal - payload.discount - payload.paid,
+    due: Math.max(0, Math.round((subtotal - payload.discount - payload.paid) * 100) / 100),
     paymentMethod: payload.paymentMethod,
     note: payload.note,
     createdAt: new Date().toISOString(),

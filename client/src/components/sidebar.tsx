@@ -314,7 +314,7 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
           </PopoverContent>
         </Popover>
 
-        <button
+        <Link href="/help"
           className={cn(
             "flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-sidebar-foreground/90 hover:bg-sidebar-accent",
             collapsed && "justify-center px-2"
@@ -322,7 +322,7 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
         >
           <HelpCircle className="h-5 w-5 shrink-0" />
           {!collapsed && <span>Help & Support</span>}
-        </button>
+        </Link>
         <Button
           variant="ghost"
           size="sm"

@@ -317,17 +317,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         name: patch.name,
         variantName: patch.variantName,
         variantCode: patch.variantCode,
-        lowStock: patch.lowStockThreshold
+        lowStock: patch.lowStockThreshold,
+        sellPrice: patch.sellPrice !== product.sellPrice ? patch.sellPrice : undefined,
+        expDate: patch.expiryDate !== undefined && patch.expiryDate !== (product.expiryDate?.slice(0, 10) ?? "")
+          ? patch.expiryDate || null : undefined,
       })
-      for (const lot of (product.lots || []).filter((lot) => lot.stock > 0))
-        if (patch.sellPrice !== undefined || patch.expiryDate !== undefined) {
-          await api.put(`/product/lot/${encodeURIComponent(lot.id)}`, {
-            sellPrice: patch.sellPrice,
-            retail: patch.sellPrice,
-            mrp: patch.sellPrice,
-            expDate: patch.expiryDate
-          })
-        }
     })
   }
   const deleteProduct: DataContextValue["deleteProduct"] = async (id) => {
@@ -389,7 +383,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         !product ||
         !Number.isInteger(i.quantity) ||
         i.quantity <= 0 ||
-        i.buyPrice < 0
+        !Number.isFinite(i.buyPrice) || i.buyPrice < 0
       )
         throw new Error("Invalid purchase item")
       return purchaseBody(
@@ -401,22 +395,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         note
       )
     })
-    if (paid !== total)
+    if (Math.round(paid * 100) !== Math.round(total * 100))
       throw new Error(
         "The backend tracks purchase costs, not supplier payment balances. Record a fully paid purchase; partial supplier payments are not supported."
       )
     await save(async () => {
-      let saved = 0
-      try {
-        for (const body of bodies) {
-          await api.post("/product", body)
-          saved++
-        }
-      } catch (error) {
-        throw new Error(
-          `${saved} of ${bodies.length} purchase lines were saved. Do not resubmit saved lines. ${error instanceof Error ? error.message : "Purchase failed"}`
-        )
-      }
+      await api.post("/product/purchase", { lines: bodies })
     })
   }
   const addSell: DataContextValue["addSell"] = async (payload) => {
