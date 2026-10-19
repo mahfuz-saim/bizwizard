@@ -11,7 +11,7 @@ await fs.mkdir(build, { recursive: true });
 const P = Presentation.create({ slideSize: { width: 1600, height: 900 } });
 const C = { navy: '#101F3C', ink: '#13243F', blue: '#2463EB', pale: '#E9F0FF', bg: '#F6F8FC', white: '#FFFFFF', muted: '#637089', line: '#D8E0ED', teal: '#14837D', coral: '#B85B4B', gray: '#8B9BB6', light: '#ADBBD2' };
 const font = 'Arial';
-const timings = [20,35,35,35,45,45,45,40,40,40,45,15];
+const timings = [30,35,35,35,45,45,45,40,40,40,45,15];
 const refs = {
   technical: 'submission/technical/main.tex', security: 'submission/security/main.tex',
   benchmark: 'evidence/submission/benchmark-live-results.json', matched: 'evidence/submission/matched-evaluation-live.json',
@@ -102,8 +102,12 @@ function copy(s,title,body,x,y,w,{dark=s._dark,size=28}={}){
  text(s,'Financing options, cash alerts\nand business analysis in one workspace.',76,570,650,92,29,{color:C.light});
  await image(s,'dashboard-main.png',795,188,733,484,{alt:'BizWizard dashboard rendered in a local illustrative demo'});
  text(s,'Current product UI with illustrative demo data',795,697,730,35,19,{color:C.light});
- text(s,'2026 FinTechathon International Track',76,821,1000,32,22,{color:C.light});
- note(s,'BizWizard helps a small-business owner make financing and cash decisions using the records the shop already keeps. We will follow an owner from a cash concern to a proposed action, then show the controls and evidence behind that action.',[refs.technical,'README.md','submission/presentation/assets/provenance.json']);
+ text(s,'BongoForge',76,738,670,35,27,{bold:true,color:C.white});
+ text(s,'Sadman Sakib  /  Mahfuz Saim  /  Sunan Rabbi',76,779,1450,33,24,{color:C.white});
+ text(s,'Rajshahi University of Engineering & Technology (RUET)',76,820,1450,31,23,{color:C.light});
+ text(s,'CSE, 4th year, 2nd semester',76,856,1450,28,21,{color:C.light});
+ text(s,'2026 FinTechathon International Track',795,752,733,33,21,{color:C.light});
+ note(s,'We are BongoForge: Sadman Sakib, Mahfuz Saim and Sunan Rabbi. All three of us study CSE in the fourth year, second semester at Rajshahi University of Engineering & Technology, RUET. BizWizard helps a small-business owner make financing and cash decisions using the records the shop already keeps. We will follow an owner from a cash concern to a proposed action, then show the controls and evidence behind that action.',[refs.technical,'README.md','submission/presentation/assets/provenance.json','Team names and academic affiliation supplied by the team.']);
 }
 
 // 2. Problem: cash timing, without invented market statistics.
