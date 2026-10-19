@@ -320,7 +320,7 @@ text, diagrams, tables and benchmark chart. Product screenshots remain images.
 The deck has 12 main slides with speaker notes and three hidden technical backup
 slides. Unhide slides 13–15 when needed for questions.
 
-The JavaScript source is `submission/presentation/build.mjs`. It uses the
+The JavaScript source : `submission/presentation/build.mjs`. It uses the
 `@oai/artifact-tool` library supplied with the Codex presentation runtime, separate
 from application dependencies. With that runtime available, run the source with
 Node.js; `ARTIFACT_TOOL_MODULE` can point to the library's module file. Drafts and
