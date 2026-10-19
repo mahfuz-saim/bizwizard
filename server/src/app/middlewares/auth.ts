@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import httpStatus from 'http-status';
-import { Secret } from 'jsonwebtoken';
+import { JsonWebTokenError, NotBeforeError, Secret, TokenExpiredError } from 'jsonwebtoken';
 import config from '../../config';
 import ApiError from '../../errors/ApiError';
 import { JWTHelper } from '../../helpers/jwtHelpers';
@@ -39,7 +39,9 @@ const auth =
             }
             next();
         } catch (error) {
-            next(error);
+            if (error instanceof TokenExpiredError || error instanceof JsonWebTokenError || error instanceof NotBeforeError) {
+                next(new ApiError(httpStatus.UNAUTHORIZED, 'Your session has expired. Please sign in again.'));
+            } else next(error);
         }
     };
 

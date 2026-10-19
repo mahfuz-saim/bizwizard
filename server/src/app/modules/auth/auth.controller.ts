@@ -75,6 +75,7 @@ const refreshToken = catchAsync(async (req: Request, res: Response) => {
     const { refreshToken } = req.cookies;
 
     const result = await AuthService.refreshToken(refreshToken);
+    issueTokens(res, result.accessToken);
 
     sendResponse<IRefreshTokenResponse>(res, {
         statusCode: 200,

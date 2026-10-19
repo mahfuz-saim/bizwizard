@@ -5,7 +5,7 @@ import { createPortal } from "react-dom"
 import { Bell, Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import * as Popover from "@radix-ui/react-popover"
-import { api, getApiBaseUrl } from "@/lib/api"
+import { api, getAccessToken, getApiBaseUrl } from "@/lib/api"
 import { useStore } from "@/lib/store"
 import type { ShopNotification } from "@/lib/types"
 import { isUnread, newNotifications, notificationsThrough, notificationTime, NOTIFICATION_TOAST_MS, readNotificationStream } from "@/lib/notifications"
@@ -46,12 +46,17 @@ export function NotificationBell() {
     const controller = new AbortController()
     let retryTimer: ReturnType<typeof setTimeout> | undefined
     let retries = 0
-    const connect = async () => {
+    const connect = async (retried = false) => {
       try {
         const response = await fetch(`${getApiBaseUrl()}/notifications/stream/${encodeURIComponent(session.shopId!)}`, {
-          headers: { Authorization: `Bearer ${session.accessToken}`, "x-tenant-id": session.tenantId!, Accept: "text/event-stream" },
+          headers: { Authorization: `Bearer ${getAccessToken()}`, "x-tenant-id": session.tenantId!, Accept: "text/event-stream" },
           credentials: "include", cache: "no-store", signal: controller.signal,
         })
+        if (response.status === 401 && !retried) {
+          await api.get("/auth/me")
+          if (!controller.signal.aborted) await connect(true)
+          return
+        }
         if (response.status === 401 || response.status === 403) {
           setConnectionError("Notification access expired. Refresh your account or log in again.")
           return

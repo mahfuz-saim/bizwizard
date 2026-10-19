@@ -17,6 +17,10 @@ const TENANT_KEY = "bizwizard_tenant_id"
 const SHOP_KEY = "bizwizard_shop_id"
 const USER_KEY = "bizwizard_user"
 const SIMULATION_KEY = "bizwizard_simulation_source"
+export const SESSION_EXPIRED_EVENT = "bizwizard:session-expired"
+const SESSION_EXPIRED_MESSAGE = "Your session has expired. Please sign in again."
+let sessionGeneration = 0
+let refreshInFlight: { generation: number; promise: Promise<void> } | null = null
 
 export function getSimulationSourceId(): string | null {
   return typeof window === "undefined" ? null : localStorage.getItem(SIMULATION_KEY)
@@ -108,10 +112,46 @@ function buildUrl(path: string, params?: FetchOptions["params"]) {
   return url.toString()
 }
 
-async function request<T>(
-  path: string,
-  { params, json, headers, ...init }: FetchOptions = {}
-): Promise<ApiResponse<T>> {
+function expireSession(generation: number) {
+  if (generation !== sessionGeneration) return
+  clearSession()
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))
+}
+
+async function refreshAccessToken(generation: number) {
+  if (refreshInFlight?.generation === generation) return refreshInFlight.promise
+  const promise = (async () => {
+    let res: Response
+    try {
+      res = await fetch(buildUrl("/auth/refresh-token"), {
+        method: "POST", credentials: "include", cache: "no-store",
+        headers: { Accept: "application/json" },
+      })
+    } catch {
+      throw new ApiError("Could not reconnect to your session. Please try again.", 503)
+    }
+    if (generation !== sessionGeneration) throw new ApiError("Your session has changed. Please try again.", 401)
+    if ([400, 401, 403, 404].includes(res.status)) {
+      expireSession(generation)
+      throw new ApiError(SESSION_EXPIRED_MESSAGE, 401)
+    }
+    let payload: ApiResponse<{ accessToken: string }> | null = null
+    try { payload = await res.json() } catch { /* Invalid responses are retryable, not a logout. */ }
+    if (generation !== sessionGeneration) throw new ApiError("Your session has changed. Please try again.", 401)
+    if (!res.ok || !payload?.success || typeof payload.data?.accessToken !== "string" || !payload.data.accessToken) {
+      throw new ApiError("Could not reconnect to your session. Please try again.", 503)
+    }
+    setAccessToken(payload.data.accessToken)
+  })()
+  refreshInFlight = { generation, promise }
+  try { await promise } finally {
+    if (refreshInFlight?.promise === promise) refreshInFlight = null
+  }
+}
+
+async function request<T>(path: string, options: FetchOptions = {}, retried = false): Promise<ApiResponse<T>> {
+  const { params, json, headers, ...init } = options
+  const generation = sessionGeneration
   const token = getAccessToken()
   const tenantId = getTenantId()
   const res = await fetch(buildUrl(path, params), {
@@ -127,6 +167,19 @@ async function request<T>(
     },
     body: json !== undefined ? JSON.stringify(json) : init.body,
   })
+
+  const canRefresh = token && (!path.startsWith("/auth/") || path === "/auth/me") && !new Headers(headers).has("Authorization")
+  if (res.status === 401 && canRefresh) {
+    if (generation !== sessionGeneration) throw new ApiError("Your session has changed. Please try again.", 401)
+    if (retried) {
+      expireSession(generation)
+      throw new ApiError(SESSION_EXPIRED_MESSAGE, 401)
+    }
+    // A parallel request may already have replaced the rejected token.
+    if (getAccessToken() === token) await refreshAccessToken(generation)
+    if (generation !== sessionGeneration) throw new ApiError(SESSION_EXPIRED_MESSAGE, 401)
+    return request<T>(path, options, true)
+  }
 
   let payload: ApiResponse<T> | null = null
   try { payload = (await res.json()) as ApiResponse<T> } catch { /* noop */ }
@@ -191,6 +244,7 @@ export async function loginWithCredentials(
 }
 
 export function clearSession() {
+  sessionGeneration++
   setSimulationSourceId(null)
   setAccessToken(null)
   setTenantId(null)

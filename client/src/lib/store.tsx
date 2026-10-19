@@ -5,6 +5,7 @@ import {
   api,
   ApiError,
   clearSession,
+  SESSION_EXPIRED_EVENT,
   getAccessToken,
   getShopId,
   getSimulationSourceId,
@@ -129,6 +130,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setNotifications([])
     setStats(emptyStats)
   }, [])
+  React.useEffect(() => {
+    const onSessionExpired = () => {
+      generation.current++
+      demoMode.current = false
+      setSimulationSource(null)
+      setSession(null)
+      resetData()
+      setError("Your session has expired. Please sign in again.")
+      setSource("auth")
+    }
+    window.addEventListener(SESSION_EXPIRED_EVENT, onSessionExpired)
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onSessionExpired)
+  }, [resetData])
   const logout = React.useCallback(() => {
     setSimulationSource(null)
     generation.current++
