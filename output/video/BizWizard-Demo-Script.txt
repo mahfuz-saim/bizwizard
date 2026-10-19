@@ -141,13 +141,6 @@ BizWizard brings the shop's records into its next financial decision.
 The owner can inspect the reason, review the options and retain approval
 authority. We are BongoForge from RUET. Thank you.
 
-RECORDING CHECK
-
-Confirm the final video is at most five minutes, narration matches the visible
-states, demo data is identified, and no private information appears. Rehearsal
-determines the actual duration; timestamps are production targets, not a
-measurement of a recorded video.
-
 SOURCE BASIS
 
 Screen labels and workflows: client/src/app/(dashboard)/finance/
