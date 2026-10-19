@@ -312,3 +312,21 @@ and run from the repository root:
 The first build downloads LaTeX packages. Both PDFs are written to `output/pdf/`;
 intermediate files stay in Git-ignored `submission/.build/`. Building documents does
 not run the application, call AI, or regenerate the financial evidence.
+
+## Presentation
+
+Open `output/presentation/BizWizard-Presentation.pptx` in PowerPoint to edit the
+text, diagrams, tables and benchmark chart. Product screenshots remain images.
+The deck has 12 main slides with speaker notes and three hidden technical backup
+slides. Unhide slides 13–15 when needed for questions.
+
+The JavaScript source is `submission/presentation/build.mjs`. It uses the
+`@oai/artifact-tool` library supplied with the Codex presentation runtime, separate
+from application dependencies. With that runtime available, run the source with
+Node.js; `ARTIFACT_TOOL_MODULE` can point to the library's module file. Drafts and
+previews stay in the Git-ignored `.build/` directory. Full validation also uses
+`PRESENTATION_SKILL_DIR`, `RUNTIME_NODE_MODULES` and `RUNTIME_PYTHON`; set
+`PRESENTATION_OUTPUT` to a new filename when generating another final version.
+Direct PowerPoint edits do not require any of these tools and do not update the
+JavaScript source. Screenshots use illustrative local demo responses; measured
+results come from the saved submission evidence, not those screenshots.

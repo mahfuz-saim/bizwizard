@@ -1,0 +1,15 @@
+{
+  "basis": "Current local application rendered with intercepted synthetic API responses. UI illustrations, not production operation evidence.",
+  "applicationSource": "client/src/app/(dashboard)",
+  "matchedEvaluationSource": "evidence/submission/matched-evaluation-live.json",
+  "captures": [
+    "dashboard-main.png",
+    "inventory-main.png",
+    "matching-ranked.png",
+    "cashflow-main.png",
+    "analysis-main.png",
+    "mobile-cashflow.png"
+  ],
+  "captureMethod": "Headless Chrome against a local Next.js server. API requests intercepted with synthetic responses. No backend or production write requests.",
+  "imageUse": "Product walkthrough illustrations. Benchmark chart and paired-result table use the saved evidence reports separately."
+}
