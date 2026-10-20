@@ -6,7 +6,6 @@ decisions. Built for the FinTechathon SME Finance Copilot topic.
 **Financing is simulated:** no real lender is contacted, and no loan or bank transfer happens.
 
 - Application: [bizwizard-lake.vercel.app](https://bizwizard-lake.vercel.app/)
-- Private repositories require an invitation for reviewers to access source code.
 
 ## Main features
 
