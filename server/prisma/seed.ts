@@ -221,7 +221,8 @@ export async function seedAccount(account: SeedAccount, now: Date, refresh: bool
             for (const row of stock)
                 await tx.shopVariant.update({ where: { id: row.shopVariantId }, data: { totalProducts: row._sum.stock ?? 0 } });
         },
-        { maxWait: 10000, timeout: 180000, isolationLevel: 'Serializable' },
+        // Two years of history and cash-ledger triggers can exceed three minutes on the VPS.
+        { maxWait: 10000, timeout: 600000, isolationLevel: 'Serializable' },
     );
     console.log(
         `${account.email}: ${data.inventory.length} products, ${data.buyers.length} customers, ${data.checkouts.length} sales, ${data.lots.length} purchases, ${data.debts.length} credit sales, ${data.expenses.length} expense months, ${data.pickups.length} pickup orders, ${data.losses.length} stock adjustments, ${data.attendance.length} attendance records (${start.toISOString()} – ${now.toISOString()}).`,
