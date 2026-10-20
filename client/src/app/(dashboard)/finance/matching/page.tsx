@@ -20,6 +20,7 @@ export default function MatchingPage() {
   const [maxRate, setMaxRate] = React.useState("")
   const [matches, setMatches] = React.useState<FinanceMatch[]>([])
   const [offers, setOffers] = React.useState<FinanceOffer[]>([])
+  const [offerBlockers, setOfferBlockers] = React.useState<string[]>([])
   const [applications, setApplications] = React.useState<{ id: string; requestedAmount: number; status: string; schedule?: { installmentNo: number; totalDue: number; status: string }[] }[]>([])
   const [notice, setNotice] = React.useState("")
   const [transcript, setTranscript] = React.useState<{ id?: string; fromParty: string; message: string; reasoning: string; round: number }[]>([])
@@ -35,6 +36,7 @@ export default function MatchingPage() {
       const [r, apps] = await Promise.all([matchingApi.results(), matchingApi.applications()])
       setMatches(r.matches)
       setOffers(r.offers)
+      setOfferBlockers(r.offerBlockers ?? [])
       setApplications(apps as typeof applications)
       setLoaded(true)
     } catch (e) { setLoadError(e instanceof Error ? e.message : "Could not load financing data.") } finally { setLoading(false) }
@@ -91,7 +93,7 @@ export default function MatchingPage() {
               {["WORKING_CAPITAL", "INVENTORY", "EXPANSION", "EQUIPMENT", "DEBT_CONSOLIDATION", "EMERGENCY"].map((p) => <option key={p} value={p}>{p.replaceAll("_", " ")}</option>)}
             </select>
           </label>
-          <label className="text-sm">Max rate % (optional)<Input inputMode="decimal" value={maxRate} onChange={(e) => setMaxRate(e.target.value)} /></label>
+          <label className="text-sm">Max rate % (optional)<Input inputMode="decimal" value={maxRate} onChange={(e) => setMaxRate(e.target.value)} /><span className="text-xs text-muted-foreground">Offers above this rate are blocked.</span></label>
           <Button disabled={busy || !canAct} onClick={() => void run()}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Find &amp; negotiate offers</Button>
         </CardContent>
       </Card>
@@ -99,9 +101,23 @@ export default function MatchingPage() {
       <PageRefreshState loading={loading} error={loadError} retry={() => void load()} />
       {notice && <p role="alert" className="rounded-lg border border-warning/40 bg-warning/5 p-3 text-sm">{notice}</p>}
 
+      {(offerBlockers.length > 0 || (matches.length > 0 && !offers.some(o => ["ISSUED", "COUNTERED"].includes(o.status)))) && (
+        <Card>
+          <CardHeader><CardTitle className="text-base">{offers.some(o => ["ISSUED", "COUNTERED"].includes(o.status)) ? "Why some options have no offer" : "No selectable offers"}</CardTitle></CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {offerBlockers.length > 0 ? <>
+              <p>These checks blocked offers in your latest search:</p>
+              <ul className="list-disc space-y-1 pl-5">{offerBlockers.map(reason => <li key={reason}>{reason}</li>)}</ul>
+              <p>Review your request and search again. Raising or clearing Max rate allows higher rates; other safety checks still apply.</p>
+            </> : <p>No open offers are available. Previous offers may already be accepted or rejected, or the lender could not issue an offer. Review your request and select Find &amp; negotiate offers to search again.</p>}
+          </CardContent>
+        </Card>
+      )}
+
       {matches.length > 0 && (
         <div className="space-y-3">
           <h3 className="font-semibold">Ranked options (rule gate first, AI re-rank second)</h3>
+          <p className="text-sm text-muted-foreground">Eligible means a product meets the basic rules, not that a loan offer is ready. Select an offer below using Accept &amp; apply.</p>
           {[...matches].sort(financingOrder).map((m) => (
             <Card key={m.id}>
               <CardContent className="p-4">

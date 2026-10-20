@@ -12,6 +12,7 @@ import { guardOffer, clampAiScore, blendScore } from '../shared/guard';
 import { ensureCatalog, ensureDefaultPolicies } from '../shared/catalog';
 import { priceOfferCore, runNegotiation } from '../agents/agentCore';
 import ApiError from '../../../../errors/ApiError';
+import { explainOfferBlocker } from './offer-feedback';
 
 const db = () => prisma as any;
 
@@ -207,7 +208,7 @@ export const matchingService = {
               model: 'deterministic-core',
               promptVersion: prompts.priceOffer.version,
               inputHash: hashInput({ product: m.product.id, profileID }),
-              inputSnapshot: { profileID, pd: pricedOffer.pd, lgd: pricedOffer.lgd },
+              inputSnapshot: { profileID, marketID: market.id, financeProductID: m.product.id, pd: pricedOffer.pd, lgd: pricedOffer.lgd },
               output: JSON.parse(JSON.stringify(pricedOffer)),
               projectedImpact: roundCurrency(pricedOffer.offeredAmount * (pricedOffer.offeredRate / 100) * (pricedOffer.tenorMonths / 12)),
               guardResult: verdict.passed ? 'PASSED' : 'REJECTED_BY_GUARD',
@@ -263,10 +264,27 @@ export const matchingService = {
     ]);
     const products = await db().financeProduct.findMany({ include: { provider: true } });
     const byId = new Map(products.map((p: any) => [p.id, p]));
+    const latestMarket = markets[0];
+    const lenderDecisions = latestMarket ? await db().aiDecision.findMany({
+      where: {
+        tenantID: tenantId, shopID: shopId, agentType: 'LENDER_AGENT', status: 'REJECTED',
+        decisionType: { in: ['ISSUE_OFFER', 'DECLINE_OFFER'] },
+        decidedAt: { gte: latestMarket.createdAt },
+      },
+      select: { inputSnapshot: true, guardReason: true, decisionType: true },
+    }) : [];
+    const offerBlockers = [...new Set<string>(lenderDecisions
+      // Older decisions predate market IDs in their snapshots; use the latest request's time window.
+      .filter((decision: any) => !decision.inputSnapshot?.marketID || decision.inputSnapshot.marketID === latestMarket.id)
+      .flatMap((decision: any) => [
+        ...(decision.guardReason ? decision.guardReason.split('; ').map(explainOfferBlocker) : []),
+        ...(decision.decisionType === 'DECLINE_OFFER' ? ['The lender declined based on risk or affordability.'] : []),
+      ]))];
     return {
       matches: matches.map((m: any) => ({ ...m, product: byId.get(m.financeProductID) ?? null })),
       offers,
       markets,
+      offerBlockers,
       simulatedMarket: true,
     };
   },

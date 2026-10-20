@@ -44,7 +44,7 @@ export const matchingApi = {
     data(api.post("/finance/matching/run", { shopId: getShopId(), ...body })),
   results: () =>
     data(api.get("/finance/matching/results", shopParams())) as Promise<{
-      matches: FinanceMatch[]; offers: FinanceOffer[]; simulatedMarket: boolean
+      matches: FinanceMatch[]; offers: FinanceOffer[]; simulatedMarket: boolean; offerBlockers?: string[]
     }>,
   negotiate: (offerId: string) =>
     data(api.post(`/finance/matching/offers/${offerId}/negotiate?shopId=${getShopId() ?? ""}`, {})),

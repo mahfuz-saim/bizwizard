@@ -134,7 +134,7 @@ export default function CashflowPage() {
         <CardHeader><CardTitle className="text-base">Projected balance — next 90 days</CardTitle></CardHeader>
         <CardContent>
           {displayProjection?.narrative && <p className="mb-3 flex gap-2 text-sm text-muted-foreground"><Bot className="mt-0.5 h-4 w-4 shrink-0" />{displayProjection.narrative}</p>}
-          <div className="relative flex h-48 items-end gap-[2px]" role="img" aria-label="90-day projected cash balance chart">
+          <div className="relative flex h-48 items-end gap-0.5" role="img" aria-label="90-day projected cash balance chart">
             {showTroughMarker && (
               <div
                 className="animate-in fade-in pointer-events-none absolute -top-6 flex -translate-x-1/2 flex-col items-center text-destructive duration-500"
@@ -145,7 +145,7 @@ export default function CashflowPage() {
               </div>
             )}
             {buckets.map((b, i) => (
-              <div key={b.date} title={`${b.date}: ${fmtBDT(b.closingBalance)}`} className={`flex-1 rounded-t transition-[height] duration-150 ${b.closingBalance < 0 ? "bg-destructive" : i === troughIndex && showTroughMarker ? "bg-destructive/70" : "bg-gradient-to-t from-brand-600 to-brand-400"}`} style={{ height: `${Math.max(2, ((b.closingBalance - min) / (max - min || 1)) * 100)}%` }} />
+              <div key={b.date} title={`${b.date}: ${fmtBDT(b.closingBalance)}`} className={`flex-1 rounded-t transition-[height] duration-150 ${b.closingBalance < 0 ? "bg-destructive" : i === troughIndex && showTroughMarker ? "bg-destructive/70" : "bg-linear-to-t from-brand-600 to-brand-400"}`} style={{ height: `${Math.max(2, ((b.closingBalance - min) / (max - min || 1)) * 100)}%` }} />
             ))}
           </div>
           <div className="mt-2 flex justify-between text-[10px] text-muted-foreground"><span>Today</span><span>+45d</span><span>+90d</span></div>
