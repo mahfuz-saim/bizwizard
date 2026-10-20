@@ -8,7 +8,11 @@
 
 \DocSection{01 / OVERVIEW}{Technical Documentation}{2026 FinTechathon International Track\newline Topic E - SME Finance Copilot}
 
-\DocNote{\textbf{Purpose.} Help a small-business owner compare financing, anticipate cash pressure and understand business performance. Financial calculations remain deterministic; AI selects or explains constrained options.}
+\DocNote{\textbf{Purpose.} Run the shop and use its records to make financial decisions. BizWizard combines business management with financing comparisons, cash-flow alerts and financial analysis. Code calculates the numbers; optional AI helps choose or explain allowed options.}
+
+\subsection*{The business records behind the copilot}
+
+Inventory, sales, purchases, customers, suppliers, debts, expenses and employee workflows share one platform. The finance tools use records saved through these workflows rather than asking owners to build a separate financial dataset. Demonstrations and submitted test evidence use synthetic data, not verified customer records.
 
 \subsection*{Implemented capabilities}
 
@@ -31,7 +35,7 @@ Business financial analysis & Compute product economics and working-capital metr
 
 \subsection*{Scope}
 
-The application is a sandbox finance copilot. Financing offers and money movement are simulated; no external lender is contacted and no bank transfer is executed. This document describes the implemented workflows, evaluation methods and operating limitations.
+The finance copilot operates in a sandbox: financing offers and money movement are simulated. No external lender is contacted and no bank transfer is executed. The business-management platform supplies the records; this document focuses on the Topic E finance workflows and their limits.
 
 
 \textbf{Application:} \url{https://bizwizard-lake.vercel.app/}\newline \textbf{Repository:} \url{https://github.com/mahfuz-saim/bizwizard}\newline Reviewer access is required for the private repository.
@@ -71,7 +75,7 @@ The disposable local simulator\_test database is test infrastructure, not a seco
 
 \begin{ReportTable}{L{0.261477}L{0.738523}}
 
-\rowcolor{Navy} \textcolor{white}{\textbf{Stage}} & \textcolor{white}{\textbf{Deterministic contract}} \\
+\rowcolor{Navy} \textcolor{white}{\textbf{Stage}} & \textcolor{white}{\textbf{Rules enforced by code}} \\
 
 1. Profile and completeness & Aggregate the shop history: revenue, COGS, operating expense, receivables, inventory, debt burden and cash. Matching requires at least 60\% coverage of its 90-day sales window. \\
 
@@ -81,7 +85,7 @@ The disposable local simulator\_test database is test infrastructure, not a seco
 
 4. Price and negotiate & Initial offers pass product and affordability guards. Pricing and the accept/counter/reject policies are deterministic, with at most three rounds; they are not an LLM-to-LLM negotiation. \\
 
-5. Owner confirmation & Acceptance checks scope, offer state and expiry, then creates the application and rounded schedule transactionally. Duplicate acceptance reuses it; current affordability is not re-underwritten. \\
+5. Owner confirmation & Acceptance checks shop access, offer state and expiry, then saves the application and rounded schedule in one database transaction. Repeated acceptance reuses it; affordability is not recalculated at this stage. \\
 
 \end{ReportTable}
 
@@ -98,12 +102,12 @@ Pr\big/\bigl(1-(1+r)^{-n}\bigr), & r>0,
 \end{cases}
 \qquad r=\frac{i_{\mathrm{annual}}}{1200}.
 \end{align*}
-\SmallText{Here R is monthly revenue, C is COGS, O is operating expense, D is existing debt service, P is principal, n is the number of monthly installments, and the annual rate is expressed as a percentage.}
+\SmallText{FCF is free cash flow; COGS is cost of goods sold; EMI and PMT refer to monthly installments. R is monthly revenue, C is COGS, O is operating expense, D is existing debt service, P is principal, n is the number of installments, and the annual rate is a percentage.}
 
 The 50\% screening capacity and 35\% borrower policy ceiling are separate checks. AI enriches product ranking; deterministic policies price and negotiate offers. Currency boundaries round to two decimals, with the last installment absorbing residual principal. Submission is not disbursement.
 
 
-\DocNote[Amber]{\textbf{Model limitations.} Missing lot costs use an estimated COGS of 70\% of line sales value. Credit risk is heuristic, not a validated bureau score. The helper effectiveApr annualizes total cost / principal; it is not an IRR-based regulatory APR. Quotes are simulated, not real credit commitments.}
+\DocNote[Amber]{\textbf{Model limitations.} Missing lot costs are estimated at 70\% of line sales value. Credit risk uses rules of thumb, not a validated bureau score. The effectiveApr helper annualizes total cost divided by principal; it is not a regulatory annual percentage rate (APR) based on the timing of payments. Quotes are simulated, not real credit commitments.}
 
 \clearpage
 
@@ -111,7 +115,7 @@ The 50\% screening capacity and 35\% borrower policy ceiling are separate checks
 
 \subsection*{Cash synchronization and projection}
 
-PostgreSQL triggers synchronize non-simulated paid sales, debt payments and expense events with cash records, including updates and deletions. Demo shops bypass automatic synchronization; the simulator manages their ledger separately. Repeated backfill preserves manual entries and is idempotent. Supplier-obligation settlement links an existing matching purchase rather than issuing another payment.
+PostgreSQL triggers keep cash records in step with non-simulated paid sales, debt payments and expenses, including edits and deletions. Demo shops use a separate simulator-managed ledger. Backfill adds missing historical cash entries without duplicating them or replacing manual entries. Settling a supplier obligation links an existing matching purchase; it does not issue another payment.
 
 
 The projection builds daily historical inflow/outflow series, estimates recent levels and day-of-week seasonality, applies a clipped trend, and adds scheduled commitments and probability-weighted receivables. It rolls balances forward for 90 days and identifies the trough, first shortfall and buffer days.
@@ -131,7 +135,7 @@ Idle cash; revenue decline; expense spike; insufficient data & Flag idle balance
 
 \subsection*{Analysis and hypothesis verification}
 
-The analysis module computes margins, product contribution, working capital, breakeven and concentration from scoped records. Candidate explanations are checked by removing the candidate contribution from the original gap. A claim is VERIFIED only if the nonzero gap's residual is at most 10\%; this is accounting attribution, not causal discovery.
+The analysis module computes margins, product contribution, working capital, breakeven and concentration from the selected shop's records. It checks an explanation by subtracting its contribution from the observed gap. A claim is VERIFIED only when at most 10\% of the nonzero gap remains unexplained. This checks whether the numbers fit, not whether one event caused another.
 
 
 Scenario levers change price, collections, operating cost or product mix through an explicit simplified model. Approved capital decisions freeze an observation window; 30-day before/after profit observations exclude future rows and remain non-causal. Treasury collection evidence links unique existing payments and is gross cash, not incremental profit.
@@ -139,29 +143,33 @@ Scenario levers change price, collections, operating cost or product mix through
 
 \SmallText{\textbf{Assumptions:} collection probabilities and scenario elasticity are heuristics. Receivable age can stand in for overdue age. Scheduled commitments can overlap ordinary historical expenses. Cash accounts are not externally reconciled; historical supplier obligations must be recorded explicitly.}
 
+\subsection*{Worked example: from a sale to evidence}
+
+\DocNote{\textbf{Illustrative flow, not a measured result.} A paid sale of BDT 1,000 is saved in a non-demo shop. Its cash entry is synchronized automatically and feeds the next projection. If a cash-buffer alert appears, the owner can review a proposed collection plan before approving it. Approval alone adds no cash: recording a collection must link an existing valid payment. The saved plan and payment link let the reviewer inspect what was approved and what was actually recorded.}
+
 \clearpage
 
 \DocSection{05 / AI RUNTIME AND EVALUATION}{AI Runtime and Evaluation}{Structured model choices, deterministic validation and paired sandbox measurement.}
 
-Each configured AI call requests JSON and validates it with Zod. The runtime permits one repair retry within its deadline. Missing keys, invalid output, budget denial and timeouts use a labelled deterministic fallback. Calls reserve a conservative per-tenant monthly cost allowance. Model, prompt version, tokens, cost and status are logged best-effort; logging failures do not block the feature.
+Each AI call requests JSON, checked with Zod against the expected fields and allowed values. One repair retry is permitted within the time limit. Missing keys, invalid output, exhausted budgets and timeouts use a clearly labelled rules-based fallback. Calls reserve part of the business's monthly AI budget. The system attempts to log the model, prompt version, tokens, estimated cost and status; a logging failure does not block the feature.
 
 
 \subsection*{Shop-specific paired evaluation}
 
 \EvaluationDiagram
 
-The snapshot requires 60\% sales-history completeness and at least 14 cash-history days. It captures current quotes, economics, commitments and mandate versions under a repeatable-read transaction. The model cannot choose seeds or future draws. A unique snapshot key and atomic run claim prevent concurrent duplicate paid calls; unchanged daily inputs reuse the saved evaluation.
+The snapshot requires 60\% sales-history completeness and at least 14 cash-history days. A repeatable-read database transaction captures a consistent view of quotes, product economics, commitments and versioned owner policies (mandates). The AI cannot choose the random seed or future outcomes. A unique snapshot key and a single database claim prevent duplicate paid calls; unchanged daily inputs reuse the saved evaluation.
 
 
 \begin{ReportTable}{L{0.221557}L{0.778443}}
 
 \rowcolor{Navy} \textcolor{white}{\textbf{Role}} & \textcolor{white}{\textbf{Paired sandbox metric}} \\
 
-Lender & Full-term net credit cash return after funding costs, repayments and modeled recovery; common default draws. The pinned flat-rate baseline funds the same exposure-bounded universe. \\
+Lender & Net cash return over the loan term after funding costs, repayments and modeled recovery. AI and fixed-rate rules use the same loans, exposure limits and random default outcomes. \\
 
 Borrower & Full-term borrowing cost on equal-principal feasible quotes; baseline selects lowest quoted APR. Both sides assume repayment in full, independently of the lender experiment. \\
 
-Treasurer / analyst & 30-day closing cash versus delayed-collection rules; modeled capital gross margin versus equal allocation among revenue-ranked SKUs. The roles are independent experiments. \\
+Treasurer / analyst & 30-day closing cash versus delayed-collection rules; modeled capital gross margin versus equal allocation among products ranked by revenue. Each role is a separate experiment. \\
 
 \end{ReportTable}
 
@@ -170,6 +178,8 @@ Treasurer / analyst & 30-day closing cash versus delayed-collection rules; model
 \clearpage
 
 \DocSection{06 / VALIDATION}{Validation Results}{Live-provider benchmarks and isolated application execution tests.}
+
+\EvidenceRevision
 
 \subsection*{Live AI versus pinned rules: three synthetic risk cases}
 
@@ -208,7 +218,7 @@ Analyst & 46,761.23 & 46,761.23 & +0.00 \\
 
 \end{ReportTable}
 
-\SmallText{These are means across eight paired paths: lender and borrower use their loan terms; treasurer and analyst use 30 days. The live policy succeeded without fallback; its estimated API cost was USD 0.000155. The exported result reproduced with a matching canonical outcome hash.}
+\SmallText{These are means across eight paired paths: lender and borrower use their loan terms; treasurer and analyst use 30 days. The live policy succeeded without fallback; its estimated API cost was USD 0.000155. Offline replay produced the same result hash, a fingerprint of the consistently ordered outcome data. Positive differences favour the participant; borrower differences measure cost saved, while other roles measure extra return or cash.}
 
 \subsection*{Database execution evidence}
 
@@ -231,24 +241,34 @@ npm run evidence:finance
 npm run evidence:finance -- --replay EXPORTED_EVALUATION.json
 \end{CodeBlock}
 
-The benchmark needs Node.js 24, npm and Git; offline mode needs no database. Explicit --live uses the reviewer's own key in Git-ignored server/.env.benchmark or the environment. The execution runner additionally needs disposable local PostgreSQL database simulator\_test at 127.0.0.1, configured through EVIDENCE\_DATABASE\_URL. It creates a new schema, applies migrations and disables external AI. Replay needs only the exported JSON and installed dependencies.
+All commands need Node.js 24, npm, Git and installed dependencies. Offline benchmarks and JSON replay need no database or AI key. Only --live uses your key from server/.env.benchmark or the environment. Database evidence needs local PostgreSQL at 127.0.0.1, database simulator\_test and EVIDENCE\_DATABASE\_URL; it creates a fresh schema, applies migrations and disables external AI. See the README for setup steps.
 
 
 \subsection*{Application deployment}
 
-Frontend: Vercel, root client, Next.js preset, NEXT\_PUBLIC\_API\_BASE\_URL set to the backend /api/v1 endpoint. Backend: the original repository's main workflow builds an artifact and uses restricted SSH. The installed deployment script installs dependencies, generates Prisma, starts the backup service, applies committed migrations, switches the release and checks readiness. The VPS and its secrets/services must already be configured.
+\textbf{Frontend:} Vercel, root client, Next.js preset; set NEXT\_PUBLIC\_API\_BASE\_URL to the backend /api/v1 endpoint. \textbf{Backend:} main-branch CI builds an artifact and deploys over restricted SSH. The installed script installs dependencies, generates Prisma, starts backup, applies migrations, switches releases and checks readiness. VPS secrets and services must already be configured; frontend deployment is separate.
 
 
-Cash triggers, supplier-obligation metadata and matched-evaluation storage are committed migrations. Use migrate deploy, not schema-only db push. Existing history can be reconciled using the owner-only backfill action. Code rollback does not reverse a database migration. A frontend fork must be synchronized separately.
+Use migrate deploy, not schema-only db push: migrations install cash triggers, supplier-obligation fields and evaluation storage. Owners can backfill existing cash history. Code rollback does not undo database migrations.
 
 
 \subsection*{Review workflow}
 
-Use a synthetic account or dedicated demo workspace. Open Cash Flow and inspect a projection and alert; run matching and inspect eligibility, negotiation and an approved application; inspect verified analysis; then run a matched evaluation in AI Agent Ledger, download it and replay the JSON. The Security Self-Assessment documents permission tiers and residual risks.
+Use a synthetic account or demo workspace. Inspect a Cash Flow projection and alert; run financing matching and review negotiation and an approved application; inspect verified analysis. In AI Agent Ledger, run a matched evaluation, download it and replay the JSON. See the Security Self-Assessment for permissions and risks.
 
 
 \subsection*{References and supporting material}
 
-\SmallText{\textbf{Competition requirements:} FinTechathon International Track competition appendix, Topic E and submission checklist (pages 2-3).\newline \textbf{Source and setup:} project repository and root README, including deployment prerequisites and test instructions.\newline \textbf{Execution evidence:} the six reports in evidence/submission/ contain benchmark results, operation logs, paired outcomes and replay verification. Revision identifiers and source hashes are retained in those reports.}
+\SmallText{\textbf{Requirements:} FinTechathon International Track appendix, Topic E and submission checklist (pages 2-3). \textbf{Setup:} \href{https://github.com/mahfuz-saim/bizwizard/blob/main/README.md}{root README}. The linked reports below require repository access.}
+
+\begin{ReportTable}{L{0.47}L{0.53}}
+\rowcolor{Navy} \textcolor{white}{\textbf{Report in evidence/submission/}} & \textcolor{white}{\textbf{What to verify}} \\
+\EvidenceFile{benchmark-results.json} & Offline fixture comparison; no AI call. \\
+\EvidenceFile{benchmark-live-results.json} & Three live-provider cases, choices, costs and results. \\
+\EvidenceFile{sandbox-operation-logs.json} & Migrations, five integration suites and numeric checks. \\
+\EvidenceFile{matched-evaluation.json} & Shop snapshot and rules-based paired evaluation. \\
+\EvidenceFile{matched-evaluation-live.json} & Live AI choices and eight paired outcome paths. \\
+\EvidenceFile{matched-replay-verification.json} & Offline reproduction of the live evaluation. \\
+\end{ReportTable}
 
 \end{document}
