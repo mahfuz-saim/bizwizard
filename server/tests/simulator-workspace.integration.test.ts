@@ -76,8 +76,23 @@ test('isolated demo: migration, copied history, next-month runs, locking, rollba
   assert.notEqual(demo.id,source.id);
   assert.equal((await simulatorService.prepare(tenant.id,source.id)).id,demo.id);
   const demoScope={tenantID:tenant.id,shopID:demo.id};
-  assert.equal(await prisma.checkout.count({where:demoScope}),730);
+  // The demo workspace copies the window the finance code actually reads
+  // (90 days of sales, 180 days of cash) instead of the shop's whole
+  // history — the numbers below are what that window contains.
+  assert.equal(await prisma.checkout.count({where:demoScope}),93);
+  assert.equal(await prisma.cashTransaction.count({where:demoScope}),367);
+  const oldestDemoTxn=await prisma.cashTransaction.findFirstOrThrow({where:demoScope,orderBy:{occurredAt:'asc'}});
+  assert.equal(oldestDemoTxn.occurredAt.toISOString(),'2026-04-19T12:00:00.000Z','the copied cash history starts at the window edge');
   assert.equal(await prisma.expenseItem.count({where:{expense:{shopID:demo.id}}}),1);
+  // Whatever is left out of the window is folded into the opening balance, so
+  // the demo starts with exactly the cash position of the shop it mirrors.
+  const cashPosition = async (where: Record<string, unknown>) => {
+    const accounts = await prisma.cashAccount.findMany({ where });
+    const txns = await prisma.cashTransaction.findMany({ where });
+    return accounts.reduce((sum: number, a: any) => sum + a.openingBalance, 0)
+      + txns.filter((t: any) => t.status === 'CLEARED').reduce((sum: number, t: any) => sum + (t.direction === 'IN' ? t.amount : -t.amount), 0);
+  };
+  assert.equal(await cashPosition(demoScope), await cashPosition(scope), 'the copied baseline keeps the source cash position');
   const clonedItem=await prisma.checkoutItem.findFirstOrThrow({where:{checkout:{shopID:demo.id}}});
   assert.notEqual(clonedItem.lotId,lot.id);
   const baseline=demo.simulationBaselineAt!.toISOString();
@@ -95,7 +110,13 @@ test('isolated demo: migration, copied history, next-month runs, locking, rollba
     throw new Error('rollback probe');
   }),/rollback probe/);
   assert.equal(await prisma.checkout.count({where:demoScope}),countBefore);
-  const result=await simulatorService.fastForward(tenant.id,demo.id);
+  const streamedDays:number[]=[];
+  const streamedCues:string[]=[];
+  const result=await simulatorService.fastForward(tenant.id,demo.id,undefined,{
+    onDay:day=>streamedDays.push(day.day),
+    onCue:toast=>streamedCues.push(toast.id),
+  });
+  assert.deepEqual(streamedDays,Array.from({length:30},(_,i)=>i+1),'every simulated day is streamed while the run is still going');
   assert.equal(result.dailyEvents.length,30);
   assert.equal(new Date(result.dailyEvents[0].date).getTime(),new Date(baseline.slice(0,10)).getTime()+86400000);
   assert.equal((await shopClock(tenant.id,demo.id)).toISOString(),result.endedAt);
@@ -116,7 +137,7 @@ test('isolated demo: migration, copied history, next-month runs, locking, rollba
   assert.equal(reset.simulationAsOf!.toISOString(),baseline);
   assert.equal(reset.simulationResult,null);
   assert.equal(await prisma.financeEvaluation.count({where:demoScope}),0);
-  assert.equal(await prisma.checkout.count({where:demoScope}),730);
+  assert.equal(await prisma.checkout.count({where:demoScope}),93);
   assert.equal(await prisma.notification.count({where:{shopId:demo.id}}),0);
   const buckets=await prisma.expense.findMany({where:demoScope});
   assert.equal(buckets.reduce((sum,b)=>sum+b.totalAmount,0),100);

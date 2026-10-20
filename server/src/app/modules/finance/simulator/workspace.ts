@@ -30,40 +30,122 @@ export async function requireDemo(tx: any, tenantID: string, shopID: string) {
   return shop;
 }
 
+/**
+ * How much history the demo workspace needs.
+ *
+ * Every finance read the simulator relies on looks back a bounded amount of
+ * time: the sales/expense profile aggregates reach 90 days back
+ * (loadProfileAggregates), the cash projection 180 days back
+ * (loadCashTransactions). Copying the source shop's *whole* history into the
+ * demo shop therefore copied tens of thousands of rows nobody reads, and the
+ * first run (plus every reset) spent tens of seconds in "preparing" before a
+ * single transaction could appear. The windows below cover every horizon the
+ * simulator actually reads — so every number it sees stays identical — while
+ * making the copy a fraction of the size.
+ */
+const SALES_WINDOW_DAYS = 90;
+const CASH_WINDOW_DAYS = 180;
+/** The windows are anchored on the source's last activity; the baseline clock
+ *  sits at the end of that day, so a couple of extra days are kept to cover
+ *  the day the clock rounds up to. */
+const WINDOW_MARGIN_DAYS = 2;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The most recent moment the source shop was active — the anchor of the window. */
+async function latestSourceActivity(tx: any, tenantID: string, shopID: string): Promise<number> {
+  const [sale, expense, cash] = await Promise.all([
+    tx.checkout.findFirst({ where: { tenantID, shopID, isSimulated: false }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
+    tx.expenseItem.findFirst({ where: { tenantID, isSimulated: false, expense: { shopID } }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
+    tx.cashTransaction.findFirst({ where: { tenantID, shopID, isSimulated: false }, orderBy: { occurredAt: 'desc' }, select: { occurredAt: true } }),
+  ]);
+  const times = [sale?.createdAt, expense?.createdAt, cash?.occurredAt]
+    .filter(Boolean)
+    .map((t: any) => new Date(t).getTime());
+  return times.length ? Math.max(...times) : Date.now();
+}
+
+/**
+ * Money that moved before the window, per cash account.
+ *
+ * The demo shop only receives the transactions inside the window, so the part
+ * that falls outside has to be folded into the account's opening balance —
+ * otherwise the demo would start with a different cash position than the
+ * source shop it is supposed to mirror.
+ */
+async function netCashBeforeWindow(tx: any, tenantID: string, shopID: string, windowStart: Date): Promise<Map<string, number>> {
+  const rows = await tx.cashTransaction.findMany({
+    where: { tenantID, shopID, isSimulated: false, status: 'CLEARED', occurredAt: { lt: windowStart } },
+    select: { accountID: true, direction: true, amount: true },
+  });
+  const net = new Map<string, number>();
+  for (const row of rows) {
+    const delta = row.direction === 'IN' ? Number(row.amount) : -Number(row.amount);
+    net.set(row.accountID, (net.get(row.accountID) ?? 0) + delta);
+  }
+  return net;
+}
+
 export async function copyBaseline(tx: any, source: any, demoID: string) {
   const tenantID = source.tenantID;
   const ids = new Map<string, string>();
   const remap = (id: string | null) => id ? ids.get(id) ?? null : null;
   let latest = 0;
   const copy = async (model: string, where: any, patch: (row: any) => any) => {
-    const rows = await tx[model].findMany({ where: { tenantID, ...where } });
+    const rows = await tx[model].findMany({ where });
     for (const row of rows) ids.set(row.id, randomUUID());
     const data = rows.map((row: any) => {
       const time = row.occurredAt ?? row.createdAt;
       if (['checkout', 'expenseItem', 'cashTransaction'].includes(model) && time) latest = Math.max(latest, new Date(time).getTime());
       return { ...row, id: ids.get(row.id), ...patch(row) };
     });
-    for (let i = 0; i < data.length; i += 500) await tx[model].createMany({ data: data.slice(i, i + 500) });
+    for (let i = 0; i < data.length; i += 1000) await tx[model].createMany({ data: data.slice(i, i + 1000) });
+    return rows;
   };
-  await copy('shopBuyer', { shopID: source.id }, () => ({ shopID: demoID }));
-  await copy('shopSupplier', { shopId: source.id }, () => ({ shopId: demoID }));
-  await copy('shopVariant', { shopID: source.id }, () => ({ shopID: demoID }));
-  await copy('lot', { ShopVariant: { shopID: source.id } }, r => ({ shopVariantId: remap(r.shopVariantId), supplyId: remap(r.supplyId) }));
-  await copy('checkout', { shopID: source.id, isSimulated: false }, () => ({ shopID: demoID, soldByOwnerId: null, soldByEmployeeId: null }));
-  await copy('checkoutItem', { checkout: { shopID: source.id, isSimulated: false } }, r => ({ checkoutID: remap(r.checkoutID), lotId: remap(r.lotId), variantId: remap(r.variantId) }));
-  await copy('debt', { shopID: source.id, isSimulated: false, checkout: { isSimulated: false } }, r => ({ shopID: demoID, checkoutID: remap(r.checkoutID) }));
+
+  // --- current state: copied in full (catalogue, people, standing commitments).
+  await copy('shopBuyer', { tenantID, shopID: source.id }, () => ({ shopID: demoID }));
+  await copy('shopSupplier', { tenantID, shopId: source.id }, () => ({ shopId: demoID }));
+  await copy('shopVariant', { tenantID, shopID: source.id }, () => ({ shopID: demoID }));
+  await copy('lot', { tenantID, ShopVariant: { shopID: source.id } }, r => ({ shopVariantId: remap(r.shopVariantId), supplyId: remap(r.supplyId) }));
+  await copy('expense', { tenantID, shopID: source.id }, () => ({ shopID: demoID, totalAmount: 0 }));
+  await copy('cashCommitment', { tenantID, shopID: source.id }, r => ({ shopID: demoID, paymentExpenseID: remap(r.paymentExpenseID) }));
+  await copy('aiAgentPolicy', { tenantID, shopID: source.id, isActive: true }, () => ({ shopID: demoID }));
+
+  // --- history: only the window the finance code actually reads.
+  const anchor = await latestSourceActivity(tx, tenantID, source.id);
+  const salesStart = new Date(anchor - (SALES_WINDOW_DAYS + WINDOW_MARGIN_DAYS) * DAY_MS);
+  const cashStart = new Date(anchor - (CASH_WINDOW_DAYS + WINDOW_MARGIN_DAYS) * DAY_MS);
+
+  // Receivables still open are what the demo is about, so they are kept even
+  // when the sale behind them is older than the window.
+  const openDebts = await tx.debt.findMany({
+    where: { tenantID, shopID: source.id, isSimulated: false, status: { not: 'PAID' } },
+    select: { id: true, checkoutID: true },
+  });
+  const openCheckoutIDs = openDebts.map((d: any) => d.checkoutID).filter(Boolean);
+  const recentCheckout = { tenantID, shopID: source.id, isSimulated: false, createdAt: { gte: salesStart } };
+  const checkoutWhere = openCheckoutIDs.length ? { OR: [recentCheckout, { tenantID, id: { in: openCheckoutIDs } }] } : recentCheckout;
+
+  await copy('checkout', checkoutWhere, () => ({ shopID: demoID, soldByOwnerId: null, soldByEmployeeId: null }));
+  await copy('checkoutItem', { tenantID, checkout: checkoutWhere }, r => ({ checkoutID: remap(r.checkoutID), lotId: remap(r.lotId), variantId: remap(r.variantId) }));
+  const recentDebt = { tenantID, shopID: source.id, isSimulated: false, checkout: { createdAt: { gte: salesStart } } };
+  const debtWhere = openDebts.length ? { OR: [recentDebt, { id: { in: openDebts.map((d: any) => d.id) } }] } : recentDebt;
+  const copiedDebts = await copy('debt', debtWhere, r => ({ shopID: demoID, checkoutID: remap(r.checkoutID) }));
   // DebtPayments has no tenantID; its tenant boundary is the parent debt.
-  const payments = await tx.debtPayments.findMany({ where: { isSimulated: false, debt: { tenantID, shopID: source.id, isSimulated: false } } });
+  const debtIDs = copiedDebts.map((d: any) => d.id);
+  const payments = debtIDs.length ? await tx.debtPayments.findMany({ where: { isSimulated: false, debt: { id: { in: debtIDs } } } }) : [];
   for (const row of payments) ids.set(row.id, randomUUID());
   if (payments.length) await tx.debtPayments.createMany({ data: payments.map((r: any) => ({ ...r, id: ids.get(r.id), debtId: remap(r.debtId) })) });
-  await copy('expense', { shopID: source.id }, () => ({ shopID: demoID, totalAmount: 0 }));
-  await copy('expenseItem', { isSimulated: false, expense: { shopID: source.id } }, r => ({ expenseID: remap(r.expenseID), shopVariantId: remap(r.shopVariantId), lotId: remap(r.lotId), supplierId: remap(r.supplierId) }));
+  await copy('expenseItem', { tenantID, isSimulated: false, expense: { shopID: source.id }, createdAt: { gte: salesStart } }, r => ({ expenseID: remap(r.expenseID), shopVariantId: remap(r.shopVariantId), lotId: remap(r.lotId), supplierId: remap(r.supplierId) }));
   const totals = await tx.expenseItem.groupBy({ by: ['expenseID'], where: { tenantID, expense: { shopID: demoID } }, _sum: { amount: true } });
   for (const total of totals) await tx.expense.update({ where: { id: total.expenseID }, data: { totalAmount: total._sum.amount ?? 0 } });
-  await copy('cashAccount', { shopID: source.id }, () => ({ shopID: demoID }));
-  await copy('cashTransaction', { shopID: source.id, isSimulated: false }, r => ({ shopID: demoID, accountID: remap(r.accountID), sourceRefID: remap(r.sourceRefID) }));
-  await copy('cashCommitment', { shopID: source.id }, r => ({ shopID: demoID, paymentExpenseID: remap(r.paymentExpenseID) }));
-  await copy('aiAgentPolicy', { shopID: source.id, isActive: true }, () => ({ shopID: demoID }));
+  const carried = await netCashBeforeWindow(tx, tenantID, source.id, cashStart);
+  await copy('cashAccount', { tenantID, shopID: source.id }, r => ({
+    shopID: demoID,
+    openingBalance: (r.openingBalance ?? 0) + (carried.get(r.id) ?? 0),
+    currentBalance: (r.currentBalance ?? 0) + (carried.get(r.id) ?? 0),
+  }));
+  await copy('cashTransaction', { tenantID, shopID: source.id, isSimulated: false, occurredAt: { gte: cashStart } }, r => ({ shopID: demoID, accountID: remap(r.accountID), sourceRefID: remap(r.sourceRefID) }));
   const baselineAt = new Date(latest || Date.now());
   baselineAt.setUTCHours(23, 59, 59, 999);
   await tx.shop.update({ where: { id: demoID }, data: { simulationBaselineAt: baselineAt, simulationAsOf: baselineAt, simulationRunID: null, simulationResult: Prisma.DbNull } });

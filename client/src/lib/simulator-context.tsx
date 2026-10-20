@@ -107,6 +107,10 @@ export function FinanceSimulatorProvider({ children }: { children: React.ReactNo
   const eventsRef = React.useRef<VisibleStreamEvent[]>([])
   const revealedRef = React.useRef(0)
   const shownToastIds = React.useRef<Set<string>>(new Set())
+  /** Toasts known so far — milestone cues arrive while the run is still going. */
+  const toastsRef = React.useRef<SimToast[]>([])
+  /** True once the backend confirmed the run finished. */
+  const runCompleteRef = React.useRef(false)
   React.useEffect(() => {
     if (!store.simulationSourceId || !store.session?.shopId || state.status !== "idle") return
     let active = true
@@ -116,17 +120,18 @@ export function FinanceSimulatorProvider({ children }: { children: React.ReactNo
       const events = flattenEvents(result)
       eventsRef.current = events
       revealedRef.current = events.length
+      toastsRef.current = result.toasts ?? []
       setState(s => s.status !== "idle" ? s : ({ ...s, result, status: "done", dayIndex: result.dailyEvents.length, progress: 1, visibleEvents: events.slice().reverse(), totalEvents: events.length, revealedEvents: events.length }))
     }).catch(() => {})
     return () => { active = false }
   }, [store.simulationSourceId, store.session?.shopId, state.status])
 
-  const applyRevealed = React.useCallback((result: FastForwardResult, revealed: number) => {
+  const applyRevealed = React.useCallback((revealed: number) => {
     const events = eventsRef.current
     const visible = events.slice(0, revealed).slice().reverse()
     const dayIndex = revealed > 0 ? events[revealed - 1].day : 0
     const through = revealed > 0 ? Date.parse(events[revealed - 1].occurredAt) : -Infinity
-    const dueToasts = result.toasts.filter((t) => through >= Date.parse(t.occurredAt) && !shownToastIds.current.has(t.id))
+    const dueToasts = toastsRef.current.filter((t) => through >= Date.parse(t.occurredAt) && !shownToastIds.current.has(t.id))
     dueToasts.forEach((t) => shownToastIds.current.add(t.id))
     setState((s) => ({
       ...s,
@@ -144,46 +149,80 @@ export function FinanceSimulatorProvider({ children }: { children: React.ReactNo
   // Re-created whenever playback starts/stops or the speed changes, so a
   // manual speed change mid-run takes effect on the very next tick.
   React.useEffect(() => {
-    if (state.status !== "playing" || !state.result) return
-    const result = state.result
+    if (state.status !== "playing") return
     const id = setInterval(() => {
-      revealedRef.current += 1
-      if (revealedRef.current >= eventsRef.current.length) {
-        clearInterval(id)
-        applyRevealed(result, eventsRef.current.length)
-        setState((s) => ({ ...s, status: "done", completedAt: s.completedAt + 1 }))
+      const total = eventsRef.current.length
+      if (revealedRef.current >= total) {
+        // The queue is drained. The run is only over once the backend has
+        // confirmed it — more days may still be on their way.
+        if (runCompleteRef.current) {
+          clearInterval(id)
+          applyRevealed(total)
+          setState((s) => ({ ...s, status: "done", completedAt: s.completedAt + 1 }))
+        }
         return
       }
-      applyRevealed(result, revealedRef.current)
+      revealedRef.current += 1
+      applyRevealed(revealedRef.current)
     }, state.speedMs)
     return () => clearInterval(id)
-  }, [state.status, state.speedMs, state.result, applyRevealed])
+  }, [state.status, state.speedMs, applyRevealed])
 
   const runFastForward = React.useCallback(async () => {
     const identity = getSessionIdentity()
     const assertSession = () => assertSessionUnchanged(identity)
     shownToastIds.current = new Set()
-    setState((s) => ({ ...s, status: "loading", error: null, drawerOpen: true }))
+    toastsRef.current = []
+    runCompleteRef.current = false
+    eventsRef.current = []
+    revealedRef.current = 0
+    setState((s) => ({ ...s, status: "loading", error: null, drawerOpen: true, result: null, visibleEvents: [], activeToasts: [], totalEvents: 0, revealedEvents: 0, progress: 0, dayIndex: 0 }))
     try {
       const template = state.template
       if (store.source !== "backend" || !["OWNER", "ADMIN"].includes(store.session?.role ?? "")) throw new Error("Log in as a shop owner to use the isolated demo simulator.")
       const demo = await simulatorApi.prepare()
       assertSession()
-      await store.switchSimulation(demo.id, demo.simulationSourceShopID)
+      // The demo workspace is ready — the page data can refresh in the
+      // background while the simulation starts streaming right away.
+      void store.switchSimulation(demo.id, demo.simulationSourceShopID).catch(() => undefined)
+      const result = await simulatorApi.fastForwardStream(
+        template,
+        day => {
+          // A simulated day arrived: queue its rows for the one-by-one reveal.
+          eventsRef.current.push(...day.events.map(e => ({ ...e, day: day.day, date: day.date, phase: day.phase })))
+          setState(s => ({ ...s, status: s.status === "loading" ? "playing" : s.status, totalEvents: eventsRef.current.length }))
+        },
+        toast => {
+          // A milestone cue (e.g. the first CRITICAL alert) — it is revealed
+          // when playback reaches its transaction time.
+          if (!toastsRef.current.some(t => t.id === toast.id)) toastsRef.current = [...toastsRef.current, toast]
+        },
+      )
       assertSession()
-      const result = await simulatorApi.fastForward(template)
-      assertSession()
+      runCompleteRef.current = true
+      for (const toast of result.toasts ?? []) {
+        const existing = toastsRef.current.find(t => t.id === toast.id)
+        if (!existing) {
+          toastsRef.current = [...toastsRef.current, toast]
+        } else if (!shownToastIds.current.has(toast.id)) {
+          // A milestone cue arrived earlier with the same id — keep its
+          // timing but take the committed message.
+          toastsRef.current = toastsRef.current.map(t => (t.id === toast.id ? { ...toast, occurredAt: t.occurredAt } : t))
+        }
+      }
+      // The committed result is authoritative: use it for the event list (the
+      // last day can still receive extra rows after the treasury pass).
       const flat = flattenEvents(result)
       eventsRef.current = flat
-      revealedRef.current = 0
       setState((s) => ({
-        ...s, status: "playing", result, dayIndex: 0, progress: 0, totalEvents: flat.length, revealedEvents: 0,
-        visibleEvents: [], activeToasts: [],
+        ...s, status: s.status === "loading" ? "playing" : s.status, result, totalEvents: flat.length,
       }))
     } catch (e) {
       // Never fail silently: the live stream would sit empty with no reason
       // shown, which is exactly the "transactions never appear" report.
-      setState((s) => ({ ...s, status: "error", error: e instanceof Error ? e.message : "Simulation failed to run." }))
+      eventsRef.current = []
+      revealedRef.current = 0
+      setState((s) => ({ ...s, status: "error", error: e instanceof Error ? e.message : "Simulation failed to run.", visibleEvents: [], totalEvents: 0, revealedEvents: 0 }))
     }
   }, [state.template, store])
 
@@ -199,12 +238,12 @@ export function FinanceSimulatorProvider({ children }: { children: React.ReactNo
   }, [])
 
   const skipToEnd = React.useCallback(() => {
-    const result = state.result
-    if (!result) return
     revealedRef.current = eventsRef.current.length
-    applyRevealed(result, eventsRef.current.length)
-    setState((s) => ({ ...s, status: "done", completedAt: s.completedAt + 1 }))
-  }, [state.result, applyRevealed])
+    applyRevealed(eventsRef.current.length)
+    // While the backend is still simulating, more days can still arrive — the
+    // run only ends once it confirms the result.
+    if (runCompleteRef.current) setState((s) => ({ ...s, status: "done", completedAt: s.completedAt + 1 }))
+  }, [applyRevealed])
 
   const resetSimulation = React.useCallback(async () => {
     const identity = getSessionIdentity()
@@ -214,6 +253,8 @@ export function FinanceSimulatorProvider({ children }: { children: React.ReactNo
       assertSessionUnchanged(identity)
       await store.refresh(false)
       shownToastIds.current = new Set()
+      toastsRef.current = []
+      runCompleteRef.current = false
       eventsRef.current = []
       revealedRef.current = 0
       setState((s) => ({
@@ -232,6 +273,9 @@ export function FinanceSimulatorProvider({ children }: { children: React.ReactNo
   const exitSimulation = React.useCallback(async () => {
     if (state.status === "loading" || state.status === "resetting") return
     eventsRef.current = []
+    toastsRef.current = []
+    runCompleteRef.current = false
+    revealedRef.current = 0
     setState(s => ({ ...s, status: "idle", result: null, visibleEvents: [], activeToasts: [], drawerOpen: false, dayIndex: 0, progress: 0 }))
     await store.switchSimulation(null, null)
   }, [state.status, store])

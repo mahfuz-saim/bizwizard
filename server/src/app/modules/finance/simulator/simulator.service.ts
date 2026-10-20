@@ -44,6 +44,31 @@ export interface DailyStreamDay {
   expense: number;
 }
 
+export interface SimulatorToast {
+  id: 'critical' | 'guard' | 'reconciled';
+  kind: 'critical' | 'guard' | 'reconciled';
+  uiCueDay: number;
+  occurredAt: string;
+  title: string;
+  message: string;
+  actionLabel: string;
+  actionHref: string;
+  refID: string;
+}
+
+/**
+ * Optional live hooks for a running simulation.
+ *
+ * `onDay` is called as soon as a day's rows exist (before that day's treasury
+ * evaluation), `onCue` as soon as a milestone toast becomes known. They let a
+ * streaming client reveal transactions while the remaining days are still
+ * being simulated.
+ */
+export interface SimulatorRunHooks {
+  onDay?: (day: DailyStreamDay) => void;
+  onCue?: (toast: SimulatorToast) => void;
+}
+
 /** 30-day (default) midday timestamp for a given ISO day, spaced so same-day rows keep a stable order. */
 function dayTimestamp(date: string, offsetMinutes = 0): Date {
   return new Date(new Date(`${date}T12:00:00.000Z`).getTime() + offsetMinutes * 60000);
@@ -96,17 +121,30 @@ const CASH_CATEGORY_FOR_EXPENSE: Record<string, string> = {
   GENERAL: 'OPERATING_EXPENSE',
 };
 
+/** The CRITICAL milestone toast, built from a treasury evaluation. */
+function criticalToastFrom(evaluated: any, cueDay: number, events: DailyStreamEvent[]): SimulatorToast {
+  const alert = (evaluated?.alerts ?? []).find((a: any) => a.severity === 'CRITICAL');
+  const projected = alert?.projectedShortfall ?? evaluated?.projection?.shortfallAmount ?? 0;
+  return {
+    id: 'critical', kind: 'critical', uiCueDay: cueDay,
+    occurredAt: events[events.length - 1]?.occurredAt ?? new Date().toISOString(),
+    title: '🚨 CRITICAL',
+    message: `Cash shortfall of ${fmt(projected)} predicted on ${evaluated?.projection?.shortfallDate ?? 'the near horizon'}. TREASURER_AGENT has proposed 1 action.`,
+    actionLabel: 'View alert', actionHref: '/finance/cashflow', refID: alert?.id ?? '',
+  };
+}
+
 export const simulatorService = {
   prepare: prepareWorkspace,
   async workspace(tenantId: string, shopId: string) {
     const source = await workspaceFor(tenantId, shopId);
     return db().shop.findFirst({ where: { tenantID: tenantId, simulationSourceShopID: source.simulationSourceShopID ?? source.id } });
   },
-  async fastForward(tenantId: string, shopId: string, template?: SimTemplate) {
+  async fastForward(tenantId: string, shopId: string, template?: SimTemplate, hooks?: SimulatorRunHooks) {
     return lockedWorkspace(tenantId, shopId, async (tx, shop) => {
       await requireDemo(tx, tenantId, shopId);
       return simulationContext.run({ client: tx, asOf: new Date(shop.simulationAsOf) }, async () => {
-        const result = await simulatorService.playMonth(tenantId, shopId, template);
+        const result = await simulatorService.playMonth(tenantId, shopId, template, hooks);
         await tx.shop.update({ where: { id: shopId }, data: {
           simulationAsOf: new Date(result.endedAt), simulationRunID: result.simulationRunID,
           simulationResult: JSON.parse(JSON.stringify(result)),
@@ -115,7 +153,7 @@ export const simulatorService = {
       });
     });
   },
-  async playMonth(tenantId: string, shopId: string, template?: SimTemplate) {
+  async playMonth(tenantId: string, shopId: string, template?: SimTemplate, hooks?: SimulatorRunHooks) {
     const shop = await requireDemo(db(), tenantId, shopId);
     const clock = simulationContext.getStore();
     if (!clock) throw simulationError('Simulation requires an isolated transaction.');
@@ -242,9 +280,19 @@ export const simulatorService = {
 
         runningBalance = roundCurrency(runningBalance + revenue - expenseTotal);
         streamDays.push({ day: day.day, date: day.date, phase: day.phase, events, runningBalance, revenue: roundCurrency(revenue), expense: roundCurrency(expenseTotal) });
+        // Hand the day to the caller before the treasury evaluation, so a
+        // streaming client can start showing transactions while the remaining
+        // days are still being simulated.
+        hooks?.onDay?.(streamDays[streamDays.length - 1]);
         await refreshBalances(tenantId, shopId);
         const evaluated = await cashflowService.runTreasury(tenantId, shopId, { runID: simulationRunID, occurredAt: new Date(events[events.length - 1]?.occurredAt ?? clock.asOf) });
-        if (firstCriticalDay == null && evaluated.alerts.some((alert: any) => alert.severity === 'CRITICAL')) firstCriticalDay = day.day;
+        if (firstCriticalDay == null && evaluated.alerts.some((alert: any) => alert.severity === 'CRITICAL')) {
+          firstCriticalDay = day.day;
+          // The CRITICAL milestone is announced as soon as it is detected, so
+          // a streaming client can reveal it on the right day instead of
+          // waiting for the whole run to finish.
+          hooks?.onCue?.(criticalToastFrom(evaluated, day.day, events));
+        }
       }
     }
 

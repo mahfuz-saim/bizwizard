@@ -50,15 +50,15 @@ export function SimulatorDrawer() {
               </>)}
             </div>
             <SheetDescription>
-              {sim.result
-                ? `Run ${sim.result.simulationRunID.slice(0, 14)}… · ${
+              {sim.status === "playing" || sim.status === "paused"
+                ? `${sim.result ? `Run ${sim.result.simulationRunID.slice(0, 14)}… · ` : ""}${
                     sim.status === "playing"
                       ? `day ${sim.dayIndex} of 30 (${sim.revealedEvents}/${sim.totalEvents})`
-                      : sim.status === "paused"
-                        ? `paused at day ${sim.dayIndex} of 30 (${sim.revealedEvents}/${sim.totalEvents})`
-                        : `${sim.visibleEvents.length} rows written`
+                      : `paused at day ${sim.dayIndex} of 30 (${sim.revealedEvents}/${sim.totalEvents})`
                   }`
-                : "Fast-forward creates an isolated demo copy and simulates its next 30 days. Playback replays committed demo records; pausing does not undo writes."}
+                : sim.result
+                  ? `Run ${sim.result.simulationRunID.slice(0, 14)}… · ${sim.visibleEvents.length} rows written`
+                  : "Fast-forward creates an isolated demo copy and simulates its next 30 days. Playback replays committed demo records; pausing does not undo writes."}
             </SheetDescription>
           </SheetHeader>
           <div className="flex-1 space-y-2 overflow-y-auto p-4">

@@ -108,17 +108,33 @@ button; normal inventory/sales writes are blocked in the demo UI.
    customer/supplier links, cash accounts/transactions and commitments, remapping
    record IDs. Legacy simulated rows are excluded. Users, passwords, credentials
    and external-service settings are not copied.
+   The copy is **windowed**: the current state (catalogue, lots, people,
+   accounts, commitments, policies) is copied in full, while the ledger history
+   is limited to the horizon the finance code actually reads — 90 days of
+   sales/expenses and 180 days of cash. Money that moved before the window is
+   folded into the account's opening balance, so the demo starts with exactly
+   the cash position of the shop it mirrors. Without the window the first run
+   (and every reset) copied the shop's entire history and spent tens of seconds
+   in "preparing" before a single transaction could appear.
 2. `POST /finance/simulator/fast-forward` accepts only the demo `shopId` and an
    optional `LESS`/`MORE` template. It advances the persisted clock by 30 days,
    beginning the day after the latest copied activity (or the preceding run).
    Each day is evaluated by the real deterministic treasury pipeline using that
    day's clock. Projection narration uses the deterministic fallback inside the
    run, avoiding 30 external AI calls.
-3. The database computation commits atomically before playback starts. Pause,
-   resume and skip control **replay**, not database writes. Transactions can be
-   inspected in the drawer. Notifications and milestone toasts show simulated
-   timestamps and are revealed when playback reaches their transaction time.
-   A reload restores the last committed run, rather than running it again.
+   With `"stream": true` (or `?stream=1`) the response is NDJSON: one line per
+   simulated day (`{"type":"day"}`), a line per milestone cue
+   (`{"type":"cue"}`) and a final `{"type":"result"}` line carrying the same
+   result the plain JSON response returns. A failed run is reported as an
+   `{"type":"error"}` line.
+3. The database computation commits atomically; in streaming mode the days are
+   pushed to the client while the run is still being computed, and the client
+   discards the preview if the run does not commit. Pause, resume and skip
+   control **replay**, not database writes. Transactions can be inspected in the
+   drawer. Notifications and milestone toasts show simulated timestamps and are
+   revealed when playback reaches their transaction time. Every transaction is
+   revealed on its own, never a whole day at once. A reload restores the last
+   committed run, rather than running it again.
    A run survives an access-token refresh (the client rotates the token on a
    401); only an ended session or a different account stops it, and the drawer
    then shows the reason instead of an empty stream.

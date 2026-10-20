@@ -111,6 +111,33 @@ export const simulatorApi = {
   workspace: () => data(api.get("/finance/simulator/workspace", { shopId: getShopId() ?? "" })) as Promise<{ simulationAsOf: string; simulationResult: FastForwardResult | null } | null>,
   fastForward: (template?: SimTemplate) =>
     data(api.post("/finance/simulator/fast-forward", { shopId: getShopId(), template })) as Promise<FastForwardResult>,
+  /**
+   * Fast-forward that streams: the backend pushes each simulated day as soon
+   * as its rows exist, so the live stream can start revealing transactions
+   * while the remaining days are still being simulated. The final result is
+   * identical to the non-streaming response.
+   */
+  fastForwardStream: async (
+    template: SimTemplate | undefined,
+    onDay: (day: SimDailyStreamDay) => void,
+    onCue: (toast: SimToast) => void,
+  ): Promise<FastForwardResult> => {
+    const box: { result: FastForwardResult | null } = { result: null }
+    await api.stream(
+      "/finance/simulator/fast-forward",
+      { shopId: getShopId(), template, stream: true },
+      line => {
+        const payload = line as { type?: string; day?: SimDailyStreamDay; toast?: SimToast; result?: FastForwardResult; message?: string } | null
+        if (!payload) return
+        if (payload.type === "day" && payload.day) onDay(payload.day)
+        else if (payload.type === "cue" && payload.toast) onCue(payload.toast)
+        else if (payload.type === "result" && payload.result) box.result = payload.result
+        else if (payload.type === "error") throw new Error(String(payload.message ?? "Simulation failed"))
+      },
+    )
+    if (!box.result) throw new Error("The simulation did not return a result.")
+    return box.result
+  },
   reset: () => data(api.post("/finance/simulator/reset", { shopId: getShopId() })),
   inspect: (type: StreamEventType, id: string) =>
     data(api.get("/finance/simulator/inspect", { shopId: getShopId() ?? "", type, id })),

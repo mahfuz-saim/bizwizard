@@ -229,6 +229,85 @@ async function request<T>(path: string, options: FetchOptions = {}, retried = fa
   return payload
 }
 
+/**
+ * Streaming request (NDJSON).
+ *
+ * The backend can push one line per simulated unit of work while it is still
+ * running, so the UI can start showing results immediately instead of waiting
+ * for the whole response. Auth handling mirrors request(): a 401 triggers a
+ * token refresh and a single retry (safe — the backend rejects the request
+ * before it starts any work).
+ */
+async function streamRequest(
+  path: string,
+  options: FetchOptions & { onLine?: (line: unknown) => void } = {},
+  retried = false,
+): Promise<void> {
+  const { params, json, headers, onLine, ...init } = options
+  const generation = sessionGeneration
+  const token = getAccessToken()
+  const tenantId = getTenantId()
+  const res = await fetch(buildUrl(path, params), {
+    ...init,
+    credentials: "include",
+    cache: "no-store",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/x-ndjson, application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(tenantId ? { "x-tenant-id": tenantId } : {}),
+      ...headers,
+    },
+    body: json !== undefined ? JSON.stringify(json) : init.body,
+  })
+
+  const canRefresh = token && (!path.startsWith("/auth/") || path === "/auth/me") && !new Headers(headers).has("Authorization")
+  if (res.status === 401 && canRefresh) {
+    if (generation !== sessionGeneration) throw new ApiError("Your session has changed. Please try again.", 401)
+    if (retried) {
+      expireSession(generation)
+      throw new ApiError(SESSION_EXPIRED_MESSAGE, 401)
+    }
+    if (getAccessToken() === token) await refreshAccessToken(generation)
+    if (generation !== sessionGeneration) throw new ApiError(SESSION_EXPIRED_MESSAGE, 401)
+    return streamRequest(path, options, true)
+  }
+
+  if (!res.ok) {
+    let payload: ApiResponse<unknown> | null = null
+    try { payload = (await res.json()) as ApiResponse<unknown> } catch { /* noop */ }
+    throw new ApiError(payload?.message || `Request failed (${res.status})`, res.status, payload)
+  }
+
+  if (!res.body || !onLine) return
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      let newline = buffer.indexOf("\n")
+      while (newline >= 0) {
+        const line = buffer.slice(0, newline).trim()
+        buffer = buffer.slice(newline + 1)
+        if (line) {
+          try { onLine(JSON.parse(line)) } catch { /* ignore a malformed line */ }
+        }
+        newline = buffer.indexOf("\n")
+      }
+    }
+    const tail = buffer.trim()
+    if (tail) {
+      try { onLine(JSON.parse(tail)) } catch { /* ignore a malformed tail */ }
+    }
+  } catch (error) {
+    await reader.cancel().catch(() => undefined)
+    throw error
+  }
+}
+
 export const api = {
   baseUrl: API_BASE,
   get: <T>(path: string, params?: FetchOptions["params"]) =>
@@ -242,6 +321,9 @@ export const api = {
   postWithAuthorization: <T>(path: string, body: unknown, token: string) =>
     request<T>(path, { method: "POST", json: body, headers: { Authorization: token } }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  /** POST a request whose NDJSON response is consumed line by line. */
+  stream: (path: string, body: unknown, onLine: (line: unknown) => void, params?: FetchOptions["params"]) =>
+    streamRequest(path, { method: "POST", json: body, params, onLine }),
 }
 
 // ---------- Auth helpers ----------
