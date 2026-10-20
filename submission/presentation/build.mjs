@@ -11,12 +11,12 @@ await fs.mkdir(build, { recursive: true });
 const P = Presentation.create({ slideSize: { width: 1600, height: 900 } });
 const C = { navy: '#101F3C', ink: '#13243F', blue: '#2463EB', pale: '#E9F0FF', bg: '#F6F8FC', white: '#FFFFFF', muted: '#637089', line: '#D8E0ED', teal: '#14837D', coral: '#B85B4B', gray: '#8B9BB6', light: '#ADBBD2' };
 const font = 'Arial';
-const timings = [25,30,25,30,35,45,35,45,35,45,35,45,40,35,45,15];
+const timings = [25,30,25,30,30,35,45,35,45,35,45,35,45,40,35,40,15];
 const workflowImages = {
-  cash: 'images/photo_6249019189544817640_y.jpg',
-  agents: 'images/photo_6249019189544817641_y.jpg',
-  matching: 'images/photo_6249019189544817642_y.jpg',
-  analysis: 'images/photo_6249019189544817643_y.jpg',
+  cash: 'Team-supplied cash flow reference: photo_6249019189544817640_y.jpg',
+  agents: 'Team-supplied agent system reference: photo_6249019189544817641_y.jpg',
+  matching: 'Team-supplied financing reference: photo_6249019189544817642_y.jpg',
+  analysis: 'Team-supplied analysis reference: photo_6249019189544817643_y.jpg',
 };
 const refs = {
   technical: 'submission/technical/main.tex', security: 'submission/security/main.tex',
@@ -102,10 +102,10 @@ function copy(s,title,body,x,y,w,{dark=s._dark,size=28}={}){
 // 1. Opening: the product and its purpose.
 {
  const s=slide('',{dark:true});
- text(s,'SME FINANCE COPILOT',72,160,650,36,22,{color:'#94B6FF',bold:true});
+ text(s,'BUSINESS MANAGEMENT + FINANCE',72,160,650,36,22,{color:'#94B6FF',bold:true});
  text(s,'BizWizard',72,235,690,120,106,{bold:true,color:C.white});
- text(s,'Financial decisions\nfor the shop owner',72,385,670,150,58,{bold:true,color:C.white});
- text(s,'Financing options, cash alerts\nand business analysis in one workspace.',76,570,650,92,29,{color:C.light});
+ text(s,'Business management\nwith financial guidance',72,385,670,150,58,{bold:true,color:C.white});
+ text(s,'Run the shop. Use its records\nto make financial decisions.',76,570,650,92,29,{color:C.light});
  await image(s,'dashboard-main.png',795,188,733,484,{alt:'BizWizard dashboard rendered in a local illustrative demo'});
  text(s,'Current product UI with illustrative demo data',795,697,730,35,19,{color:C.light});
  text(s,'BongoForge',76,738,670,35,27,{bold:true,color:C.white});
@@ -113,7 +113,7 @@ function copy(s,title,body,x,y,w,{dark=s._dark,size=28}={}){
  text(s,'Rajshahi University of Engineering & Technology (RUET)',76,820,1450,31,23,{color:C.light});
  text(s,'CSE, 4th year, 2nd semester',76,856,1450,28,21,{color:C.light});
  text(s,'2026 FinTechathon International Track',795,752,733,33,21,{color:C.light});
- note(s,'We are BongoForge: Sadman Sakib, Mahfuz Saim and Sunan Rabbi. All three of us study CSE in the fourth year, second semester at Rajshahi University of Engineering & Technology, RUET. BizWizard helps a small-business owner make financing and cash decisions using the records the shop already keeps. We will follow an owner from a cash concern to a proposed action, then show the controls and evidence behind that action.',[refs.technical,'README.md','submission/presentation/assets/provenance.json','Team names and academic affiliation supplied by the team.']);
+ note(s,'We are BongoForge: Sadman Sakib, Mahfuz Saim and Sunan Rabbi, CSE fourth year, second semester at Rajshahi University of Engineering & Technology, RUET. BizWizard combines daily business management with a finance copilot built on that existing platform. Owners manage inventory, sales, customers, debts, purchases, suppliers, expenses and employees. Finance services read those persisted shop records to calculate margins, cash forecasts and financing capacity. Our goal is to help owners run the business and make financial decisions in one connected workspace. The demonstration uses illustrative seeded data, not verified real-customer records or evidence of customer adoption.',[refs.technical,'README.md','client/src/app/(dashboard)','server/src/app/modules','submission/presentation/assets/provenance.json','Team names and academic affiliation supplied by the team.']);
 }
 
 // 2. Problem: cash timing, without invented market statistics.
@@ -156,7 +156,29 @@ function copy(s,title,body,x,y,w,{dark=s._dark,size=28}={}){
  note(s,'Follow a collection decision through the system. The cash engine raises an alert from scoped records. A treasury recommendation comes from a prepared menu and passes financial guards. The owner can approve a plan. Collection evidence must link an existing recorded debt payment. Approval alone cannot claim that cash arrived. Financing acceptance follows a separate application workflow.',[refs.technical,refs.security,'server/src/app/modules/finance/cashflow/cashflow.service.ts']);
 }
 
-// 5. Financing: show the actual ranking interface, then the bounded sequence.
+{
+ const s=slide('Daily work inside BizWizard');
+ text(s,'The finance copilot reads the platform’s saved business records.',76,241,1448,45,32,{bold:true});
+ table(s,[
+  ['Daily activity','Saved business records','Connection to finance'],
+  ['Buy and manage stock','Purchases, suppliers, lots and unit costs','Inventory value and cost of goods'],
+  ['Sell to customers','Sales, customer accounts and unpaid balances','Revenue, margins and receivables'],
+  ['Collect money owed','Debt payments and customer payment history','Cash inflow and remaining debt'],
+  ['Record expenses and bills','Operating expenses and dated commitments','Cash outflow and forecasts'],
+  ['Manage employees','Staff profiles, attendance and shop assignments','Controlled access to shop records'],
+ ],76,315,1448,402,[342,602,504],25);
+ text(s,'A credit sale reduces stock and records money owed.\nA later collection adds a payment record to the same shop.',76,754,1448,70,29,{color:C.blue,bold:true});
+ caption(s,'Implemented application workflows. Presentation screenshots use illustrative seeded data.');
+ note(s,'This is the business-management foundation beneath the finance copilot. The platform supports inventory and lot-level stock, purchasing and suppliers, checkout and sales, customer records, outstanding debts and collections, expenses, reporting, employee profiles, attendance and shop assignments. These are implemented application workflows with persisted records, rather than numbers typed only into a finance demonstration. Finance services read scoped sales, costs, debt, stock, expense and cash records from the same backend. Employee administration supplies access controls and business context; the finance engine does not use every employee field directly.\n\nExample: a credit checkout records the sale and its items, reduces stock and creates a customer debt in a transaction. A recorded debt payment later supplies collection history and, for a non-simulated source shop, the database cash trigger synchronizes the cash ledger. The finance layer uses that connected history for revenue, receivables, margins and cash projections. A forecast remains a model rather than a transaction. The existing integration is distinct from claiming that the sample records came from real customers. The screenshots use intercepted synthetic responses and seeded demonstrations, as documented in asset provenance. No production adoption, externally audited data quality or complete enterprise accounting capability is claimed.',[
+  'README.md','client/src/app/(dashboard)','server/src/app/modules/checkout/checkout.service.ts',
+  'server/src/app/modules/debt','server/src/app/modules/inventory','server/src/app/modules/expense',
+  'server/src/app/modules/supplier','server/src/app/modules/employee/employee.service.ts',
+  'server/src/app/modules/finance/shared/shopData.ts','server/prisma/migrations/20261018190000_cash_event_sync/migration.sql',
+  'submission/presentation/assets/provenance.json',
+ ]);
+}
+
+// Financing: show the actual ranking interface, then the bounded sequence.
 {
  const s=slide('Financing that starts with affordability');
  copy(s,'1  Check eligibility','90 days of sales history.\nAt least 60% sales-day coverage.',76,266,490);
@@ -313,12 +335,12 @@ function copy(s,title,body,x,y,w,{dark=s._dark,size=28}={}){
 // 12. Closing and handoff to the focused demonstration.
 {
  const s=slide('BizWizard in practice',{dark:true});
- text(s,'Business records become\na decision the owner can inspect.',76,268,1435,175,66,{bold:true,color:C.white});
- text(s,'Compare financing. Review a cash alert.\nInspect the evidence behind a recommendation.',76,522,1390,126,39,{color:C.light});
+ text(s,'Daily operations and financial decisions,\nconnected in one shop workspace.',76,268,1435,175,62,{bold:true,color:C.white});
+ text(s,'Manage the business, then use its records\nto review financing, cash flow and margins.',76,522,1390,126,39,{color:C.light});
  const link=text(s,'bizwizard-lake.vercel.app',76,730,1100,59,42,{color:'#93B5FF',bold:true});
  link.text.get('bizwizard-lake.vercel.app').link={uri:'https://bizwizard-lake.vercel.app/',isExternal:true};
  caption(s,'Working sandbox. No external lender contact or bank transfer.');
- note(s,'Close with the same owner decision introduced at the start: review the cash outlook, compare feasible financing and inspect the evidence behind a recommendation. If moving to a demonstration, use a synthetic account or isolated demo workspace and the saved evidence. Avoid a new paid call during the talk. Included screenshots support an offline explanation. Current scope is simulated financing with no external lender contact or money execution. Before sensitive production use, strengthen browser-session handling, provider-data controls and audit guarantees, and verify backup restoration. Before real lending, revalidate final affordability and terms, assess legal obligations and implement external execution controls. Heuristic risk/cost models, Float money, trusted administrators and non-causal observations remain limitations.',[refs.technical,refs.security,'README.md','https://bizwizard-lake.vercel.app/']);
+ note(s,'Our broader idea is connected business management and financial guidance for small-business owners. The implemented foundation covers daily operational workflows. The finance copilot builds on their saved shop records to compare simulated financing, project cash and explain product economics. The intended benefit is less manual transfer between operational records and financial decisions; we do not claim a measured customer outcome. Demonstration records remain seeded or synthetic. If moving to a demonstration, use an isolated demo workspace and saved evidence, without a new paid call during the talk. Included screenshots support an offline explanation. Current financing is simulated, with no external lender contact or money execution. Before sensitive production use, strengthen browser sessions, provider-data handling and audit guarantees, and verify backup restoration. Real lending would require revalidating final affordability and terms, assessing legal obligations and implementing external execution controls. Heuristic risk/cost models, Float money, trusted administrators and non-causal observations remain limitations.',[refs.technical,refs.security,'README.md','https://bizwizard-lake.vercel.app/']);
 }
 
 if(P.slides.items.length!==timings.length)throw new Error('Slide count and speaking times disagree.');
@@ -340,7 +362,7 @@ if(process.env.PRESENTATION_SKILL_DIR){
  const {finalizePresentation}=await import(pathToFileURL(path.join(skill,'container_tools/artifact_tool_utils.mjs')).href);
  const final=process.env.PRESENTATION_OUTPUT ?? path.join(root,'output/presentation/BizWizard-Presentation.pptx');
  await fs.mkdir(path.dirname(final),{recursive:true});
- await finalizePresentation({workspaceDir:root,candidatePath:candidate,finalPath:final,pythonExecutable:process.env.RUNTIME_PYTHON,integrityValidatorPath:path.join(skill,'container_tools/inspect_presentation_package_integrity.py'),layoutValidatorPath:path.join(skill,'container_tools/inspect_presentation_layout_geometry.py'),layoutArgs:['--expected-slide-size-emu','15240000,8572500','--validate-heading-fit',...[6,8,10,13,14].flatMap(n=>['--require-native-table-slide',String(n)])],explicitTotalSlideCount:16,requiredNativeTableOwnerSlides:[6,8,10,13,14],requiredNativeChartOwnerSlides:[15],materializeLiteralChartWorkbooks:true,fontPolicy:{basis:'design',families:[font]},verifyArtifactToolImport:true,receiptPath:path.join(build,path.basename(final)+'.validation.json')});
+ await finalizePresentation({workspaceDir:root,candidatePath:candidate,finalPath:final,pythonExecutable:process.env.RUNTIME_PYTHON,integrityValidatorPath:path.join(skill,'container_tools/inspect_presentation_package_integrity.py'),layoutValidatorPath:path.join(skill,'container_tools/inspect_presentation_layout_geometry.py'),layoutArgs:['--expected-slide-size-emu','15240000,8572500','--validate-heading-fit',...[5,7,9,11,14,15].flatMap(n=>['--require-native-table-slide',String(n)])],explicitTotalSlideCount:17,requiredNativeTableOwnerSlides:[5,7,9,11,14,15],requiredNativeChartOwnerSlides:[16],materializeLiteralChartWorkbooks:true,fontPolicy:{basis:'design',families:[font]},verifyArtifactToolImport:true,receiptPath:path.join(build,path.basename(final)+'.validation.json')});
  console.log(`Finalized: ${final}`);
 }else{
  console.log('Draft exported. Set PRESENTATION_SKILL_DIR and the runtime paths to run the finalizer.');
