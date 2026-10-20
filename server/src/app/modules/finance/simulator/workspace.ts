@@ -43,6 +43,19 @@ export async function copyBaseline(tx: any, source: any, demoID: string) {
       if (['checkout', 'expenseItem', 'cashTransaction'].includes(model) && time) latest = Math.max(latest, new Date(time).getTime());
       return { ...row, id: ids.get(row.id), ...patch(row) };
     });
+    // These full-row copies are already validated database records. PostgreSQL
+    // can restore their column types without Prisma encoding each field separately.
+    const bulkModel = ['checkout', 'checkoutItem', 'cashTransaction'].includes(model)
+      ? Prisma.dmmf.datamodel.models.find(m => m.name.toLowerCase() === model.toLowerCase()) : undefined;
+    if (bulkModel) {
+      const table = Prisma.raw(`"${bulkModel.dbName ?? bulkModel.name}"`);
+      const columns = Prisma.join(bulkModel.fields.filter(f => f.kind !== 'object').map(f => Prisma.raw(`"${f.dbName ?? f.name}"`)));
+      for (let i = 0; i < data.length; i += 5000) {
+        await tx.$executeRaw`INSERT INTO ${table} (${columns}) SELECT ${columns}
+          FROM jsonb_populate_recordset(NULL::${table}, ${JSON.stringify(data.slice(i, i + 5000))}::jsonb)`;
+      }
+      return;
+    }
     for (let i = 0; i < data.length; i += 500) await tx[model].createMany({ data: data.slice(i, i + 500) });
   };
   await copy('shopBuyer', { shopID: source.id }, () => ({ shopID: demoID }));

@@ -20,7 +20,8 @@ export function notificationsThrough(items: ShopNotification[], through: string 
 }
 
 export function newNotifications(items: ShopNotification[], seen: Set<string>) {
-  const fresh = items.filter(item => !seen.has(item.id) && isUnread(item))
+  // Simulator milestones already have their own playback toasts.
+  const fresh = items.filter(item => !seen.has(item.id) && isUnread(item) && item.data?.source !== "finance-simulator")
   items.forEach(item => seen.add(item.id))
   return fresh.reverse() // oldest first when several arrived while disconnected
 }

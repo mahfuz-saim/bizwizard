@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import prisma, { simulationContext } from '../shared/database';
+import prisma, { simulationContext, simulationCashRows } from '../shared/database';
 import { lockedWorkspace, requireDemo, prepareWorkspace, workspaceFor, simulationError, restoreWorkspace } from './workspace';
 import { hashInput } from '../../../../lib/ai/client';
 import { roundCurrency, sumMoney } from '../shared/money';
@@ -24,6 +24,12 @@ const db = () => prisma as any;
 
 const fmt = (n: number) => `৳${Math.round(n).toLocaleString('en-IN')}`;
 const newRunId = () => `sim_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+async function createSimulationCashTransaction(args: any) {
+  const row = await db().cashTransaction.create(args);
+  simulationCashRows(row.tenantID, row.shopID)?.push(row);
+  return row;
+}
 
 export type DailyStreamEventType = 'CHECKOUT' | 'EXPENSE_ITEM' | 'DEBT_PAYMENT' | 'CASH_TRANSACTION';
 export interface DailyStreamEvent {
@@ -102,11 +108,14 @@ export const simulatorService = {
     const source = await workspaceFor(tenantId, shopId);
     return db().shop.findFirst({ where: { tenantID: tenantId, simulationSourceShopID: source.simulationSourceShopID ?? source.id } });
   },
-  async fastForward(tenantId: string, shopId: string, template?: SimTemplate) {
+  async fastForward(tenantId: string, shopId: string, template?: SimTemplate, onProgress?: (day: number) => void) {
     return lockedWorkspace(tenantId, shopId, async (tx, shop) => {
       await requireDemo(tx, tenantId, shopId);
-      return simulationContext.run({ client: tx, asOf: new Date(shop.simulationAsOf) }, async () => {
-        const result = await simulatorService.playMonth(tenantId, shopId, template);
+      // This run only appends ledger rows; keep its private snapshot in sync at each write.
+      const rows = await tx.cashTransaction.findMany({ where: { tenantID: tenantId, shopID: shopId },
+        select: { accountID: true, direction: true, amount: true, category: true, occurredAt: true, status: true } });
+      return simulationContext.run({ client: tx, asOf: new Date(shop.simulationAsOf), cashLedger: { tenantID: tenantId, shopID: shopId, rows } }, async () => {
+        const result = await simulatorService.playMonth(tenantId, shopId, template, onProgress);
         await tx.shop.update({ where: { id: shopId }, data: {
           simulationAsOf: new Date(result.endedAt), simulationRunID: result.simulationRunID,
           simulationResult: JSON.parse(JSON.stringify(result)),
@@ -115,7 +124,7 @@ export const simulatorService = {
       });
     });
   },
-  async playMonth(tenantId: string, shopId: string, template?: SimTemplate) {
+  async playMonth(tenantId: string, shopId: string, template?: SimTemplate, onProgress?: (day: number) => void) {
     const shop = await requireDemo(db(), tenantId, shopId);
     const clock = simulationContext.getStore();
     if (!clock) throw simulationError('Simulation requires an isolated transaction.');
@@ -169,7 +178,7 @@ export const simulatorService = {
               items: { create: [{ tenantID: tenantId, productName: 'Simulated walk-in sale', unitPrice: sale.unitPrice, discountedPrice: sale.unitPrice, quantity: sale.quantity, createdAt: checkoutAt }] },
             },
           });
-          const cashTxn = await tx.cashTransaction.create({
+          const cashTxn = await createSimulationCashTransaction({
             data: {
               tenantID: tenantId, shopID: shopId, accountID: primary.id, direction: 'IN', amount: sale.amount,
               category: 'SALES_COLLECTION', occurredAt: dayTimestamp(day.date, minute++), description: 'Simulated daily sales',
@@ -191,7 +200,7 @@ export const simulatorService = {
             },
           });
           await tx.expense.update({ where: { id: expenseBucketID }, data: { totalAmount: { increment: expense.amount } } });
-          const cashTxn = await tx.cashTransaction.create({
+          const cashTxn = await createSimulationCashTransaction({
             data: {
               tenantID: tenantId, shopID: shopId, accountID: primary.id, direction: 'OUT', amount: expense.amount,
               category: CASH_CATEGORY_FOR_EXPENSE[expense.expenseType] ?? 'OPERATING_EXPENSE', occurredAt: dayTimestamp(day.date, minute++),
@@ -227,7 +236,7 @@ export const simulatorService = {
             const amount = roundCurrency(plan.smallDebtAmount);
             const payment = await tx.debtPayments.create({ data: { debtId: smallDebtId, amount, isSimulated: true, simulationRunID, createdAt: dayTimestamp(day.date, minute++) } });
             await tx.debt.update({ where: { id: smallDebtId }, data: { paidAmount: amount, status: 'PAID' } });
-            const cashTxn = await tx.cashTransaction.create({
+            const cashTxn = await createSimulationCashTransaction({
               data: {
                 tenantID: tenantId, shopID: shopId, accountID: primary.id, direction: 'IN', amount,
                 category: 'INVOICE_PAYMENT', occurredAt: dayTimestamp(day.date, minute++), description: 'Customer settled credit sale',
@@ -245,6 +254,7 @@ export const simulatorService = {
         await refreshBalances(tenantId, shopId);
         const evaluated = await cashflowService.runTreasury(tenantId, shopId, { runID: simulationRunID, occurredAt: new Date(events[events.length - 1]?.occurredAt ?? clock.asOf) });
         if (firstCriticalDay == null && evaluated.alerts.some((alert: any) => alert.severity === 'CRITICAL')) firstCriticalDay = day.day;
+        onProgress?.(day.day);
       }
     }
 
@@ -276,7 +286,7 @@ export const simulatorService = {
         data: { expenseID: bucketID, tenantID: tenantId, amount: topUp, name: 'Supplier payment pulled forward', expenseType: 'GENERAL', isSimulated: true, simulationRunID, createdAt: dayTimestamp(lastDay.date, 20 + attempt) },
       });
       await db().expense.update({ where: { id: bucketID }, data: { totalAmount: { increment: topUp } } });
-      const cashTxn = await db().cashTransaction.create({
+      const cashTxn = await createSimulationCashTransaction({
         data: { tenantID: tenantId, shopID: shopId, accountID: primary.id, direction: 'OUT', amount: topUp, category: 'OPERATING_EXPENSE', occurredAt: dayTimestamp(lastDay.date, 20 + attempt), description: 'Supplier payment pulled forward', source: 'SIMULATOR', sourceRefID: item.id, status: 'CLEARED', isSimulated: true, simulationRunID },
       });
       const lastStream = streamDays[streamDays.length - 1];
@@ -329,7 +339,7 @@ export const simulatorService = {
       if (recon.verdict.passed) {
         const payment = await db().debtPayments.create({ data: { debtId: bigDebtId, amount: recon.realizedImpact, isSimulated: true, simulationRunID, createdAt: dayTimestamp(plan.days[plan.horizonDays - 1].date, 120) } });
         await db().debt.update({ where: { id: bigDebtId }, data: { paidAmount: { increment: recon.realizedImpact }, status: 'PAID' } });
-        const cashTxn = await db().cashTransaction.create({
+        const cashTxn = await createSimulationCashTransaction({
           data: { tenantID: tenantId, shopID: shopId, accountID: primary.id, direction: 'IN', amount: recon.realizedImpact, category: 'INVOICE_PAYMENT', occurredAt: dayTimestamp(plan.days[plan.horizonDays - 1].date, 120), description: `Collected: ${plan.bigDebtLabel}`, source: 'SIMULATOR', sourceRefID: payment.id, status: 'CLEARED', isSimulated: true, simulationRunID },
         });
         const lastStream = streamDays[streamDays.length - 1];
@@ -398,6 +408,13 @@ export const simulatorService = {
         actionLabel: 'View scorecard', actionHref: '/finance/agent', refID: treasuryAction.id,
       },
     ].filter(Boolean);
+
+    const milestones = toasts.filter((toast: any) => toast.kind !== 'critical');
+    if (milestones.length) await db().notification.createMany({ data: milestones.map((toast: any) => ({
+      tenantID: tenantId, shopId, title: toast.title, body: toast.message, role: ['OWNER'], isPublic: false,
+      data: { source: 'finance-simulator', simulationRunID, simulationOccurredAt: toast.occurredAt,
+        kind: toast.kind, actionHref: toast.actionHref, refID: toast.refID },
+    })) });
 
     return {
       simulationRunID, shopID: shopId, sourceShopID: shop.simulationSourceShopID,

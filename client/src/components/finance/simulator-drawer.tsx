@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ArrowUpRight, ArrowDownRight, Pause, Play, ReceiptText, Wallet, HandCoins, ShoppingCart } from "lucide-react"
+import { ArrowUpRight, ArrowDownRight, Pause, Play, ReceiptText, Wallet, HandCoins, ShoppingCart, Loader2 } from "lucide-react"
 import { fmtBDT } from "@/lib/finance-api"
 import { useSimulator, type VisibleStreamEvent } from "@/lib/simulator-context"
 import type { StreamEventType } from "@/lib/simulator-api"
@@ -62,7 +62,9 @@ export function SimulatorDrawer() {
             </SheetDescription>
           </SheetHeader>
           <div className="flex-1 space-y-2 overflow-y-auto p-4">
-            {sim.visibleEvents.length === 0 && (
+            {sim.status === "loading" && <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />{sim.preparationStep}</p>}
+            {sim.status === "error" && <p role="alert" className="text-sm text-destructive">{sim.error}</p>}
+            {sim.visibleEvents.length === 0 && sim.status !== "loading" && sim.status !== "error" && (
               <p className="text-sm text-muted-foreground">No simulated activity yet.</p>
             )}
             {sim.visibleEvents.map((e, i) => {
@@ -91,7 +93,7 @@ export function SimulatorDrawer() {
                       aria-label={`Inspect ${LABELS[e.type]} ${e.id}`}
                       onClick={() => setInspecting(e)}
                     >
-                      <ArrowUpRight className="h-3.5 w-3.5 rotate-[-45deg]" />
+                      <ArrowUpRight className="h-3.5 w-3.5 -rotate-45" />
                     </Button>
                   </div>
                 </div>
