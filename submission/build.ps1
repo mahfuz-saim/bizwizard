@@ -6,7 +6,8 @@ $output = Join-Path (Split-Path $PSScriptRoot -Parent) 'output/pdf'
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 $documents = @(
     @{ Folder = 'technical'; Name = 'BizWizard-Technical-Documentation.pdf' },
-    @{ Folder = 'security'; Name = 'BizWizard-Security-Self-Assessment.pdf' }
+    @{ Folder = 'security'; Name = 'BizWizard-Security-Self-Assessment.pdf' },
+    @{ Folder = 'evidence'; Name = 'BizWizard-Execution-Evidence-Guide.pdf' }
 )
 foreach ($document in $documents) {
     $build = Join-Path $PSScriptRoot ('.build/' + $document.Folder)
