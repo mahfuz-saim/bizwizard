@@ -8,6 +8,9 @@
         "seed.ts",
         "seed/transaction-data.ts",
         "seed/transaction-data.test.ts",
+        "seed/refresh.ts",
+        "seed/refresh.test.ts",
+        "seed/refresh.integration.test.ts",
         "../src/helpers/bcryptHelpers.ts"
     ]
 }
