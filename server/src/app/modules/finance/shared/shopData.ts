@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import prisma, { shopClock } from './database';
+import prisma, { shopClock, simulationCashRows } from './database';
 import { roundCurrency, sumMoney } from './money';
 import { buildProfile, isoDay, type ProfileAggregates } from './metricEngine';
 import type { DailyNet } from './cashEngine';
@@ -180,6 +180,10 @@ export async function loadCashTransactions(tenantId: string, shopId: string, day
   asOf = asOf ?? await shopClock(tenantId, shopId);
   const db = prisma as any;
   const start = new Date(asOf.getTime() - days * DAY);
+  const ledger = simulationCashRows(tenantId, shopId);
+  const end = asOf.getTime();
+  if (ledger) return ledger.filter(row => row.occurredAt >= start && row.occurredAt.getTime() <= end)
+    .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
   const rows = await db.cashTransaction.findMany({
     where: { tenantID: tenantId, shopID: shopId, occurredAt: { gte: start, lte: asOf } },
     orderBy: { occurredAt: 'asc' },

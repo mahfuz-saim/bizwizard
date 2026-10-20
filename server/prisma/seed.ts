@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { AuthUtils } from '../src/helpers/bcryptHelpers';
+import { clearGeneratedHistory, renewHistoryIds } from './seed/refresh';
 import {
     buildTransactionData,
     SEED_PASSWORD,
@@ -11,40 +12,9 @@ import {
 
 const prisma = new PrismaClient();
 
-// Only the known fixture namespace is replaceable. No global deleteMany calls.
-// Foreign-key conflicts with new, manually-created activity abort and roll back,
-// rather than cascading into another shop's records.
-async function clearGeneratedHistory(
-    tx: Prisma.TransactionClient,
-    account: SeedAccount,
-) {
-    const tenantID = seedId(account, 'tenant');
-    const generated = { startsWith: `seed-v2-${account.key}-` };
-    const scoped = { tenantID, id: generated };
-    await tx.debtPayments.deleteMany({
-        where: { id: generated, debt: { tenantID } },
-    });
-    await tx.buyerDebtLedger.deleteMany({ where: scoped });
-    await tx.pickupItem.deleteMany({ where: scoped });
-    await tx.pickup.deleteMany({ where: scoped });
-    await tx.checkoutItem.deleteMany({ where: scoped });
-    await tx.debt.deleteMany({ where: scoped });
-    await tx.checkout.deleteMany({ where: scoped });
-    await tx.expenseItem.deleteMany({ where: scoped });
-    await tx.expense.deleteMany({ where: scoped });
-    await tx.lotDeletion.deleteMany({ where: scoped });
-    await tx.lot.deleteMany({ where: scoped });
-    await tx.shopVariant.deleteMany({ where: scoped });
-    await tx.inventory.deleteMany({
-        where: { id: generated, isPrivate: true },
-    });
-    await tx.attendance.deleteMany({ where: scoped });
-    await tx.note.deleteMany({ where: scoped });
-}
-
-async function seedAccount(account: SeedAccount, now: Date, refresh: boolean) {
+export async function seedAccount(account: SeedAccount, now: Date, refresh: boolean, client: PrismaClient) {
     const userID = seedId(account, 'user');
-    const existing = await prisma.user.findUnique({
+    const existing = await client.user.findUnique({
         where: { email: account.email },
     });
     if (existing) {
@@ -67,6 +37,9 @@ async function seedAccount(account: SeedAccount, now: Date, refresh: boolean) {
         account,
         now,
     );
+    if (existing) renewHistoryIds(data, account);
+    const creditSales = new Set(data.debts.map(row => row.checkoutID));
+    const paidCreditSales = data.checkouts.filter(row => row.status === 'PAID' && creditSales.has(row.id!)).map(row => row.id!);
     const { hash, salt } = await AuthUtils.hashedPassword(SEED_PASSWORD);
     // Each account is atomic. On failure no partial shop/history is left behind.
     // Chunk bulk inserts to stay well below PostgreSQL's bind-parameter limit.
@@ -77,10 +50,19 @@ async function seedAccount(account: SeedAccount, now: Date, refresh: boolean) {
         for (let i = 0; i < rows.length; i += 500)
             await insert(rows.slice(i, i + 500));
     }
-    await prisma.$transaction(
+    await client.$transaction(
         async tx => {
+            await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`seed:${shopID}`}))::text`;
             if (existing) {
                 await clearGeneratedHistory(tx, account);
+                const buckets = await tx.expense.findMany({ where: { tenantID, shopID }, select: { id: true, year: true, month: true } });
+                for (const expense of data.expenses) {
+                    const bucket = buckets.find(row => row.year === expense.year && row.month === expense.month);
+                    if (!bucket) continue;
+                    for (const item of data.expenseItems)
+                        if (item.expenseID === expense.id) item.expenseID = bucket.id;
+                    expense.id = bucket.id;
+                }
             } else {
                 await tx.user.create({
                     data: {
@@ -184,10 +166,10 @@ async function seedAccount(account: SeedAccount, now: Date, refresh: boolean) {
                 });
             }
             await chunks(data.inventory, batch =>
-                tx.inventory.createMany({ data: batch }),
+                tx.inventory.createMany({ data: batch, skipDuplicates: true }),
             );
             await chunks(data.variants, batch =>
-                tx.shopVariant.createMany({ data: batch }),
+                tx.shopVariant.createMany({ data: batch, skipDuplicates: true }),
             );
             await chunks(data.lots, batch =>
                 tx.lot.createMany({ data: batch }),
@@ -202,7 +184,8 @@ async function seedAccount(account: SeedAccount, now: Date, refresh: boolean) {
                 tx.pickupItem.createMany({ data: batch }),
             );
             await chunks(data.checkouts, batch =>
-                tx.checkout.createMany({ data: batch }),
+                tx.checkout.createMany({ data: batch.map(row => creditSales.has(row.id!) && row.status === 'PAID'
+                    ? { ...row, status: 'UNPAID' } : row) }),
             );
             await chunks(data.items, batch =>
                 tx.checkoutItem.createMany({ data: batch }),
@@ -213,17 +196,33 @@ async function seedAccount(account: SeedAccount, now: Date, refresh: boolean) {
             await chunks(data.payments, batch =>
                 tx.debtPayments.createMany({ data: batch }),
             );
+            // A paid credit sale must have its debt before the cash trigger sees PAID.
+            await chunks(paidCreditSales, batch => tx.$executeRaw`
+                UPDATE checkouts SET status = 'PAID'
+                WHERE "tenantID" = ${tenantID} AND "shopID" = ${shopID} AND id IN (${Prisma.join(batch)})`);
             await chunks(data.ledger, batch =>
                 tx.buyerDebtLedger.createMany({ data: batch }),
             );
             await chunks(data.expenses, batch =>
-                tx.expense.createMany({ data: batch }),
+                tx.expense.createMany({ data: batch, skipDuplicates: true }),
             );
             await chunks(data.expenseItems, batch =>
                 tx.expenseItem.createMany({ data: batch }),
             );
+            const totals = await tx.expenseItem.groupBy({
+                by: ['expenseID'], where: { tenantID, expense: { shopID } }, _sum: { amount: true },
+            });
+            await tx.expense.updateMany({ where: { tenantID, shopID }, data: { totalAmount: 0 } });
+            for (const total of totals)
+                await tx.expense.update({ where: { id: total.expenseID }, data: { totalAmount: Math.round((total._sum.amount ?? 0) * 100) / 100 } });
+            const stock = await tx.lot.groupBy({
+                by: ['shopVariantId'], where: { tenantID, shopVariantId: { in: data.variants.map(row => row.id!) }, ShopVariant: { shopID } }, _sum: { stock: true },
+            });
+            for (const row of stock)
+                await tx.shopVariant.update({ where: { id: row.shopVariantId }, data: { totalProducts: row._sum.stock ?? 0 } });
         },
-        { maxWait: 10000, timeout: 180000 },
+        // Two years of history and cash-ledger triggers can exceed three minutes on the VPS.
+        { maxWait: 10000, timeout: 600000, isolationLevel: 'Serializable' },
     );
     console.log(
         `${account.email}: ${data.inventory.length} products, ${data.buyers.length} customers, ${data.checkouts.length} sales, ${data.lots.length} purchases, ${data.debts.length} credit sales, ${data.expenses.length} expense months, ${data.pickups.length} pickup orders, ${data.losses.length} stock adjustments, ${data.attendance.length} attendance records (${start.toISOString()} – ${now.toISOString()}).`,
@@ -259,15 +258,17 @@ async function main() {
         );
     const now = new Date();
     for (const account of seedAccounts)
-        await seedAccount(account, now, refresh);
+        await seedAccount(account, now, refresh, prisma);
     console.log('Seed complete. New accounts use password: ' + SEED_PASSWORD);
 }
 
-main()
-    .catch(error => {
-        console.error('Seed failed:', error);
-        process.exitCode = 1;
-    })
-    .finally(async () => {
-        await prisma.$disconnect();
-    });
+if (require.main === module) {
+    main()
+        .catch(error => {
+            console.error('Seed failed:', error);
+            process.exitCode = 1;
+        })
+        .finally(async () => {
+            await prisma.$disconnect();
+        });
+}

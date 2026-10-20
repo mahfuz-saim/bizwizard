@@ -13,6 +13,7 @@ import {
   loginWithCredentials,
   setShopId,
   setTenantId,
+  setCurrentUser,
   type AuthSession,
   type AuthUser
 } from "./api"
@@ -197,6 +198,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
             "This account has no accessible shop. Ask the owner to assign a shop."
           )
         setTenantId(me.defaultTenantId)
+        setCurrentUser(me.user)
         let selectedShopId = me.defaultShopId
         if (getSimulationSourceId() === me.defaultShopId && (me.role === "OWNER" || me.role === "ADMIN")) {
           const workspace = await api.get<{ id: string } | null>("/finance/simulator/workspace", { shopId: me.defaultShopId })
@@ -490,7 +492,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       resetData()
       setSimulationSourceId(sourceId)
       setShopId(id)
-      await refresh(true, true)
+      await refresh(false, true)
     },
     dataVersion,
     source,

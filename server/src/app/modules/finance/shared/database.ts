@@ -1,9 +1,19 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import prisma from '../../../../shared/prisma';
-import type { Prisma } from '@prisma/client';
+import type { CashTransaction, Prisma } from '@prisma/client';
 
-type SimulationContext = { client: Prisma.TransactionClient; asOf: Date };
+export type SimulationCashRow = Pick<CashTransaction, 'accountID' | 'direction' | 'amount' | 'category' | 'occurredAt' | 'status'>;
+type SimulationContext = {
+  client: Prisma.TransactionClient;
+  asOf: Date;
+  cashLedger?: { tenantID: string; shopID: string; rows: SimulationCashRow[] };
+};
 export const simulationContext = new AsyncLocalStorage<SimulationContext>();
+
+export function simulationCashRows(tenantID: string, shopID: string) {
+  const ledger = simulationContext.getStore()?.cashLedger;
+  return ledger?.tenantID === tenantID && ledger.shopID === shopID ? ledger.rows : undefined;
+}
 
 // Finance work within a simulation must share its transaction and virtual clock.
 export default new Proxy(prisma, {

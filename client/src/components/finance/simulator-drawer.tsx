@@ -27,6 +27,7 @@ import {
   Wallet,
   HandCoins,
   ShoppingCart,
+  Loader2,
 } from "lucide-react";
 import { fmtBDT } from "@/lib/finance-api";
 import { useSimulator, type VisibleStreamEvent } from "@/lib/simulator-context";
@@ -102,16 +103,25 @@ export function SimulatorDrawer() {
             </SheetDescription>
           </SheetHeader>
           <div className="flex-1 space-y-2 overflow-y-auto p-4">
-            {sim.visibleEvents.length === 0 && (
+            {sim.status === "loading" && (
+              <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {sim.preparationStep}
+              </p>
+            )}
+            {sim.status === "error" && (
+              <p role="alert" className="text-sm text-destructive">{sim.error}</p>
+            )}
+            {sim.visibleEvents.length === 0 && sim.status !== "loading" && sim.status !== "error" && (
               <p className="text-sm text-muted-foreground">
                 No simulated activity yet.
               </p>
             )}
-            {sim.visibleEvents.map((e, i) => {
+            {sim.visibleEvents.map((e) => {
               const Icon = ICONS[e.type];
               return (
                 <div
-                  key={`${e.id}-${i}`}
+                  key={`${e.type}:${e.id}`}
                   className="animate-in fade-in slide-in-from-top-1 flex items-center justify-between gap-2 rounded-lg border p-2.5 text-sm duration-200">
                   <div className="flex min-w-0 items-center gap-2">
                     <span

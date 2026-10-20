@@ -5,6 +5,17 @@ import type { ShopNotification } from "./types"
 
 const item = (id: string): ShopNotification => ({ id, title: `Title ${id}`, body: "বাংলা notification", createdAt: "2026-10-17T00:00:00Z" })
 
+test("saved simulator milestones appear in history without duplicate bell toasts", () => {
+  const milestone = { ...item("guard"), data: { source: "finance-simulator", simulationRunID: "run", simulationOccurredAt: "2026-10-20T12:00:00Z" } }
+  const seen = new Set<string>()
+  assert.deepEqual(notificationsThrough([milestone], "2026-10-20T11:59:00Z"), [])
+  const visible = notificationsThrough([milestone], "2026-10-20T12:00:00Z")
+  assert.deepEqual(visible, [milestone])
+  assert.deepEqual(newNotifications(visible, seen), [])
+  assert.equal(seen.has(milestone.id), true)
+  assert.equal(isUnread(milestone), true)
+})
+
 test("playback releases notifications only when their simulated transaction time is reached", () => {
   const early = { ...item("early"), data: { simulationRunID: "run", simulationOccurredAt: "2026-10-20T12:02:00Z" } }
   const late = { ...item("late"), data: { simulationRunID: "run", simulationOccurredAt: "2026-10-21T12:00:00Z" } }
