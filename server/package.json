@@ -21,7 +21,7 @@
         "test": "tsx --test src/lib/ai/*.test.ts src/app/modules/finance/**/*.test.ts src/app/modules/auth/*.test.ts src/app/modules/user/*.test.ts src/helpers/*.test.ts tests/*.test.ts scripts/submission.test.ts",
         "test:notifications": "tsx --test tests/notifications.test.ts",
         "seed": "prisma generate && ts-node --project prisma/tsconfig.json prisma/seed.ts",
-        "seed:test": "prisma generate && ts-node --project prisma/tsconfig.json prisma/seed/transaction-data.test.ts",
+        "seed:test": "prisma generate && tsc -p prisma/tsconfig.json --noEmit && tsx --test prisma/seed/*.test.ts",
         "pris": "npx prisma migrate dev && npx prisma generate",
         "seed:finance": "prisma generate && tsx prisma/seed-finance.ts",
         "test:finance": "tsx --test src/lib/ai/*.test.ts src/app/modules/finance/**/*.test.ts"

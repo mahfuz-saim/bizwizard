@@ -136,8 +136,9 @@ npm run dev:node
 ```
 
 The original `npm run dev` uses Bun. `dev:node` uses the installed Node.js/tsx instead.
-The seed preserves existing fixture accounts by default; `--refresh` replaces their
-generated history. Do not refresh or seed production as a deployment step.
+The seed skips existing accounts. `--refresh` rebuilds generated history while
+preserving added activity and its inventory links. Linked payments can block a
+refresh. Do not refresh or seed production as a deployment step.
 
 Frontend, in a second terminal:
 
