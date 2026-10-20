@@ -176,13 +176,13 @@ export default function CashflowPage() {
 
         <div className="space-y-4">
           <Card>
-            <CardHeader><CardTitle className="text-base">Treasurer actions — projected vs realized</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">Treasurer actions — projected vs actual</CardTitle></CardHeader>
             <CardContent className="space-y-2">
               <p className="text-xs text-muted-foreground">Approval records your decision only. Collect debts, move funds or change payments separately and record the actual transaction; projected impact is not realized income.</p>
               {actions.length === 0 && <p className="text-sm text-muted-foreground">No actions yet. The treasurer only proposes from a pre-computed menu; anything moving money needs your approval.</p>}
               {actions.map((a) => (
                 <div key={a.id} className="flex flex-col items-start justify-between gap-2 rounded-lg border p-3 sm:flex-row">
-                  <div><p className="text-sm font-medium">{a.title}</p><p className="text-xs text-muted-foreground">{a.rationale}</p><p className="text-xs">Projected {fmtBDT(a.projectedImpact)} · Realized {a.realizedImpact == null ? "pending" : fmtBDT(a.realizedImpact)} · {a.status}</p></div>
+                  <div><p className="text-sm font-medium">{a.title}</p><p className="text-xs text-muted-foreground">{a.rationale}</p><p className="text-xs">Projected: {fmtBDT(a.projectedImpact)} · Actual result: {a.realizedImpact == null ? "pending" : fmtBDT(a.realizedImpact)} · {a.status}</p></div>
                   {a.status === "PROPOSED" && <div className="flex gap-1"><Button size="sm" disabled={busy || !canApprove} onClick={() => void run(async () => { await cashflowApi.decideAction(a.id, true); setNotice("Action approved. No money moved; complete and record the actual transaction separately.") })}>Approve plan</Button><Button size="sm" variant="ghost" disabled={busy || !canApprove} onClick={() => void run(() => cashflowApi.decideAction(a.id, false))}>Reject</Button></div>}
                   {a.status === "APPROVED" && a.actionType === "COLLECT_DEBT" && canApprove && <div className="w-full space-y-2 sm:max-w-sm">
                     <Button size="sm" variant="outline" disabled={busy} onClick={() => void run(async () => { const payments = await cashflowApi.collectionEvidence(a.id); setEvidence(previous => ({ ...previous, [a.id]: payments })) })}>Load recorded collections</Button>
