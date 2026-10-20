@@ -5,6 +5,7 @@ import prisma from '../src/shared/prisma';
 import { simulatorService } from '../src/app/modules/finance/simulator/simulator.service';
 import { lockedWorkspace } from '../src/app/modules/finance/simulator/workspace';
 import { shopClock } from '../src/app/modules/finance/shared/database';
+import { roundCurrency } from '../src/app/modules/finance/shared/money';
 import express, { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import config from '../src/config';
@@ -45,6 +46,7 @@ test('isolated demo: migration, copied history, next-month runs, locking, rollba
       accounts:await prisma.cashAccount.findMany({where:scope}),
       lots:await prisma.lot.findMany({where:{shopVariantId:variant.id}}),
       policies:await prisma.aiAgentPolicy.findMany({where:scope,orderBy:{id:'asc'}}),
+      notifications:await prisma.notification.findMany({where:{tenantID:tenant.id,shopId:source.id},orderBy:{id:'asc'}}),
     };
   }
   await prisma.aiAgentPolicy.create({ data: { ...scope, agentType: 'TREASURER_AGENT', name: 'Source mandate', objective: 'Fixture', riskAppetite: 0.3, maxExposure: 500000, bufferTargetDays: 14 } });
@@ -100,7 +102,23 @@ test('isolated demo: migration, copied history, next-month runs, locking, rollba
   assert.equal(new Date(result.dailyEvents[0].date).getTime(),new Date(baseline.slice(0,10)).getTime()+86400000);
   assert.equal((await shopClock(tenant.id,demo.id)).toISOString(),result.endedAt);
   const notifications=await prisma.notification.findMany({where:{shopId:demo.id}});
-  assert.ok(notifications.length>0,'daily treasury creates simulated critical notifications');
+  assert.ok(notifications.length>0,'simulation notifications are saved in the demo shop');
+  for (const alert of result.finalState.alerts.filter((alert: any) => alert.severity === 'CRITICAL')) {
+    assert.equal(notifications.filter(n => (n.data as { alertID?: string }).alertID === alert.id).length, 1,
+      'critical alerts retain one persistent notification each');
+  }
+  for (const toast of result.toasts.filter((toast: any) => toast.kind !== 'critical')) {
+    const saved = notifications.filter(n => (n.data as { kind?: string }).kind === toast.kind);
+    assert.equal(saved.length, 1, 'each simulator milestone is saved exactly once');
+    assert.equal(saved[0].title, toast.title);
+    assert.equal(saved[0].body, toast.message);
+    assert.equal((saved[0].data as { simulationOccurredAt: string }).simulationOccurredAt, toast.occurredAt);
+  }
+  for (const cashAccount of await prisma.cashAccount.findMany({ where: demoScope })) {
+    const ledger = await prisma.cashTransaction.findMany({ where: { ...demoScope, accountID: cashAccount.id, status: 'CLEARED' } });
+    const balance = ledger.reduce((total, row) => roundCurrency(total + (row.direction === 'IN' ? row.amount : -row.amount)), cashAccount.openingBalance);
+    assert.equal(cashAccount.currentBalance, balance, 'cached simulation balance matches the saved ledger');
+  }
   for(const n of notifications){
     const data=n.data as {simulationRunID:string;simulationOccurredAt:string};
     assert.equal(data.simulationRunID,result.simulationRunID);

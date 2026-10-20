@@ -1,13 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import prisma, { shopClock, simulationContext } from '../shared/database';
+import prisma, { shopClock, simulationContext, simulationCashRows } from '../shared/database';
 import { callStructured, hashInput } from '../../../../lib/ai/client';
 import * as prompts from '../../../../lib/ai/prompts';
 import { roundCurrency, sumMoney } from '../shared/money';
-import { buildProfile } from '../shared/metricEngine';
 import { dailyNetSeries, buildProjection } from '../shared/cashEngine';
 import { evaluateAlerts, buildActionMenu } from '../shared/alerts';
 import { guardTreasuryActions } from '../shared/guard';
-import { loadProfileAggregates, loadOpenDebts, loadCashTransactions, assertShop } from '../shared/shopData';
+import { loadOpenDebts, loadCashTransactions, assertShop } from '../shared/shopData';
 import { ensureDefaultPolicies } from '../shared/catalog';
 import ApiError from '../../../../errors/ApiError';
 import { expenseSpikeRatio } from '../shared/expenseSpike';
@@ -32,7 +31,9 @@ export async function ensureAccounts(tenantId: string, shopId: string) {
 
 export async function refreshBalances(tenantId: string, shopId: string) {
   const accounts = await ensureAccounts(tenantId, shopId);
-  const txns = await db().cashTransaction.findMany({ where: { tenantID: tenantId, shopID: shopId, status: 'CLEARED' }, select: { accountID: true, direction: true, amount: true } });
+  const ledger = simulationCashRows(tenantId, shopId);
+  const txns = ledger ? ledger.filter(row => row.status === 'CLEARED')
+    : await db().cashTransaction.findMany({ where: { tenantID: tenantId, shopID: shopId, status: 'CLEARED' }, select: { accountID: true, direction: true, amount: true } });
   for (const a of accounts) {
     let bal = roundCurrency(a.openingBalance);
     for (const t of txns.filter((x: any) => x.accountID === a.id))
@@ -215,8 +216,6 @@ export const cashflowService = {
     const avgDailyOutflow = history.length ? roundCurrency(history.slice(-28).reduce((a, h) => a + h.outflow, 0) / Math.min(28, history.length)) : 0;
     const debts = await loadOpenDebts(tenantId, shopId);
     const commitments = await db().cashCommitment.findMany({ where: { tenantID: tenantId, shopID: shopId, isPaid: false, dueDate: { lte: new Date(asOf.getTime() + 3 * DAY) } } }).catch(() => []);
-    const aggregates = await loadProfileAggregates(tenantId, shopId, 90);
-    const profile = buildProfile(aggregates);
     const revSeries = await loadCashTransactions(tenantId, shopId, 35);
     const revHist = dailyNetSeries(revSeries, 35, asOf);
     const recentExpenses = await db().expenseItem.findMany({
@@ -236,7 +235,6 @@ export const cashflowService = {
       ledgerDays: Math.min(180, history.filter((h) => h.inflow + h.outflow > 0).length),
       asOf,
     });
-    void profile;
     const savedAlerts: any[] = [];
     for (const a of candidateAlerts) {
       const exists = await db().cashAlert.findFirst({ where: { tenantID: tenantId, shopID: shopId, triggerRule: a.triggerRule, status: 'OPEN' } }).catch(() => null);

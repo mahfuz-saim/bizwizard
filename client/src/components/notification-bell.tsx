@@ -35,6 +35,11 @@ export function NotificationBell() {
   const [connectionError, setConnectionError] = React.useState("")
   const [readError, setReadError] = React.useState("")
   const [saving, setSaving] = React.useState(false)
+  const [open, setOpen] = React.useState(false)
+  const [loading, setLoading] = React.useState(false)
+  const [loadError, setLoadError] = React.useState("")
+  const [reload, setReload] = React.useState(0)
+  const snapshotRevision = React.useRef(0)
   const dismiss = React.useCallback((id: string) => setToasts(current => current.filter(item => item.id !== id)), [])
   React.useEffect(() => {
     const fresh = newNotifications(items, seen.current)
@@ -65,6 +70,7 @@ export function NotificationBell() {
           if (controller.signal.aborted) return
           retries = 0
           setConnectionError("")
+          snapshotRevision.current++
           setItems(snapshot)
         })
         if (!controller.signal.aborted) throw new Error("Notification stream disconnected")
@@ -78,6 +84,26 @@ export function NotificationBell() {
     return () => { controller.abort(); clearTimeout(retryTimer) }
   }, [setItems, source, session?.shopId, session?.tenantId, session?.accessToken])
 
+  React.useEffect(() => {
+    if (!open || source !== "backend" || !session?.shopId) return
+    const shopId = session.shopId
+    let active = true
+    const revision = snapshotRevision.current
+    void Promise.resolve().then(() => {
+      if (!active) return
+      setLoading(true)
+      setLoadError("")
+      return api.get<ShopNotification[]>(`/notifications/${encodeURIComponent(shopId)}`)
+        .then(response => {
+          if (!Array.isArray(response.data)) throw new Error("Invalid notification list")
+          if (active && snapshotRevision.current === revision) setItems(response.data)
+        })
+        .catch(() => { if (active) setLoadError("Could not load notifications. Please try again.") })
+        .finally(() => { if (active) setLoading(false) })
+    })
+    return () => { active = false }
+  }, [open, reload, source, session?.shopId, session?.tenantId, setItems])
+
   const unread = items.filter(isUnread)
   const markRead = async (targets: ShopNotification[]) => {
     if (!session?.shopId || saving) return
@@ -86,6 +112,7 @@ export function NotificationBell() {
     try {
       await Promise.all(targets.map(async item => {
         await api.post(`/notifications/mark-read/${encodeURIComponent(item.id)}`, { shopId: session.shopId })
+        snapshotRevision.current++
         setItems(current => current.map(n => n.id === item.id ? { ...n, ReadStatus: [{ isRead: true }] } : n))
       }))
     } catch { setReadError("Could not mark notifications as read. Please try again.") }
@@ -93,7 +120,7 @@ export function NotificationBell() {
   }
 
   return <>
-    <Popover.Root>
+    <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
         <Button variant="ghost" size="icon" className="relative" aria-label={`Notifications${unread.length ? `, ${unread.length} unread` : ""}`}>
           <Bell className="h-5 w-5" />
@@ -108,8 +135,10 @@ export function NotificationBell() {
         <hr className="m-0" />
         {connectionError && <p role="status" className="p-3 text-xs text-muted-foreground">{connectionError}</p>}
         {readError && <p role="alert" className="p-3 text-xs text-destructive">{readError}</p>}
+        {loading && <p role="status" className="p-3 text-xs text-muted-foreground">Refreshing notifications…</p>}
+        {loadError && <div className="flex items-center justify-between gap-2 p-3"><p role="alert" className="text-xs text-destructive">{loadError}</p><Button size="sm" variant="outline" disabled={loading} onClick={() => setReload(n => n + 1)}>Retry</Button></div>}
         <div className="max-h-96 overflow-y-auto" role="list" aria-label="Notification list">
-          {items.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">No notifications yet. You’re all caught up.</p>}
+          {items.length === 0 && !loading && !loadError && <p className="p-6 text-center text-sm text-muted-foreground">No notifications yet. You’re all caught up.</p>}
           {items.map(item => <div key={item.id} role="listitem" className={cn("border-b p-3 last:border-0", isUnread(item) && "bg-primary/5")}>
             <div className="flex items-start gap-2"><p className="min-w-0 flex-1 wrap-break-word text-sm font-semibold">{item.title}</p>{isUnread(item) && <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" aria-label={`Mark ${item.title} as read`} disabled={saving} onClick={() => void markRead([item])}><Check className="h-4 w-4" /></Button>}</div>
             <p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm text-muted-foreground">{item.body}</p>

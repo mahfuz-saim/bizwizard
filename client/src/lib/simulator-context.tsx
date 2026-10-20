@@ -46,6 +46,7 @@ function flattenEvents(result: FastForwardResult): VisibleStreamEvent[] {
 interface SimulatorState {
   status: "idle" | "loading" | "playing" | "paused" | "done" | "error" | "resetting"
   error: string | null
+  preparationStep: string | null
   result: FastForwardResult | null
   dayIndex: number
   /** 0..1 playback progress — pages lerp their own baseline → final numbers with this. */
@@ -84,7 +85,7 @@ const SimulatorContext = React.createContext<SimulatorContextValue | null>(null)
 export function FinanceSimulatorProvider({ children }: { children: React.ReactNode }) {
   const store = useStore()
   const [state, setState] = React.useState<SimulatorState>({
-    status: "idle", error: null, result: null, dayIndex: 0, progress: 0, totalEvents: 0, revealedEvents: 0,
+    status: "idle", error: null, preparationStep: null, result: null, dayIndex: 0, progress: 0, totalEvents: 0, revealedEvents: 0,
     visibleEvents: [], activeToasts: [], drawerOpen: false, speedMs: DEFAULT_SPEED_MS, template: "LESS", completedAt: 0,
   })
   const eventsRef = React.useRef<VisibleStreamEvent[]>([])
@@ -146,26 +147,28 @@ export function FinanceSimulatorProvider({ children }: { children: React.ReactNo
     const token = getAccessToken()
     const assertSession = () => { if (getAccessToken() !== token) throw new Error("Account changed; simulation UI operation cancelled.") }
     shownToastIds.current = new Set()
-    setState((s) => ({ ...s, status: "loading", error: null, drawerOpen: true }))
+    setState((s) => ({ ...s, status: "loading", error: null, preparationStep: "Preparing your demo copy…", drawerOpen: true }))
     try {
       const template = state.template
       if (store.source !== "backend" || !["OWNER", "ADMIN"].includes(store.session?.role ?? "")) throw new Error("Log in as a shop owner to use the isolated demo simulator.")
       const demo = await simulatorApi.prepare()
       assertSession()
+      setState(s => ({ ...s, preparationStep: "Opening the demo shop…" }))
       await store.switchSimulation(demo.id, demo.simulationSourceShopID)
       assertSession()
+      setState(s => ({ ...s, preparationStep: "Calculating the next 30 days…" }))
       const result = await simulatorApi.fastForward(template)
       assertSession()
       const flat = flattenEvents(result)
       eventsRef.current = flat
       revealedRef.current = 0
       setState((s) => ({
-        ...s, status: "playing", result, dayIndex: 0, progress: 0, totalEvents: flat.length, revealedEvents: 0,
+        ...s, status: "playing", preparationStep: null, result, dayIndex: 0, progress: 0, totalEvents: flat.length, revealedEvents: 0,
         visibleEvents: [], activeToasts: [],
       }))
     } catch (e) {
       if (getAccessToken() !== token) return
-      setState((s) => ({ ...s, status: "error", error: e instanceof Error ? e.message : "Simulation failed to run." }))
+      setState((s) => ({ ...s, status: "error", preparationStep: null, error: e instanceof Error ? e.message : "Simulation failed to run." }))
     }
   }, [state.template, store])
 
@@ -199,7 +202,7 @@ export function FinanceSimulatorProvider({ children }: { children: React.ReactNo
       eventsRef.current = []
       revealedRef.current = 0
       setState((s) => ({
-        status: "idle", error: null, result: null, dayIndex: 0, progress: 0, totalEvents: 0, revealedEvents: 0,
+        status: "idle", error: null, preparationStep: null, result: null, dayIndex: 0, progress: 0, totalEvents: 0, revealedEvents: 0,
         visibleEvents: [], activeToasts: [], drawerOpen: s.drawerOpen, speedMs: s.speedMs, template: s.template, completedAt: s.completedAt + 1,
       }))
     } catch (e) {
