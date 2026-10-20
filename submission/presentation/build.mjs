@@ -111,9 +111,9 @@ function copy(s,title,body,x,y,w,{dark=s._dark,size=28}={}){
  text(s,'BongoForge',76,738,670,35,27,{bold:true,color:C.white});
  text(s,'Sadman Sakib  /  Mahfuz Saim  /  Sunan Rabbi',76,779,1450,33,24,{color:C.white});
  text(s,'Rajshahi University of Engineering & Technology (RUET)',76,820,1450,31,23,{color:C.light});
- text(s,'CSE, 4th year, 2nd semester',76,856,1450,28,21,{color:C.light});
+ text(s,'Bangladesh',76,856,1450,28,21,{color:C.light});
  text(s,'2026 FinTechathon International Track',795,752,733,33,21,{color:C.light});
- note(s,'We are BongoForge: Sadman Sakib, Mahfuz Saim and Sunan Rabbi, CSE fourth year, second semester at Rajshahi University of Engineering & Technology, RUET. BizWizard combines daily business management with a finance copilot built on that existing platform. Owners manage inventory, sales, customers, debts, purchases, suppliers, expenses and employees. Finance services read those persisted shop records to calculate margins, cash forecasts and financing capacity. Our goal is to help owners run the business and make financial decisions in one connected workspace. The demonstration uses illustrative seeded data, not verified real-customer records or evidence of customer adoption.',[refs.technical,'README.md','client/src/app/(dashboard)','server/src/app/modules','submission/presentation/assets/provenance.json','Team names and academic affiliation supplied by the team.']);
+ note(s,'We are BongoForge: Sadman Sakib, Mahfuz Saim and Sunan Rabbi from Rajshahi University of Engineering & Technology, RUET, Bangladesh. BizWizard combines daily business management with a finance copilot built on that existing platform. Owners manage inventory, sales, customers, debts, purchases, suppliers, expenses and employees. Finance services read those persisted shop records to calculate margins, cash forecasts and financing capacity. Our goal is to help owners run the business and make financial decisions in one connected workspace. The demonstration uses illustrative seeded data, not verified real-customer records or evidence of customer adoption.',[refs.technical,'README.md','client/src/app/(dashboard)','server/src/app/modules','submission/presentation/assets/provenance.json','Team names and academic affiliation supplied by the team.']);
 }
 
 // 2. Problem: cash timing, without invented market statistics.
@@ -138,9 +138,9 @@ function copy(s,title,body,x,y,w,{dark=s._dark,size=28}={}){
  copy(s,'Which financing fits?','Compare eligibility, cost\nand repayment capacity.',76,264,455);
  copy(s,'Will cash run short?','Project dated balances\nand review alerts.',568,264,460);
  copy(s,'Where is cash tied up?','Inspect product margins\nand working capital.',1062,264,465);
- await image(s,'inventory-main.png',76,474,1112,304,{alt:'Inventory screen showing the business records that feed the finance copilot'});
- await image(s,'mobile-cashflow.png',1231,456,272,352,{alt:'Mobile cash-flow screen showing the responsive application'});
- caption(s,'Existing shop records feed the finance workflows. Screens show illustrative demo data.');
+ await image(s,'live-inventory.png',96,492,1028,260,{alt:'Live inventory summary captured from the seeded demo shop'});
+ await image(s,'mobile-cashflow.png',1255,474,224,308,{alt:'Mobile cash-flow screen showing the responsive application with illustrative data'});
+ caption(s,'Inventory: live app with seeded demo records. Mobile view: illustrative demo data.');
  note(s,'These are the three capabilities in Topic E. BizWizard uses sales, inventory, debt and expense records already present in the application. The same shop scope carries into financing, treasury and analysis. The responsive interface supports smaller screens as well.',[refs.technical,'client/src/app/(dashboard)/finance','submission/presentation/assets/provenance.json']);
 }
 
@@ -185,8 +185,8 @@ function copy(s,title,body,x,y,w,{dark=s._dark,size=28}={}){
  copy(s,'2  Compare feasible options','AI can enrich the ranking.\nCode prices the offer.',76,441,490);
  copy(s,'3  Review the terms','Deterministic policies negotiate\nfor up to three rounds.',76,616,490);
  text(s,'7 simulated lenders   /   12 seeded products',601,269,927,43,29,{bold:true,color:C.blue});
- await image(s,'matching-ranked.png',601,330,927,408,{alt:'Ranked financing options in the current application, using illustrative synthetic responses'});
- caption(s,'Simulated lenders only. Acceptance creates an application and repayment schedule, with no disbursement.');
+ await image(s,'live-matching.png',641,340,847,428,{alt:'Saved live demo matching results showing offer blockers and eligible ranked products'});
+ caption(s,'Live app with seeded demo records. Eligible matches do not guarantee an offer. No loan disbursement.');
  note(s,'Matching needs at least 60 percent sales-day completeness across a 90-day window. Deterministic weights are affordability 30 percent, cost 25, liquidity 20, collateral 15 and flexibility 10. AI score changes stay within 15 points before a 60/40 blend. Pricing and negotiation use deterministic policies, not LLM-to-LLM bargaining. Initial offers pass guards. Acceptance checks scope, offer state and expiry but does not re-underwrite current affordability. The displayed APR is an annualized cost approximation. The screenshot illustrates the UI, not a live lender quote.',[refs.technical,'server/src/app/modules/finance/matching/matching.service.ts','server/src/app/modules/finance/agents/agentCore.ts','submission/presentation/assets/provenance.json']);
 }
 
@@ -205,12 +205,12 @@ function copy(s,title,body,x,y,w,{dark=s._dark,size=28}={}){
 // 6. Cash: screenshot carries the dated balance and the alert.
 {
  const s=slide('Cash flow before the next bill');
- await image(s,'cashflow-main.png',76,253,1010,531,{alt:'Cash forecast and buffer alert in a local illustrative demo'});
+ await image(s,'live-cashflow.png',96,300,940,420,{alt:'Live seeded demo cash balances, buffer and 90-day projection'});
  copy(s,'90-day projection','History, dated commitments\nand weighted receivables.',1131,272,393);
  copy(s,'Nine alert conditions','Shortfalls, cash buffers,\naging debt and unusual costs.',1131,462,393);
  copy(s,'A reviewable next step','The owner can inspect a plan\nbefore approving it.',1131,652,393,{size:26});
- caption(s,'Illustrative demo data. Projected cash and proposed actions are forecasts, not realized gains.');
- note(s,'The projection uses recent inflow and outflow levels, weekday patterns and a clipped trend. Dated commitments and probability-weighted receivables change future balances. Nine conditions span eight alert families, with separate 30-day and 60-day debt-aging conditions. Non-simulated sales, debt payments and expenses synchronize through PostgreSQL triggers. Demo shops use an isolated simulator ledger. The demo screenshot shows a low cash buffer and a collection recommendation.',[refs.technical,'server/src/app/modules/finance/shared/cashEngine.ts','server/src/app/modules/finance/shared/alerts.ts','submission/presentation/assets/provenance.json']);
+ caption(s,'Live app with seeded demo records. Projected cash and proposed actions are forecasts, not measured gains.');
+ note(s,'The projection uses recent inflow and outflow levels, weekday patterns and a clipped trend. Dated commitments and probability-weighted receivables change future balances. Nine conditions span eight alert families, with separate 30-day and 60-day debt-aging conditions. Non-simulated sales, debt payments and expenses synchronize through PostgreSQL triggers. Isolated simulation workspaces use their own ledger. This screenshot comes from the live source demo shop using seeded records. It shows positive projected balances and a buffer above target, not a fabricated shortfall. No Run treasurer, backfill or approval action was clicked for the capture.',[refs.technical,'server/src/app/modules/finance/shared/cashEngine.ts','server/src/app/modules/finance/shared/alerts.ts','submission/presentation/assets/provenance.json']);
 }
 
 {
@@ -227,13 +227,13 @@ function copy(s,title,body,x,y,w,{dark=s._dark,size=28}={}){
 // 7. Analysis: evidence before recommendation.
 {
  const s=slide('An explanation has to match the numbers');
- await image(s,'analysis-main.png',76,250,960,548,{alt:'Financial analysis with a verified margin insight and product economics, using illustrative demo data'});
+ await image(s,'live-analysis.png',96,286,920,480,{alt:'Live seeded demo financial analysis with saved insights, product economics and forecast accuracy'});
  text(s,'Candidate explanation',1094,280,430,45,31,{bold:true});
  text(s,'Check the contribution\nto the observed gap',1094,351,430,105,32,{color:C.blue,bold:true});
  text(s,'Residual gap ≤10%',1094,500,430,48,35,{bold:true});
  text(s,'Accounting attribution\nsupports the “verified” label.',1094,569,430,90,28,{color:C.muted});
  text(s,'Scenarios explore changes\nbefore the owner commits.',1094,702,430,90,27,{color:C.muted});
- caption(s,'Illustrative demo data. Verification checks accounting consistency, not causation.');
+ caption(s,'Live app with seeded demo records. Saved insights may predate current metrics. Verification does not prove causation.');
  note(s,'The analyst can propose a candidate explanation. Code checks how much of a nonzero gap the candidate accounts for. A residual of at most ten percent allows the verified label. This is accounting attribution, not proof that changing the product caused profit to rise. Product economics and working-capital measures give context. Price, collection, cost and mix scenarios use simplified models. Observed capital outcomes compare 30-day windows and remain non-causal.',[refs.technical,'server/src/app/modules/finance/shared/verifier.ts','server/src/app/modules/finance/analysis/analysis.service.ts','submission/presentation/assets/provenance.json']);
 }
 
@@ -344,7 +344,7 @@ function copy(s,title,body,x,y,w,{dark=s._dark,size=28}={}){
 }
 
 if(P.slides.items.length!==timings.length)throw new Error('Slide count and speaking times disagree.');
-const manifest={mainSlides:P.slides.items.length,backupSlides:0,mainSpeakingSeconds:timings.reduce((a,b)=>a+b,0),font,slideSize:{width:1600,height:900},workflowImages,evidence:[refs.benchmark,refs.matched,refs.logs,refs.replay],screenshots:'Illustrative local demo data. See assets/provenance.json.',sourcesInSpeakerNotes:true};
+const manifest={mainSlides:P.slides.items.length,backupSlides:0,mainSpeakingSeconds:timings.reduce((a,b)=>a+b,0),font,slideSize:{width:1600,height:900},workflowImages,evidence:[refs.benchmark,refs.matched,refs.logs,refs.replay],screenshots:'Live seeded demo inventory/finance views and illustrative dashboard/mobile views. See assets/provenance.json.',sourcesInSpeakerNotes:true};
 await fs.writeFile(path.join(build,'manifest.json'),JSON.stringify(manifest,null,2));
 for(let i=0;i<P.slides.items.length;i++){
  const s=P.slides.items[i];

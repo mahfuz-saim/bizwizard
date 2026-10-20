@@ -1,5 +1,5 @@
 {
-  "basis": "Current local application rendered with intercepted synthetic API responses. UI illustrations, not production operation evidence.",
+  "basis": "Mixed sources: live app captures from a seeded demo shop for inventory and finance, plus earlier illustrative local dashboard and mobile views. No real-customer adoption claim.",
   "applicationSource": "client/src/app/(dashboard)",
   "matchedEvaluationSource": "evidence/submission/matched-evaluation-live.json",
   "captures": [
@@ -11,5 +11,19 @@
     "mobile-cashflow.png"
   ],
   "captureMethod": "Headless Chrome against a local Next.js server. API requests intercepted with synthetic responses. No backend or production write requests.",
-  "imageUse": "Product walkthrough illustrations. Benchmark chart and paired-result table use the saved evidence reports separately."
+  "liveCaptures": {
+    "date": "2026-10-20",
+    "application": "https://bizwizard-lake.vercel.app/",
+    "accountBasis": "User-authorized seeded shop account. Credentials and browser session were not saved.",
+    "files": {
+      "live-inventory.png": "/inventory",
+      "live-matching.png": "/finance/matching",
+      "live-cashflow.png": "/finance/cashflow",
+      "live-analysis.png": "/finance/analysis"
+    },
+    "method": "Headless Chrome with a fresh browser context. Screenshots use native browser clipping with surrounding space. No mocked responses, restyled numbers or generated UI.",
+    "actions": "Signed in and opened existing pages. Did not create business transactions, run matching or treasury, approve actions, accept offers, start a simulator or make an explicit paid AI call. Page reads can refresh normal analytics records.",
+    "limitations": "Matching shows saved offer blockers. Saved insights and alerts may reflect earlier shop snapshots. Screenshots do not prove causal benefit or current affordability."
+  },
+  "imageUse": "Product walkthrough only. Benchmark chart and paired-result table use the separately saved evidence reports. Original local capture metadata above applies only to the earlier captures list."
 }
