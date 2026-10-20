@@ -22,6 +22,7 @@
       "live-analysis.png": "/finance/analysis"
     },
     "method": "Headless Chrome with a fresh browser context. Screenshots use native browser clipping with surrounding space. No mocked responses, restyled numbers or generated UI.",
+    "theme": "The app's dark-mode preference was selected in the temporary browser context and the active dark theme was verified before every capture.",
     "actions": "Signed in and opened existing pages. Did not create business transactions, run matching or treasury, approve actions, accept offers, start a simulator or make an explicit paid AI call. Page reads can refresh normal analytics records.",
     "limitations": "Matching shows saved offer blockers. Saved insights and alerts may reflect earlier shop snapshots. Screenshots do not prove causal benefit or current affordability."
   },
