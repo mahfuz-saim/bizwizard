@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useStore } from "./store"
-import { getAccessToken } from "./api"
+import { getAccessToken, getSessionIdentity, sameSessionIdentity, type SessionIdentity } from "./api"
 import { simulatorApi, type FastForwardResult, type SimDailyStreamEvent, type SimTemplate, type SimToast, type StreamEventType } from "./simulator-api"
 
 const TOTAL_DAYS = 30
@@ -41,6 +41,23 @@ function flattenEvents(result: FastForwardResult): VisibleStreamEvent[] {
   const flat: VisibleStreamEvent[] = []
   for (const d of result.dailyEvents) for (const e of d.events) flat.push({ ...e, day: d.day, date: d.date, phase: d.phase })
   return flat
+}
+
+/**
+ * Guard for a long-running simulator operation.
+ *
+ * The API client rotates the access token whenever a request comes back 401
+ * (see api.ts), so a *refreshed* token is not an account change and must not
+ * abort the run — the next request simply uses the new token. Only a session
+ * that ended (no token left) or a genuinely different account stops the work.
+ *
+ * Throws with a user-facing message; callers must surface it instead of
+ * silently giving up, otherwise the live stream stays empty with no reason
+ * shown anywhere.
+ */
+export function assertSessionUnchanged(identity: SessionIdentity | null): void {
+  if (!getAccessToken()) throw new Error("Your session ended before the simulation could finish. Please sign in again.")
+  if (!sameSessionIdentity(identity, getSessionIdentity())) throw new Error("Account changed; simulation UI operation cancelled.")
 }
 
 interface SimulatorState {
@@ -143,8 +160,8 @@ export function FinanceSimulatorProvider({ children }: { children: React.ReactNo
   }, [state.status, state.speedMs, state.result, applyRevealed])
 
   const runFastForward = React.useCallback(async () => {
-    const token = getAccessToken()
-    const assertSession = () => { if (getAccessToken() !== token) throw new Error("Account changed; simulation UI operation cancelled.") }
+    const identity = getSessionIdentity()
+    const assertSession = () => assertSessionUnchanged(identity)
     shownToastIds.current = new Set()
     setState((s) => ({ ...s, status: "loading", error: null, drawerOpen: true }))
     try {
@@ -164,7 +181,8 @@ export function FinanceSimulatorProvider({ children }: { children: React.ReactNo
         visibleEvents: [], activeToasts: [],
       }))
     } catch (e) {
-      if (getAccessToken() !== token) return
+      // Never fail silently: the live stream would sit empty with no reason
+      // shown, which is exactly the "transactions never appear" report.
       setState((s) => ({ ...s, status: "error", error: e instanceof Error ? e.message : "Simulation failed to run." }))
     }
   }, [state.template, store])
@@ -189,11 +207,11 @@ export function FinanceSimulatorProvider({ children }: { children: React.ReactNo
   }, [state.result, applyRevealed])
 
   const resetSimulation = React.useCallback(async () => {
-    const token = getAccessToken()
+    const identity = getSessionIdentity()
     setState((s) => ({ ...s, status: "resetting", error: null }))
     try {
       await simulatorApi.reset()
-      if (getAccessToken() !== token) return
+      assertSessionUnchanged(identity)
       await store.refresh(false)
       shownToastIds.current = new Set()
       eventsRef.current = []

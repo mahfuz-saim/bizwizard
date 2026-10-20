@@ -11,6 +11,7 @@ import {
   getSimulationSourceId,
   setSimulationSourceId,
   loginWithCredentials,
+  setCurrentUser,
   setShopId,
   setTenantId,
   type AuthSession,
@@ -197,6 +198,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
             "This account has no accessible shop. Ask the owner to assign a shop."
           )
         setTenantId(me.defaultTenantId)
+        // Keep the signed-in account identifiable without reading the access
+        // token: the client rotates that token on a 401, and long-running
+        // work (the simulator) must not mistake a refresh for a new account.
+        setCurrentUser(me.user)
         let selectedShopId = me.defaultShopId
         if (getSimulationSourceId() === me.defaultShopId && (me.role === "OWNER" || me.role === "ADMIN")) {
           const workspace = await api.get<{ id: string } | null>("/finance/simulator/workspace", { shopId: me.defaultShopId })
@@ -490,7 +495,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       resetData()
       setSimulationSourceId(sourceId)
       setShopId(id)
-      await refresh(true, true)
+      // Refresh without the full-page loading state: the dashboard shell (and
+      // with it the live-stream drawer on the right) must stay mounted while
+      // the simulator runs, otherwise the transactions appear on a blank page.
+      await refresh(false, true)
     },
     dataVersion,
     source,

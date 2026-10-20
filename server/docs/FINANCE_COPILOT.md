@@ -119,6 +119,9 @@ button; normal inventory/sales writes are blocked in the demo UI.
    inspected in the drawer. Notifications and milestone toasts show simulated
    timestamps and are revealed when playback reaches their transaction time.
    A reload restores the last committed run, rather than running it again.
+   A run survives an access-token refresh (the client rotates the token on a
+   401); only an ended session or a different account stops it, and the drawer
+   then shows the reason instead of an empty stream.
 4. `POST /finance/simulator/reset` accepts only a demo shop. It clears that
    workspace's ledger and derived finance outputs, notification/read records and
    run metadata, then copies the **current source baseline** again. It is not a

@@ -74,6 +74,41 @@ export function getCurrentUser<T = unknown>(): T | null {
   try { return JSON.parse(raw) as T } catch { return null }
 }
 
+export interface SessionIdentity {
+  /** Tenant the signed-in account belongs to. */
+  tenant: string
+  /** User id of the signed-in account, when it is known. */
+  userId: string
+}
+
+/**
+ * Identity of the signed-in account, independent of the access token.
+ *
+ * The API client rotates the access token whenever a request comes back 401
+ * (see request()), so the token is NOT a stable identity: a long-running
+ * operation must survive a refresh. The account behind the token, on the
+ * other hand, must not change underneath a running operation.
+ */
+export function getSessionIdentity(): SessionIdentity | null {
+  if (!getAccessToken()) return null
+  const user = getCurrentUser<{ id?: string | null }>()
+  return {
+    tenant: getTenantId() ?? "",
+    userId: typeof user?.id === "string" ? user.id : "",
+  }
+}
+
+/**
+ * True when both identities describe the same account. An unknown user id on
+ * either side is not treated as a change — only a known mismatch is.
+ */
+export function sameSessionIdentity(a: SessionIdentity | null, b: SessionIdentity | null): boolean {
+  if (!a || !b) return false
+  if (a.tenant !== b.tenant) return false
+  if (a.userId && b.userId) return a.userId === b.userId
+  return true
+}
+
 export interface ApiResponse<T = unknown> {
   success: boolean
   statusCode?: number

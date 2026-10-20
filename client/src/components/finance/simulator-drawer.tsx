@@ -62,7 +62,17 @@ export function SimulatorDrawer() {
             </SheetDescription>
           </SheetHeader>
           <div className="flex-1 space-y-2 overflow-y-auto p-4">
-            {sim.visibleEvents.length === 0 && (
+            {sim.error && (
+              <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+                {sim.error}
+              </p>
+            )}
+            {sim.status === "loading" && (
+              <p role="status" className="text-sm text-muted-foreground">
+                Preparing the demo workspace and simulating 30 days… the transactions appear here as they are written.
+              </p>
+            )}
+            {sim.visibleEvents.length === 0 && !sim.error && sim.status !== "loading" && (
               <p className="text-sm text-muted-foreground">No simulated activity yet.</p>
             )}
             {sim.visibleEvents.map((e, i) => {
