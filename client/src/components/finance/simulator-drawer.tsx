@@ -93,7 +93,7 @@ export function SimulatorDrawer() {
                       aria-label={`Inspect ${LABELS[e.type]} ${e.id}`}
                       onClick={() => setInspecting(e)}
                     >
-                      <ArrowUpRight className="h-3.5 w-3.5 rotate-[-45deg]" />
+                      <ArrowUpRight className="h-3.5 w-3.5 -rotate-45" />
                     </Button>
                   </div>
                 </div>

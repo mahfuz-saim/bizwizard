@@ -111,6 +111,21 @@ export const simulatorApi = {
   workspace: () => data(api.get("/finance/simulator/workspace", { shopId: getShopId() ?? "" })) as Promise<{ simulationAsOf: string; simulationResult: FastForwardResult | null } | null>,
   fastForward: (template?: SimTemplate) =>
     data(api.post("/finance/simulator/fast-forward", { shopId: getShopId(), template })) as Promise<FastForwardResult>,
+  fastForwardWithProgress: async (template: SimTemplate, onProgress: (day: number) => void): Promise<FastForwardResult> => {
+    let result: FastForwardResult | undefined
+    await api.stream("/finance/simulator/fast-forward", { shopId: getShopId(), template }, line => {
+      if (!line || typeof line !== "object" || !("type" in line)) throw new Error("Invalid simulation progress response.")
+      if (line.type === "progress" && "day" in line && typeof line.day === "number" && Number.isInteger(line.day) && line.day >= 1 && line.day <= 30) {
+        onProgress(line.day)
+      } else if (line.type === "result" && "result" in line && line.result && typeof line.result === "object" && "dailyEvents" in line.result && Array.isArray(line.result.dailyEvents)) {
+        result = line.result as FastForwardResult
+      } else if (line.type === "error" && "message" in line && typeof line.message === "string") {
+        throw new Error(line.message)
+      } else throw new Error("Invalid simulation progress response.")
+    })
+    if (!result) throw new Error("The simulation ended without confirming saved results. Reload the demo to check its status.")
+    return result
+  },
   reset: () => data(api.post("/finance/simulator/reset", { shopId: getShopId() })),
   inspect: (type: StreamEventType, id: string) =>
     data(api.get("/finance/simulator/inspect", { shopId: getShopId() ?? "", type, id })),

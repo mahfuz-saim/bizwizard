@@ -74,6 +74,27 @@ export function getCurrentUser<T = unknown>(): T | null {
   try { return JSON.parse(raw) as T } catch { return null }
 }
 
+export interface SessionIdentity {
+  tenant: string
+  userId: string
+}
+
+export function getSessionIdentity(): SessionIdentity | null {
+  if (!getAccessToken()) return null
+  const user = getCurrentUser<{ id?: string | null }>()
+  return {
+    tenant: getTenantId() ?? "",
+    userId: typeof user?.id === "string" ? user.id : "",
+  }
+}
+
+export function sameSessionIdentity(a: SessionIdentity | null, b: SessionIdentity | null): boolean {
+  if (!a || !b) return false
+  if (a.tenant !== b.tenant) return false
+  if (a.userId && b.userId) return a.userId === b.userId
+  return true
+}
+
 export interface ApiResponse<T = unknown> {
   success: boolean
   statusCode?: number
@@ -95,6 +116,7 @@ export class ApiError extends Error {
 interface FetchOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined | null>
   json?: unknown
+  onLine?: (line: unknown) => void
 }
 
 function buildUrl(path: string, params?: FetchOptions["params"]) {
@@ -150,7 +172,7 @@ async function refreshAccessToken(generation: number) {
 }
 
 async function request<T>(path: string, options: FetchOptions = {}, retried = false): Promise<ApiResponse<T>> {
-  const { params, json, headers, ...init } = options
+  const { params, json, headers, onLine, ...init } = options
   const generation = sessionGeneration
   const token = getAccessToken()
   const tenantId = getTenantId()
@@ -181,6 +203,42 @@ async function request<T>(path: string, options: FetchOptions = {}, retried = fa
     return request<T>(path, options, true)
   }
 
+  if (res.ok && onLine) {
+    if (!res.body || !res.headers.get("Content-Type")?.includes("application/x-ndjson")) {
+      throw new ApiError("The simulation returned an invalid progress response.", 502)
+    }
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ""
+    const deliver = (line: string) => {
+      if (generation !== sessionGeneration) throw new ApiError("Your session has changed. Please try again.", 401)
+      if (!line.trim()) return
+      let value: unknown
+      try { value = JSON.parse(line) } catch { throw new ApiError("The simulation returned invalid progress data.", 502) }
+      onLine(value)
+    }
+    try {
+      for (;;) {
+        const { done, value } = await reader.read()
+        buffer += done ? decoder.decode() : decoder.decode(value, { stream: true })
+        let newline = buffer.indexOf("\n")
+        while (newline >= 0) {
+          deliver(buffer.slice(0, newline))
+          buffer = buffer.slice(newline + 1)
+          newline = buffer.indexOf("\n")
+        }
+        if (done) break
+      }
+      deliver(buffer)
+    } catch (error) {
+      await reader.cancel().catch(() => undefined)
+      throw error
+    } finally {
+      reader.releaseLock()
+    }
+    return { success: true }
+  }
+
   let payload: ApiResponse<T> | null = null
   try { payload = (await res.json()) as ApiResponse<T> } catch { /* noop */ }
 
@@ -207,6 +265,8 @@ export const api = {
   postWithAuthorization: <T>(path: string, body: unknown, token: string) =>
     request<T>(path, { method: "POST", json: body, headers: { Authorization: token } }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  stream: (path: string, body: unknown, onLine: (line: unknown) => void) =>
+    request(path, { method: "POST", json: body, headers: { Accept: "application/x-ndjson" }, onLine }),
 }
 
 // ---------- Auth helpers ----------

@@ -31,6 +31,13 @@ test('isolated demo: migration, copied history, next-month runs, locking, rollba
   await prisma.checkout.createMany({ data: sales });
   await prisma.checkoutItem.createMany({ data: sales.map(s => ({ tenantID:tenant.id, checkoutID:s.id, lotId:lot.id, variantId:variant.id, productName:'Fixture product', quantity:5, unitPrice:20, discountedPrice:20, createdAt:s.createdAt })) });
   await prisma.cashTransaction.createMany({ data:sales.map(s => ({ ...scope, accountID:account.id, direction:'IN' as const, amount:100, category:'SALES_COLLECTION' as const, occurredAt:s.createdAt, sourceRefID:s.id })) });
+  await prisma.checkout.update({ where: { id: sales[0].id }, data: { totalDiscount: 0.125, discountType: 'AMOUNT', pin: 1234 } });
+  await prisma.checkoutItem.updateMany({ where: { checkoutID: sales[0].id }, data: { productName: 'চাল "quoted" \\ newline\n', itemDiscount: 0.125, variantName: 'Small pack' } });
+  await prisma.cashTransaction.createMany({ data: Array.from({ length: 5001 }, (_, i) => ({
+    ...scope, accountID: account.id, direction: 'OUT' as const, amount: 0.125,
+    category: 'OTHER' as const, status: 'PENDING' as const, occurredAt: dates[0],
+    description: `Copy boundary ${i}: চাল "quoted" \\ newline\n`, categoryConfidence: 0.83,
+  })) });
   const expense = await prisma.expense.create({ data: { ...scope, year:2026, month:10, totalAmount:150 } });
   await prisma.expenseItem.create({ data: { tenantID:tenant.id, expenseID:expense.id, name:'Actual expense', amount:100, createdAt:dates[729] } });
   await prisma.expenseItem.create({ data: { tenantID:tenant.id, expenseID:expense.id, name:'Legacy simulation', amount:50, isSimulated:true, simulationRunID:'legacy', createdAt:dates[729] } });
@@ -68,16 +75,51 @@ test('isolated demo: migration, copied history, next-month runs, locking, rollba
   await new Promise<void>(resolve=>server.once('listening',resolve));
   t.after(()=>new Promise<void>(resolve=>server.close(()=>resolve())));
   const address=server.address() as {port:number};
-  async function post(path:string, role:string, shopId:string, tenantID=tenant.id){
+  async function post(path:string, role:string, shopId:string, tenantID=tenant.id, progress=false){
     const token=jwt.sign({userID:user.id,role},config.jwt.secret!,{expiresIn:'1h'});
-    return fetch(`http://127.0.0.1:${address.port}/simulator/${path}`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`,'x-tenant-id':tenantID},body:JSON.stringify({shopId})});
+    return fetch(`http://127.0.0.1:${address.port}/simulator/${path}`,{method:'POST',headers:{'Content-Type':'application/json',Accept:progress?'application/x-ndjson':'application/json',Authorization:`Bearer ${token}`,'x-tenant-id':tenantID},body:JSON.stringify({shopId})});
   }
   assert.equal((await post('fast-forward','EMPLOYEE',demo.id)).status,403);
+  assert.equal((await post('fast-forward','EMPLOYEE',demo.id,tenant.id,true)).status,403);
   assert.equal((await post('fast-forward','OWNER',source.id)).status,403);
   assert.equal((await post('prepare','OWNER',source.id,'foreign-tenant')).status,403);
   assert.notEqual(demo.id,source.id);
   assert.equal((await simulatorService.prepare(tenant.id,source.id)).id,demo.id);
   const demoScope={tenantID:tenant.id,shopID:demo.id};
+  async function assertCopiedHistory() {
+    const copiedSales = await prisma.checkout.findMany({ where: demoScope, orderBy: { createdAt: 'asc' } });
+    const sourceSales = [...before.checkouts].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    assert.equal(copiedSales.length, sourceSales.length);
+    const mappedSales = new Map(sourceSales.map((sale, i) => [sale.id, copiedSales[i].id]));
+    for (const [i, sale] of sourceSales.entries()) {
+      assert.notEqual(copiedSales[i].id, sale.id);
+      assert.deepEqual(copiedSales[i], { ...sale, id: copiedSales[i].id, shopID: demo.id, soldByOwnerId: null, soldByEmployeeId: null });
+    }
+    const copiedItems = await prisma.checkoutItem.findMany({ where: { checkout: { shopID: demo.id } } });
+    const copiedVariant = await prisma.shopVariant.findFirstOrThrow({ where: demoScope });
+    const copiedLot = await prisma.lot.findFirstOrThrow({ where: { shopVariantId: copiedVariant.id } });
+    const itemsBySale = new Map(copiedItems.map(item => [item.checkoutID, item]));
+    assert.equal(copiedItems.length, before.items.length);
+    for (const item of before.items) {
+      const copied = itemsBySale.get(mappedSales.get(item.checkoutID)!)!;
+      assert.notEqual(copied.id, item.id);
+      assert.deepEqual(copied, { ...item, id: copied.id, checkoutID: mappedSales.get(item.checkoutID), lotId: copiedLot.id, variantId: copiedVariant.id });
+    }
+    const copiedAccounts = await prisma.cashAccount.findMany({ where: demoScope });
+    const accountIds = new Map(before.accounts.map(original => [original.id, copiedAccounts.find(copy => copy.name === original.name)!.id]));
+    const copiedCash = await prisma.cashTransaction.findMany({ where: demoScope });
+    assert.equal(copiedCash.length, before.cash.length);
+    const copiedExpenses = await prisma.expenseItem.findMany({ where: { expense: { shopID: demo.id } } });
+    const mappedRefs = new Map([...mappedSales, ...before.expenseItems.filter(item => !item.isSimulated)
+      .map(item => [item.id, copiedExpenses.find(copy => copy.name === item.name)!.id] as const)]);
+    const normalizeCash = (rows: typeof copiedCash) => rows.map(row => ({ ...row, id: '' }))
+      .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+    assert.deepEqual(normalizeCash(copiedCash), normalizeCash(before.cash.map(row => ({
+      ...row, shopID: demo.id, accountID: accountIds.get(row.accountID)!,
+      sourceRefID: row.sourceRefID ? mappedRefs.get(row.sourceRefID) ?? null : null,
+    }))));
+  }
+  await assertCopiedHistory();
   assert.equal(await prisma.checkout.count({where:demoScope}),730);
   assert.equal(await prisma.expenseItem.count({where:{expense:{shopID:demo.id}}}),1);
   const clonedItem=await prisma.checkoutItem.findFirstOrThrow({where:{checkout:{shopID:demo.id}}});
@@ -97,7 +139,23 @@ test('isolated demo: migration, copied history, next-month runs, locking, rollba
     throw new Error('rollback probe');
   }),/rollback probe/);
   assert.equal(await prisma.checkout.count({where:demoScope}),countBefore);
-  const result=await simulatorService.fastForward(tenant.id,demo.id);
+  const failedDays: number[] = [];
+  await assert.rejects(() => simulatorService.fastForward(tenant.id, demo.id, undefined, day => {
+    failedDays.push(day);
+    if (day === 2) throw new Error('progress rollback probe');
+  }), /progress rollback probe/);
+  assert.deepEqual(failedDays, [1, 2]);
+  await assertCopiedHistory();
+  assert.equal((await prisma.shop.findUniqueOrThrow({ where: { id: demo.id } })).simulationRunID, null);
+  const response = await post('fast-forward', 'OWNER', demo.id, tenant.id, true);
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type')!, /application\/x-ndjson/);
+  const frames = (await response.text()).trim().split('\n').map(line => JSON.parse(line));
+  assert.deepEqual(frames.slice(0, -1), Array.from({ length: 30 }, (_, i) => ({ type: 'progress', day: i + 1 })),
+    'only day counts are sent before the committed result');
+  assert.equal(frames[frames.length - 1].type, 'result');
+  const result = frames[frames.length - 1].result as Awaited<ReturnType<typeof simulatorService.fastForward>>;
+  assert.equal((await prisma.shop.findUniqueOrThrow({ where: { id: demo.id } })).simulationRunID, result.simulationRunID);
   assert.equal(result.dailyEvents.length,30);
   assert.equal(new Date(result.dailyEvents[0].date).getTime(),new Date(baseline.slice(0,10)).getTime()+86400000);
   assert.equal((await shopClock(tenant.id,demo.id)).toISOString(),result.endedAt);
@@ -136,6 +194,7 @@ test('isolated demo: migration, copied history, next-month runs, locking, rollba
   assert.equal(await prisma.financeEvaluation.count({where:demoScope}),0);
   assert.equal(await prisma.checkout.count({where:demoScope}),730);
   assert.equal(await prisma.notification.count({where:{shopId:demo.id}}),0);
+  await assertCopiedHistory();
   const buckets=await prisma.expense.findMany({where:demoScope});
   assert.equal(buckets.reduce((sum,b)=>sum+b.totalAmount,0),100);
   await simulatorService.reset(tenant.id,demo.id);

@@ -108,14 +108,14 @@ export const simulatorService = {
     const source = await workspaceFor(tenantId, shopId);
     return db().shop.findFirst({ where: { tenantID: tenantId, simulationSourceShopID: source.simulationSourceShopID ?? source.id } });
   },
-  async fastForward(tenantId: string, shopId: string, template?: SimTemplate) {
+  async fastForward(tenantId: string, shopId: string, template?: SimTemplate, onProgress?: (day: number) => void) {
     return lockedWorkspace(tenantId, shopId, async (tx, shop) => {
       await requireDemo(tx, tenantId, shopId);
       // This run only appends ledger rows; keep its private snapshot in sync at each write.
       const rows = await tx.cashTransaction.findMany({ where: { tenantID: tenantId, shopID: shopId },
         select: { accountID: true, direction: true, amount: true, category: true, occurredAt: true, status: true } });
       return simulationContext.run({ client: tx, asOf: new Date(shop.simulationAsOf), cashLedger: { tenantID: tenantId, shopID: shopId, rows } }, async () => {
-        const result = await simulatorService.playMonth(tenantId, shopId, template);
+        const result = await simulatorService.playMonth(tenantId, shopId, template, onProgress);
         await tx.shop.update({ where: { id: shopId }, data: {
           simulationAsOf: new Date(result.endedAt), simulationRunID: result.simulationRunID,
           simulationResult: JSON.parse(JSON.stringify(result)),
@@ -124,7 +124,7 @@ export const simulatorService = {
       });
     });
   },
-  async playMonth(tenantId: string, shopId: string, template?: SimTemplate) {
+  async playMonth(tenantId: string, shopId: string, template?: SimTemplate, onProgress?: (day: number) => void) {
     const shop = await requireDemo(db(), tenantId, shopId);
     const clock = simulationContext.getStore();
     if (!clock) throw simulationError('Simulation requires an isolated transaction.');
@@ -254,6 +254,7 @@ export const simulatorService = {
         await refreshBalances(tenantId, shopId);
         const evaluated = await cashflowService.runTreasury(tenantId, shopId, { runID: simulationRunID, occurredAt: new Date(events[events.length - 1]?.occurredAt ?? clock.asOf) });
         if (firstCriticalDay == null && evaluated.alerts.some((alert: any) => alert.severity === 'CRITICAL')) firstCriticalDay = day.day;
+        onProgress?.(day.day);
       }
     }
 

@@ -17,6 +17,29 @@ export const simulatorController = {
     sendResponse(res, { success: true, statusCode: httpStatus.OK, message: 'Demo workspace retrieved', data });
   }),
   fastForward: catchAsync(async (req: Request, res: Response) => {
+    if (req.get('Accept') === 'application/x-ndjson') {
+      res.status(httpStatus.OK).set({
+        'Content-Type': 'application/x-ndjson; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        'X-Accel-Buffering': 'no',
+      });
+      res.flushHeaders();
+      const write = (payload: unknown) => {
+        if (!res.destroyed && !res.writableEnded) res.write(`${JSON.stringify(payload)}\n`);
+      };
+      try {
+        const result = await simulatorService.fastForward(tenant(req), req.body.shopId, req.body.template,
+          day => write({ type: 'progress', day }));
+        // Only the day count leaves the transaction before its commit succeeds.
+        write({ type: 'result', result });
+      } catch (error) {
+        const failure = error as Error & { statusCode?: number };
+        write({ type: 'error', message: failure.statusCode && failure.statusCode < 500
+          ? failure.message : 'Simulation failed. Please try again.' });
+      }
+      res.end();
+      return;
+    }
     const result = await simulatorService.fastForward(tenant(req), req.body.shopId, req.body.template);
     sendResponse(res, {
       success: true,
