@@ -65,11 +65,11 @@ export function SimulatorDrawer() {
             {sim.visibleEvents.length === 0 && (
               <p className="text-sm text-muted-foreground">No simulated activity yet.</p>
             )}
-            {sim.visibleEvents.map((e, i) => {
+            {sim.visibleEvents.map((e) => {
               const Icon = ICONS[e.type]
               return (
                 <div
-                  key={`${e.id}-${i}`}
+                  key={`${e.type}:${e.id}`}
                   className="animate-in fade-in slide-in-from-top-1 flex items-center justify-between gap-2 rounded-lg border p-2.5 text-sm duration-200"
                 >
                   <div className="flex min-w-0 items-center gap-2">
